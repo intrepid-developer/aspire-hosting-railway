@@ -9,8 +9,8 @@ namespace Aspire.Hosting;
 public static class RailwayPostgresExtensions
 {
     /// <summary>
-    /// Railway template code for Postgres. Official DBs are created later via
-    /// <c>template(code: "postgres")</c> then <c>templateDeployV2</c>.
+    /// Railway template code for Postgres. Deploy fetches <c>template(code: "postgres")</c>
+    /// and calls <c>templateDeployV2</c> with the returned <c>serializedConfig</c>.
     /// </summary>
     public const string TemplateCode = "postgres";
 
