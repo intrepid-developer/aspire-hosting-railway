@@ -70,7 +70,7 @@ public sealed class RailwayGraphQLApplyService
                 ? FirstNonEmpty(request.AdoptedEnvironmentId, snapshot.EnvironmentId)
                 : null);
 
-        var (environmentId, createdEnvironment) = await EnsureEnvironmentAsync(
+        var (environmentId, createdEnvironment, duplicatedProduction) = await EnsureEnvironmentAsync(
             plan,
             request,
             snapshot,
@@ -105,8 +105,18 @@ public sealed class RailwayGraphQLApplyService
 
         result.AppliedTemplateCodes.AddRange(snapshot.TemplateCodes);
 
-        if (stateManager is not null)
+        if (duplicatedProduction)
         {
+            SeedFromProduction(snapshot, result);
+        }
+
+        async Task PersistAsync()
+        {
+            if (stateManager is null)
+            {
+                return;
+            }
+
             await RailwayDeploymentStateStore.SaveAsync(
                 stateManager,
                 plan.ComputeEnvironment,
@@ -115,20 +125,16 @@ public sealed class RailwayGraphQLApplyService
                 cancellationToken).ConfigureAwait(false);
         }
 
-        await ApplyManagedTemplatesAsync(plan, request, result, reportingStep, cancellationToken).ConfigureAwait(false);
-        await ApplyBucketsAsync(plan, request, result, reportingStep, cancellationToken).ConfigureAwait(false);
-        await ApplyComputeServicesAsync(plan, request, result, reportingStep, cancellationToken).ConfigureAwait(false);
+        await PersistAsync().ConfigureAwait(false);
+
+        await ApplyManagedTemplatesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
+            .ConfigureAwait(false);
+        await ApplyBucketsAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
+            .ConfigureAwait(false);
+        await ApplyComputeServicesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
+            .ConfigureAwait(false);
         await CommitStagedAsync(request, result, reportingStep, cancellationToken).ConfigureAwait(false);
-
-        if (stateManager is not null)
-        {
-            await RailwayDeploymentStateStore.SaveAsync(
-                stateManager,
-                plan.ComputeEnvironment,
-                plan.RailwayEnvironmentName,
-                result,
-                cancellationToken).ConfigureAwait(false);
-        }
+        await PersistAsync().ConfigureAwait(false);
 
         return result;
     }
@@ -183,7 +189,7 @@ public sealed class RailwayGraphQLApplyService
         }
     }
 
-    private async Task<(string EnvironmentId, bool Created)> EnsureEnvironmentAsync(
+    private async Task<(string EnvironmentId, bool Created, bool DuplicatedProduction)> EnsureEnvironmentAsync(
         RailwayPlan plan,
         RailwayApplyRequest request,
         RailwayDeploymentSnapshot snapshot,
@@ -206,7 +212,7 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
             }
 
-            return (existing, false);
+            return (existing, false, false);
         }
 
         if (string.Equals(plan.RailwayEnvironmentName, "production", StringComparison.OrdinalIgnoreCase) &&
@@ -223,7 +229,7 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
             }
 
-            return (productionEnvironmentId, false);
+            return (productionEnvironmentId, false, false);
         }
 
         var shouldDuplicateStaging =
@@ -274,7 +280,7 @@ public sealed class RailwayGraphQLApplyService
                 new MarkdownString($"{detail} Environment `{environment.Id}`."),
                 CompletionState.Completed,
                 cancellationToken).ConfigureAwait(false);
-            return (environment.Id, true);
+            return (environment.Id, true, sourceEnvironmentId is not null);
         }
     }
 
@@ -283,6 +289,7 @@ public sealed class RailwayGraphQLApplyService
         RailwayApplyRequest request,
         RailwayApplyResult result,
         IReportingStep reportingStep,
+        Func<Task> persistAsync,
         CancellationToken cancellationToken)
     {
         foreach (var managed in plan.ManagedServices)
@@ -321,12 +328,17 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
 
                 var workflowId = deploy.Data?.TemplateDeployV2?.WorkflowId;
-                if (!string.IsNullOrWhiteSpace(workflowId))
+                if (string.IsNullOrWhiteSpace(workflowId))
                 {
-                    await WaitForWorkflowAsync(workflowId, request.Token, cancellationToken).ConfigureAwait(false);
+                    throw new InvalidOperationException(
+                        $"templateDeployV2 for '{managed.TemplateCode}' returned no workflowId. " +
+                        "The template is not recorded as applied.");
                 }
 
+                await WaitForWorkflowAsync(workflowId, request.Token, cancellationToken).ConfigureAwait(false);
+
                 result.AppliedTemplateCodes.Add(managed.TemplateCode);
+                await persistAsync().ConfigureAwait(false);
                 await task.CompleteAsync(
                     new MarkdownString($"Deployed template `{managed.TemplateCode}` via templateDeployV2."),
                     CompletionState.Completed,
@@ -375,6 +387,7 @@ public sealed class RailwayGraphQLApplyService
         RailwayApplyRequest request,
         RailwayApplyResult result,
         IReportingStep reportingStep,
+        Func<Task> persistAsync,
         CancellationToken cancellationToken)
     {
         foreach (var managed in plan.ManagedServices)
@@ -409,6 +422,7 @@ public sealed class RailwayGraphQLApplyService
                     }
 
                     result.BucketIds[managed.Name] = bucketId;
+                    await persistAsync().ConfigureAwait(false);
                 }
 
                 var credentialsResponse = await _client.BucketS3CredentialsAsync(
@@ -428,6 +442,9 @@ public sealed class RailwayGraphQLApplyService
                         "Credentials are not persisted; apply cannot invent them.");
                 }
 
+                // Image-less service that holds ${{uploads.ENDPOINT}} (and related) variables
+                // so WithReference can resolve them. It is not a compute target and must not
+                // be deployed with serviceInstanceDeployV2.
                 if (!result.ServiceIds.TryGetValue(managed.Name, out var serviceId) ||
                     string.IsNullOrWhiteSpace(serviceId))
                 {
@@ -449,6 +466,7 @@ public sealed class RailwayGraphQLApplyService
                     }
 
                     result.ServiceIds[managed.Name] = serviceId;
+                    await persistAsync().ConfigureAwait(false);
                 }
 
                 var upsert = await _client.VariableCollectionUpsertAsync(
@@ -471,6 +489,7 @@ public sealed class RailwayGraphQLApplyService
                     request.Token,
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(upsert, "variableCollectionUpsert");
+                await persistAsync().ConfigureAwait(false);
 
                 await task.CompleteAsync(
                     new MarkdownString($"Bucket `{managed.Name}` is available at `{RailwayConstants.BucketS3Endpoint}`."),
@@ -485,6 +504,7 @@ public sealed class RailwayGraphQLApplyService
         RailwayApplyRequest request,
         RailwayApplyResult result,
         IReportingStep reportingStep,
+        Func<Task> persistAsync,
         CancellationToken cancellationToken)
     {
         foreach (var service in plan.Services)
@@ -524,6 +544,7 @@ public sealed class RailwayGraphQLApplyService
                     }
 
                     result.ServiceIds[service.Name] = serviceId;
+                    await persistAsync().ConfigureAwait(false);
                 }
 
                 var update = await _client.ServiceInstanceUpdateAsync(
@@ -579,6 +600,7 @@ public sealed class RailwayGraphQLApplyService
                     request.Token,
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(deploy, "serviceInstanceDeployV2");
+                await persistAsync().ConfigureAwait(false);
 
                 await task.CompleteAsync(
                     new MarkdownString($"Service `{service.Name}` source.image is `{image}`."),
@@ -618,6 +640,27 @@ public sealed class RailwayGraphQLApplyService
                     exception.Message,
                     CompletionState.CompletedWithWarning,
                     cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static void SeedFromProduction(RailwayDeploymentSnapshot snapshot, RailwayApplyResult result)
+    {
+        foreach (var pair in snapshot.ProductionServiceIds)
+        {
+            result.ServiceIds.TryAdd(pair.Key, pair.Value);
+        }
+
+        foreach (var pair in snapshot.ProductionBucketIds)
+        {
+            result.BucketIds.TryAdd(pair.Key, pair.Value);
+        }
+
+        foreach (var code in snapshot.ProductionTemplateCodes)
+        {
+            if (!result.AppliedTemplateCodes.Contains(code, StringComparer.OrdinalIgnoreCase))
+            {
+                result.AppliedTemplateCodes.Add(code);
             }
         }
     }

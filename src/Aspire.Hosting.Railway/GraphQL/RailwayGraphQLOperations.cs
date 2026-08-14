@@ -101,6 +101,7 @@ public static class RailwayGraphQLOperations
         query workflowStatus($workflowId: String!) {
           workflowStatus(workflowId: $workflowId) {
             status
+            error
           }
         }
         """;

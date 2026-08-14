@@ -92,6 +92,9 @@ internal sealed class RailwayDeploymentSnapshot
     public Dictionary<string, string> ServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> BucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> TemplateCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> ProductionServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> ProductionBucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> ProductionTemplateCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -119,7 +122,6 @@ internal static class RailwayDeploymentStateStore
         var snapshot = new RailwayDeploymentSnapshot
         {
             ProjectId = ReadString(section.Data, ProjectIdKey),
-            EnvironmentId = ReadString(section.Data, EnvironmentIdKey),
             ProductionEnvironmentId = ReadString(section.Data, ProductionEnvironmentIdKey)
         };
 
@@ -129,25 +131,23 @@ internal static class RailwayDeploymentStateStore
         {
             snapshot.EnvironmentId = scopedEnvironmentId;
         }
+        else if (string.Equals(railwayEnvironmentName, "production", StringComparison.OrdinalIgnoreCase) &&
+                 !string.IsNullOrWhiteSpace(snapshot.ProductionEnvironmentId))
+        {
+            snapshot.EnvironmentId = snapshot.ProductionEnvironmentId;
+        }
 
         var servicesRoot = section.Data[ServicesKey] as JsonObject;
         CopyStringMap(servicesRoot?[railwayEnvironmentName] as JsonObject, snapshot.ServiceIds);
+        CopyStringMap(servicesRoot?["production"] as JsonObject, snapshot.ProductionServiceIds);
 
         var bucketsRoot = section.Data[BucketsKey] as JsonObject;
         CopyStringMap(bucketsRoot?[railwayEnvironmentName] as JsonObject, snapshot.BucketIds);
+        CopyStringMap(bucketsRoot?["production"] as JsonObject, snapshot.ProductionBucketIds);
 
         var templatesRoot = section.Data[TemplatesKey] as JsonObject;
-        if (templatesRoot?[railwayEnvironmentName] is JsonArray templates)
-        {
-            foreach (var item in templates)
-            {
-                var code = item?.GetValue<string>();
-                if (!string.IsNullOrWhiteSpace(code))
-                {
-                    snapshot.TemplateCodes.Add(code);
-                }
-            }
-        }
+        CopyTemplateCodes(templatesRoot?[railwayEnvironmentName] as JsonArray, snapshot.TemplateCodes);
+        CopyTemplateCodes(templatesRoot?["production"] as JsonArray, snapshot.ProductionTemplateCodes);
 
         return snapshot;
     }
@@ -191,6 +191,23 @@ internal static class RailwayDeploymentStateStore
 
     private static string? ReadString(JsonObject data, string key) =>
         data[key]?.GetValue<string>();
+
+    private static void CopyTemplateCodes(JsonArray? source, HashSet<string> destination)
+    {
+        if (source is null)
+        {
+            return;
+        }
+
+        foreach (var item in source)
+        {
+            var code = item?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(code))
+            {
+                destination.Add(code);
+            }
+        }
+    }
 
     private static void CopyStringMap(JsonObject? source, Dictionary<string, string> destination)
     {

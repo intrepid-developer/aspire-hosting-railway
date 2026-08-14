@@ -304,16 +304,6 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
                 stateManager,
                 context.CancellationToken).ConfigureAwait(false);
 
-            if (stateManager is not null)
-            {
-                await PersistDeploymentIdsAsync(
-                    stateManager,
-                    Name,
-                    result.ProjectId,
-                    result.EnvironmentId,
-                    context.CancellationToken).ConfigureAwait(false);
-            }
-
             var summary = result.CreatedProject
                 ? $"Created Railway project `{result.ProjectId}`"
                 : $"Adopted Railway project `{result.ProjectId}`";
@@ -380,6 +370,11 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         }
     }
 
+    /// <summary>
+    /// Writes project and environment ids only. GraphQL apply persists the full id set through
+    /// <c>RailwayDeploymentStateStore</c> after each successful item; <see cref="DeployAsync"/>
+    /// does not call this again.
+    /// </summary>
     internal static async Task PersistDeploymentIdsAsync(
         IDeploymentStateManager stateManager,
         string environmentName,

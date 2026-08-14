@@ -92,7 +92,7 @@ Host addresses are host-only: `{service}.railway.internal` (lowercase). Endpoint
 
 Postgres and Redis stay official `AddPostgres` / `AddRedis`. `PublishAsRailway*` only changes deploy. `Aspire.Npgsql` and `Aspire.StackExchange.Redis` keep working. In publish mode, `WithReference` emits Railway references such as `${{postgres.DATABASE_URL}}` (private), never the local Docker connection string.
 
-Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `serializedConfig` (never empty, never invented template UUIDs). `ApplyTemplateAsync` on the typed client performs that fetch-then-deploy sequence and polls `workflowStatus`.
+Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `serializedConfig` (never empty, never invented template UUIDs). `ApplyTemplateAsync` on the typed client fetches that config and calls `templateDeployV2`. `RailwayGraphQLApplyService` polls `workflowStatus` and fails if `workflowId` is missing.
 
 `AddRailwayBucket` is a real Aspire resource. Local run starts a maintained S3-compatible container ([Adobe S3Mock](https://github.com/adobe/S3Mock)); deploy uses `bucketCreate` + `bucketS3Credentials` and upserts the S3 connection variables. Railway buckets use `https://storage.railway.app`, virtual-hosted URLs, and an immutable region. They are not on private DNS. Bucket secrets are never written to `railway-plan.json` or deployment state.
 

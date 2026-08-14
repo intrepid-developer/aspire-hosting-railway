@@ -184,6 +184,9 @@ internal static class GraphQLFixtures
     public static string TemplateDeployV2 =>
         """{"data":{"templateDeployV2":{"projectId":"proj_placeholder","workflowId":"wf_placeholder"}}}""";
 
+    public static string TemplateDeployV2WithoutWorkflow =>
+        """{"data":{"templateDeployV2":{"projectId":"proj_placeholder"}}}""";
+
     public static string WorkflowComplete =>
         """{"data":{"workflowStatus":{"status":"Complete"}}}""";
 

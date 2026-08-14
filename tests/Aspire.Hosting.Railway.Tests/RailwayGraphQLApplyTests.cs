@@ -74,23 +74,112 @@ public class RailwayGraphQLApplyTests
     [Fact]
     public async Task Apply_StagingDuplicatesProductionByDefault()
     {
-        var handler = new ScriptedGraphQLHandler();
-        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
-        handler.Enqueue("environmentCreate", GraphQLFixtures.EnvironmentCreateStaging);
-        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+        var productionHandler = new ScriptedGraphQLHandler();
+        EnqueueProductionServiceTemplateAndBucket(productionHandler);
 
-        var apply = GraphQLFixtures.CreateApplyService(handler);
-        var result = await apply.ApplyAsync(
-            GraphQLFixtures.CreatePlan(railwayEnvironmentName: "staging", includeApi: false),
-            GraphQLFixtures.CreateRequest(includeApiImage: false),
+        var state = new MemoryDeploymentStateManager();
+        var production = GraphQLFixtures.CreateApplyService(productionHandler);
+        await production.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includePostgres: true, includeBucket: true),
+            GraphQLFixtures.CreateRequest(),
             new RecordingReportingStep(),
-            new MemoryDeploymentStateManager());
+            state);
+
+        var stagingHandler = new ScriptedGraphQLHandler();
+        stagingHandler.Enqueue("environmentCreate", GraphQLFixtures.EnvironmentCreateStaging);
+        stagingHandler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        stagingHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        stagingHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        stagingHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        stagingHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        stagingHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var staging = GraphQLFixtures.CreateApplyService(stagingHandler);
+        var result = await staging.ApplyAsync(
+            GraphQLFixtures.CreatePlan(railwayEnvironmentName: "staging", includePostgres: true, includeBucket: true),
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            state);
 
         Assert.True(result.CreatedEnvironment);
         Assert.Equal(GraphQLFixtures.StagingEnvironmentId, result.EnvironmentId);
-        Assert.Equal(1, handler.Count("environmentCreate"));
-        Assert.Contains("sourceEnvironmentId", handler.Bodies.Single(body => body.Contains("environmentCreate", StringComparison.Ordinal)), StringComparison.Ordinal);
-        Assert.Contains(GraphQLFixtures.ProductionEnvironmentId, handler.Bodies.Single(body => body.Contains("environmentCreate", StringComparison.Ordinal)), StringComparison.Ordinal);
+        Assert.Equal(GraphQLFixtures.ApiServiceId, result.ServiceIds["api"]);
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.Contains("postgres", result.AppliedTemplateCodes);
+        Assert.Equal(1, stagingHandler.Count("environmentCreate"));
+        Assert.Equal(0, stagingHandler.Count("projectCreate"));
+        Assert.Equal(0, stagingHandler.Count("serviceCreate"));
+        Assert.Equal(0, stagingHandler.Count("templateDeployV2"));
+        Assert.Equal(0, stagingHandler.Count("bucketCreate"));
+        Assert.Equal(1, stagingHandler.Count("serviceInstanceUpdate"));
+        Assert.Equal(1, stagingHandler.Count("serviceInstanceDeployV2"));
+        var environmentCreate = stagingHandler.Bodies.Single(body => body.Contains("environmentCreate", StringComparison.Ordinal));
+        Assert.Contains("sourceEnvironmentId", environmentCreate, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.ProductionEnvironmentId, environmentCreate, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_TemplatePersistedBeforeComputeFailure_RetrySkipsTemplateDeploy()
+    {
+        var firstHandler = new ScriptedGraphQLHandler();
+        firstHandler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        firstHandler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        firstHandler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        firstHandler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+
+        var state = new MemoryDeploymentStateManager();
+        var first = GraphQLFixtures.CreateApplyService(firstHandler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => first.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includePostgres: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            new RecordingReportingStep(),
+            state));
+
+        Assert.Contains("no container image", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, firstHandler.Count("templateDeployV2"));
+
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.Contains("postgres", snapshot.TemplateCodes);
+
+        var retryHandler = new ScriptedGraphQLHandler();
+        retryHandler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        retryHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        retryHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        retryHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        retryHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var retry = GraphQLFixtures.CreateApplyService(retryHandler);
+        var result = await retry.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includePostgres: true),
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Contains("postgres", result.AppliedTemplateCodes);
+        Assert.Equal(0, retryHandler.Count("template"));
+        Assert.Equal(0, retryHandler.Count("templateDeployV2"));
+        Assert.Equal(1, retryHandler.Count("serviceCreate"));
+    }
+
+    [Fact]
+    public async Task Apply_MissingWorkflowId_DoesNotMarkTemplateApplied()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2WithoutWorkflow);
+
+        var state = new MemoryDeploymentStateManager();
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includeApi: false, includePostgres: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            new RecordingReportingStep(),
+            state));
+
+        Assert.Contains("workflowId", exception.Message, StringComparison.Ordinal);
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.DoesNotContain("postgres", snapshot.TemplateCodes);
     }
 
     [Fact]
@@ -316,6 +405,23 @@ public class RailwayGraphQLApplyTests
         var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
         Assert.Equal(GraphQLFixtures.ProjectId, snapshot.ProjectId);
         Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, snapshot.EnvironmentId);
+    }
+
+    private static void EnqueueProductionServiceTemplateAndBucket(ScriptedGraphQLHandler handler)
+    {
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
     }
 
     private static PipelineStepContext CreatePipelineContext(DistributedApplicationModel model, IServiceProvider services)

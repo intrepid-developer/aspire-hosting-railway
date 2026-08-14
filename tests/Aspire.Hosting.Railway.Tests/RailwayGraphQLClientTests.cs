@@ -78,6 +78,10 @@ public class RailwayGraphQLClientTests
             "placeholder-token");
         Assert.Contains("environmentCreate", handler.Body, StringComparison.Ordinal);
         Assert.Contains("sourceEnvironmentId", handler.Body, StringComparison.Ordinal);
+
+        await client.WorkflowStatusAsync("wf_placeholder", "placeholder-token");
+        Assert.Contains("workflowStatus", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("error", handler.Body, StringComparison.Ordinal);
     }
 
     [Fact]
