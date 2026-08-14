@@ -1,0 +1,11 @@
+title = "aspire-hosting-railway"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder-only example files"
+paths = [
+  '''\.env\.example$''',
+  '''NuGet\.Config\.example$''',
+]
