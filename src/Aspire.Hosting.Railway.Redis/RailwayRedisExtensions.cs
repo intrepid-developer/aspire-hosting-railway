@@ -9,8 +9,8 @@ namespace Aspire.Hosting;
 public static class RailwayRedisExtensions
 {
     /// <summary>
-    /// Railway template code for Redis. Official DBs are created later via
-    /// <c>template(code: "redis")</c> then <c>templateDeployV2</c>.
+    /// Railway template code for Redis. Deploy fetches <c>template(code: "redis")</c>
+    /// and calls <c>templateDeployV2</c> with the returned <c>serializedConfig</c>.
     /// </summary>
     public const string TemplateCode = "redis";
 

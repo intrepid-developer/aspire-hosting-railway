@@ -6,7 +6,6 @@ namespace Aspire.Hosting.Railway;
 
 /// <summary>
 /// Typed Railway GraphQL v2 client. Unit tests should inject a fake <see cref="HttpMessageHandler"/>.
-/// Deploy in this release does not call this client against live Railway.
 /// </summary>
 public sealed class RailwayGraphQLClient
 {
@@ -68,6 +67,42 @@ public sealed class RailwayGraphQLClient
 
         return payload ?? new RailwayGraphQLResponse<T>();
     }
+
+    /// <summary>
+    /// Throws when the GraphQL envelope contains errors or has no data. Does not invent a success.
+    /// </summary>
+    /// <typeparam name="T">Response data type.</typeparam>
+    /// <param name="response">The GraphQL response.</param>
+    /// <param name="operationName">Operation name used in the exception message.</param>
+    public static void ThrowIfFailed<T>(RailwayGraphQLResponse<T> response, string operationName)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
+
+        if (response.Errors is { Count: > 0 })
+        {
+            var messages = string.Join("; ", response.Errors.Select(error => error.Message).Where(static message => !string.IsNullOrWhiteSpace(message)));
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(messages)
+                    ? $"Railway GraphQL {operationName} failed."
+                    : $"Railway GraphQL {operationName} failed: {messages}");
+        }
+
+        if (response.Data is null)
+        {
+            throw new InvalidOperationException($"Railway GraphQL {operationName} returned no data.");
+        }
+    }
+
+    /// <summary>Returns whether <paramref name="serializedConfig"/> is a fetched, non-empty template document.</summary>
+    public static bool HasSerializedConfig(JsonElement serializedConfig) =>
+        serializedConfig.ValueKind switch
+        {
+            JsonValueKind.Object => serializedConfig.EnumerateObject().Any(),
+            JsonValueKind.Array => serializedConfig.GetArrayLength() > 0,
+            JsonValueKind.String => !string.IsNullOrWhiteSpace(serializedConfig.GetString()),
+            _ => false
+        };
 
     /// <summary>Sends <c>projectCreate</c>.</summary>
     public Task<RailwayGraphQLResponse<ProjectCreateData>> ProjectCreateAsync(
@@ -166,11 +201,11 @@ public sealed class RailwayGraphQLClient
             cancellationToken);
 
     /// <summary>Sends <c>serviceDomainCreate</c>.</summary>
-    public Task<RailwayGraphQLResponse<JsonElement>> ServiceDomainCreateAsync(
+    public Task<RailwayGraphQLResponse<ServiceDomainCreateData>> ServiceDomainCreateAsync(
         ServiceDomainCreateInput input,
         string token,
         CancellationToken cancellationToken = default) =>
-        SendAsync<JsonElement>(
+        SendAsync<ServiceDomainCreateData>(
             new RailwayGraphQLRequest
             {
                 Query = RailwayGraphQLOperations.ServiceDomainCreate,
@@ -196,13 +231,19 @@ public sealed class RailwayGraphQLClient
             cancellationToken);
 
     /// <summary>Sends <c>templateDeployV2</c>.</summary>
-    public Task<RailwayGraphQLResponse<JsonElement>> TemplateDeployV2Async(
+    public Task<RailwayGraphQLResponse<TemplateDeployV2Data>> TemplateDeployV2Async(
         TemplateDeployV2Input input,
         string token,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(input.SerializedConfig);
-        return SendAsync<JsonElement>(
+        if (!HasSerializedConfig(input.SerializedConfig))
+        {
+            throw new ArgumentException(
+                "serializedConfig must be the document returned by template(code). Never invent template UUIDs or send an empty config.",
+                nameof(input));
+        }
+
+        return SendAsync<TemplateDeployV2Data>(
             new RailwayGraphQLRequest
             {
                 Query = RailwayGraphQLOperations.TemplateDeployV2,
@@ -214,11 +255,11 @@ public sealed class RailwayGraphQLClient
     }
 
     /// <summary>Sends <c>workflowStatus</c>.</summary>
-    public Task<RailwayGraphQLResponse<JsonElement>> WorkflowStatusAsync(
+    public Task<RailwayGraphQLResponse<WorkflowStatusData>> WorkflowStatusAsync(
         string workflowId,
         string token,
         CancellationToken cancellationToken = default) =>
-        SendAsync<JsonElement>(
+        SendAsync<WorkflowStatusData>(
             new RailwayGraphQLRequest
             {
                 Query = RailwayGraphQLOperations.WorkflowStatus,
@@ -229,11 +270,11 @@ public sealed class RailwayGraphQLClient
             cancellationToken);
 
     /// <summary>Sends <c>bucketCreate</c>.</summary>
-    public Task<RailwayGraphQLResponse<JsonElement>> BucketCreateAsync(
+    public Task<RailwayGraphQLResponse<BucketCreateData>> BucketCreateAsync(
         BucketCreateInput input,
         string token,
         CancellationToken cancellationToken = default) =>
-        SendAsync<JsonElement>(
+        SendAsync<BucketCreateData>(
             new RailwayGraphQLRequest
             {
                 Query = RailwayGraphQLOperations.BucketCreate,
@@ -244,12 +285,12 @@ public sealed class RailwayGraphQLClient
             cancellationToken);
 
     /// <summary>Sends <c>bucketS3Credentials</c>. The secret is in the response; callers must not persist it to plan files.</summary>
-    public Task<RailwayGraphQLResponse<JsonElement>> BucketS3CredentialsAsync(
+    public Task<RailwayGraphQLResponse<BucketS3CredentialsData>> BucketS3CredentialsAsync(
         string bucketId,
         string environmentId,
         string token,
         CancellationToken cancellationToken = default) =>
-        SendAsync<JsonElement>(
+        SendAsync<BucketS3CredentialsData>(
             new RailwayGraphQLRequest
             {
                 Query = RailwayGraphQLOperations.BucketS3Credentials,
@@ -288,17 +329,48 @@ public sealed class RailwayGraphQLClient
             cancellationToken);
 
     /// <summary>
-    /// Applies a Railway template. This release is a stub: later PRs must fetch
-    /// <c>template(code)</c> serializedConfig and call <c>templateDeployV2</c>.
+    /// Fetches <c>template(code)</c> and deploys it with <c>templateDeployV2</c> using the returned
+    /// <c>serializedConfig</c>. Does not invent template UUIDs or send an empty config.
     /// </summary>
     /// <param name="templateCode">Railway template code such as <c>postgres</c> or <c>redis</c>.</param>
+    /// <param name="projectId">Railway project id.</param>
+    /// <param name="environmentId">Railway environment id.</param>
+    /// <param name="token">Account or workspace token.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task that always throws until GraphQL apply is implemented.</returns>
-    public Task ApplyTemplateAsync(string templateCode, CancellationToken cancellationToken = default)
+    /// <returns>The <c>templateDeployV2</c> response.</returns>
+    public async Task<RailwayGraphQLResponse<TemplateDeployV2Data>> ApplyTemplateAsync(
+        string templateCode,
+        string projectId,
+        string environmentId,
+        string token,
+        CancellationToken cancellationToken = default)
     {
-        _ = templateCode;
-        _ = cancellationToken;
-        return Task.FromException(new NotImplementedException(
-            "ApplyTemplateAsync will fetch template(code) serializedConfig and call templateDeployV2 in a later PR. Do not invent template UUIDs or report a fake success."));
+        ArgumentException.ThrowIfNullOrWhiteSpace(templateCode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(token);
+
+        var templateResponse = await TemplateAsync(templateCode, token, cancellationToken).ConfigureAwait(false);
+        ThrowIfFailed(templateResponse, "template");
+
+        var template = templateResponse.Data?.Template;
+        if (template is null || !HasSerializedConfig(template.SerializedConfig))
+        {
+            throw new InvalidOperationException(
+                $"template(code: \"{templateCode}\") did not return serializedConfig. Cannot call templateDeployV2 with an empty or invented config.");
+        }
+
+        var deployResponse = await TemplateDeployV2Async(
+            new TemplateDeployV2Input
+            {
+                ProjectId = projectId,
+                EnvironmentId = environmentId,
+                SerializedConfig = template.SerializedConfig
+            },
+            token,
+            cancellationToken).ConfigureAwait(false);
+
+        ThrowIfFailed(deployResponse, "templateDeployV2");
+        return deployResponse;
     }
 }

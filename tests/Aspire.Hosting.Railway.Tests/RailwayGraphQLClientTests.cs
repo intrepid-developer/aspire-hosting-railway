@@ -81,10 +81,40 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
-    public async Task ApplyTemplateAsync_IsNotImplemented()
+    public async Task ApplyTemplateAsync_FetchesSerializedConfigThenDeploys()
     {
-        var client = new RailwayGraphQLClient(new HttpClient(new RecordingHandler("""{"data":{}}""")));
-        await Assert.ThrowsAsync<NotImplementedException>(() => client.ApplyTemplateAsync("postgres"));
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.ApplyTemplateAsync(
+            "postgres",
+            GraphQLFixtures.ProjectId,
+            GraphQLFixtures.ProductionEnvironmentId,
+            "placeholder-token");
+
+        Assert.Equal("wf_placeholder", response.Data?.TemplateDeployV2?.WorkflowId);
+        Assert.Equal(new[] { "template", "templateDeployV2" }, handler.Operations);
+        Assert.Contains("serializedConfig", handler.Bodies[1], StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Bodies[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ApplyTemplateAsync_EmptySerializedConfig_DoesNotCallTemplateDeployV2()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("template", """{"data":{"template":{"id":"tpl_placeholder","code":"postgres","serializedConfig":{}}}}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ApplyTemplateAsync(
+            "postgres",
+            GraphQLFixtures.ProjectId,
+            GraphQLFixtures.ProductionEnvironmentId,
+            "placeholder-token"));
+
+        Assert.Contains("serializedConfig", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, handler.Count("templateDeployV2"));
     }
 
     private sealed class RecordingHandler(string responseJson) : HttpMessageHandler

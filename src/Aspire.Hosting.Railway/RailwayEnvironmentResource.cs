@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -271,57 +272,75 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
 
     internal async Task DeployAsync(PipelineStepContext context)
     {
-        var reporter = context.Services.GetService<IPipelineActivityReporter>();
-        var extraStep = reporter is not null
-            ? await reporter.CreateStepAsync("Railway GraphQL apply", context.CancellationToken).ConfigureAwait(false)
-            : null;
+        var imageBasedServices = context.Model.GetComputeResources()
+            .Where(resource => resource.GetDeploymentTargetAnnotation(this) is not null)
+            .Where(resource => !resource.Annotations.OfType<IRailwayManagedServiceAnnotation>().Any())
+            .ToArray();
+
+        if (imageBasedServices.Length > 0 && ResolveContainerRegistry(context.Model) is null)
+        {
+            throw new InvalidOperationException(
+                "Railway has no container image registry. Add GHCR or Docker Hub with " +
+                "builder.AddContainerRegistry(\"ghcr\", \"ghcr.io\") and associate it with the Railway " +
+                "environment (for example railway.WithContainerRegistry(ghcr)) before deploying " +
+                "image-based services. Do not use `railway up`.");
+        }
+
+        var aspireEnvironment = context.Services.GetService<IHostEnvironment>()?.EnvironmentName;
+        var plan = RailwayPlanBuilder.Create(context.Model, this, aspireEnvironment);
+        var token = await ResolveTokenAsync(context).ConfigureAwait(false);
+        var request = await CreateApplyRequestAsync(context, plan, token).ConfigureAwait(false);
+
+        var client = CreateGraphQLClient(context.Services);
+        var apply = new RailwayGraphQLApplyService(client);
+        var stateManager = context.Services.GetService<IDeploymentStateManager>();
 
         try
         {
-            var imageBasedServices = context.Model.GetComputeResources()
-                .Where(resource => resource.GetDeploymentTargetAnnotation(this) is not null)
-                .Where(resource => !resource.Annotations.OfType<IRailwayManagedServiceAnnotation>().Any())
-                .ToArray();
-
-            if (imageBasedServices.Length > 0 && ResolveContainerRegistry(context.Model) is null)
-            {
-                throw new InvalidOperationException(
-                    "Railway has no container image registry. Add GHCR or Docker Hub with " +
-                    "builder.AddContainerRegistry(\"ghcr\", \"ghcr.io\") and associate it with the Railway " +
-                    "environment (for example railway.WithContainerRegistry(ghcr)) before deploying " +
-                    "image-based services. Do not use `railway up`.");
-            }
-
-            var message =
-                "Railway GraphQL apply is not implemented yet. Publish wrote railway-plan.json; " +
-                "a later PR will call projectCreate / environmentCreate / serviceCreate / " +
-                "templateDeployV2 / bucketCreate. This step does not contact Railway and does not report a successful apply.";
-
-            var task = await context.ReportingStep.CreateTaskAsync(
-                new MarkdownString("Railway GraphQL apply"),
+            var result = await apply.ApplyAsync(
+                plan,
+                request,
+                context.ReportingStep,
+                stateManager,
                 context.CancellationToken).ConfigureAwait(false);
-            await using (task.ConfigureAwait(false))
+
+            if (stateManager is not null)
             {
-                await task.CompleteAsync(
-                    new MarkdownString(message),
-                    CompletionState.CompletedWithWarning,
+                await PersistDeploymentIdsAsync(
+                    stateManager,
+                    Name,
+                    result.ProjectId,
+                    result.EnvironmentId,
                     context.CancellationToken).ConfigureAwait(false);
             }
 
-            if (extraStep is not null)
+            var summary = result.CreatedProject
+                ? $"Created Railway project `{result.ProjectId}`"
+                : $"Adopted Railway project `{result.ProjectId}`";
+            context.Summary.Add("🚂 Railway project", result.ProjectId);
+            context.Summary.Add("🌿 Railway environment", result.EnvironmentId);
+            if (result.Warnings.Count > 0)
             {
-                await extraStep.CompleteAsync(message, CompletionState.CompletedWithWarning, context.CancellationToken)
-                    .ConfigureAwait(false);
+                await context.ReportingStep.CompleteAsync(
+                    new MarkdownString($"{summary} with warnings."),
+                    CompletionState.CompletedWithWarning,
+                    context.CancellationToken).ConfigureAwait(false);
             }
-
-            context.Summary.Add("🚂 Railway deploy", "GraphQL apply not implemented");
+            else
+            {
+                await context.ReportingStep.CompleteAsync(
+                    new MarkdownString($"{summary} / environment `{result.EnvironmentId}`."),
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
+            }
         }
-        finally
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            if (extraStep is not null)
-            {
-                await extraStep.DisposeAsync().ConfigureAwait(false);
-            }
+            await context.ReportingStep.CompleteAsync(
+                exception.Message,
+                CompletionState.CompletedWithError,
+                context.CancellationToken).ConfigureAwait(false);
+            throw;
         }
     }
 
@@ -340,7 +359,7 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
                 await using (emptyTask.ConfigureAwait(false))
                 {
                     await emptyTask.CompleteAsync(
-                        "Nothing to destroy. GraphQL teardown is not implemented yet.",
+                        "Nothing to destroy.",
                         CompletionState.Completed,
                         context.CancellationToken).ConfigureAwait(false);
                 }
@@ -355,7 +374,7 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         await using (task.ConfigureAwait(false))
         {
             await task.CompleteAsync(
-                "Railway GraphQL destroy is not implemented yet.",
+                "Railway GraphQL destroy is not implemented. Confirmed operations do not include project or environment delete; this step does not invent those mutations.",
                 CompletionState.CompletedWithWarning,
                 context.CancellationToken).ConfigureAwait(false);
         }
@@ -373,6 +392,134 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         section.Data["ProjectId"] = JsonValue.Create(projectId);
         section.Data["EnvironmentId"] = JsonValue.Create(railwayEnvironmentId);
         await stateManager.SaveSectionAsync(section, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static RailwayGraphQLClient CreateGraphQLClient(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        if (services.GetService<RailwayGraphQLClient>() is { } existing)
+        {
+            return existing;
+        }
+
+        var factory = services.GetService<IHttpClientFactory>();
+        var httpClient = factory?.CreateClient(RailwayGraphQLClient.HttpClientName) ?? new HttpClient();
+        return new RailwayGraphQLClient(httpClient);
+    }
+
+    private async Task<string> ResolveTokenAsync(PipelineStepContext context)
+    {
+        if (TokenParameter is not null)
+        {
+            var fromParameter = await TokenParameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(fromParameter))
+            {
+                return fromParameter;
+            }
+        }
+
+        var configuration = context.Services.GetService<IConfiguration>();
+        var fromConfiguration = configuration?[RailwayConstants.TokenConfigurationKey]
+            ?? configuration?[RailwayConstants.ApiTokenEnvironmentVariableName];
+        if (!string.IsNullOrWhiteSpace(fromConfiguration))
+        {
+            return fromConfiguration;
+        }
+
+        var fromEnvironment = Environment.GetEnvironmentVariable(RailwayConstants.TokenConfigurationKey)
+            ?? Environment.GetEnvironmentVariable(RailwayConstants.ApiTokenEnvironmentVariableName);
+        if (!string.IsNullOrWhiteSpace(fromEnvironment))
+        {
+            return fromEnvironment;
+        }
+
+        throw new InvalidOperationException(
+            "An account or workspace Railway token is required for aspire deploy. " +
+            "Set RAILWAY_TOKEN (or RAILWAY_API_TOKEN in CI). Project tokens cannot call projectCreate.");
+    }
+
+    private async Task<RailwayApplyRequest> CreateApplyRequestAsync(
+        PipelineStepContext context,
+        RailwayPlan plan,
+        string token)
+    {
+        var adoptedProjectId = await TryGetParameterValueAsync(ProjectIdParameter, context.CancellationToken)
+            .ConfigureAwait(false);
+        var adoptedEnvironmentId = await TryGetParameterValueAsync(EnvironmentIdParameter, context.CancellationToken)
+            .ConfigureAwait(false);
+
+        if (IsExisting && (string.IsNullOrWhiteSpace(adoptedProjectId) || string.IsNullOrWhiteSpace(adoptedEnvironmentId)))
+        {
+            throw new InvalidOperationException(
+                "AsExisting requires railway-project-id and railway-environment-id " +
+                $"(configuration keys {RailwayConstants.ProjectIdConfigurationKey} / {RailwayConstants.EnvironmentIdConfigurationKey}).");
+        }
+
+        var request = new RailwayApplyRequest
+        {
+            Token = token,
+            AdoptedProjectId = adoptedProjectId,
+            AdoptedEnvironmentId = adoptedEnvironmentId,
+            DuplicateProductionWhenCreatingStaging = DuplicateProductionWhenCreatingStaging,
+            CreateEmptyEnvironment = CreateEmptyEnvironment
+        };
+
+        foreach (var service in plan.Services)
+        {
+            var resource = context.Model.Resources.FirstOrDefault(candidate =>
+                string.Equals(GetRailwayServiceName(candidate), service.Name, StringComparison.OrdinalIgnoreCase));
+            if (resource is not null &&
+                resource.TryGetContainerImageName(out var imageName) &&
+                !string.IsNullOrWhiteSpace(imageName))
+            {
+                request.ServiceImages[service.Name] = imageName;
+            }
+            else if (!string.IsNullOrWhiteSpace(service.Image) && !service.Image.StartsWith('{'))
+            {
+                request.ServiceImages[service.Name] = service.Image;
+            }
+
+            if (resource is not null && HasExternalHttpEndpoint(resource))
+            {
+                request.ExternalHttpServices.Add(service.Name);
+            }
+        }
+
+        return request;
+    }
+
+    private static async Task<string?> TryGetParameterValueAsync(
+        ParameterResource? parameter,
+        CancellationToken cancellationToken)
+    {
+        if (parameter is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static bool HasExternalHttpEndpoint(IResource resource)
+    {
+        if (!resource.TryGetEndpoints(out var endpoints))
+        {
+            return false;
+        }
+
+        return endpoints.Any(endpoint =>
+            endpoint.IsExternal &&
+            (string.Equals(endpoint.UriScheme, "http", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(endpoint.UriScheme, "https", StringComparison.OrdinalIgnoreCase)));
     }
 
     private string GetOutputDirectory(PipelineStepContext context)

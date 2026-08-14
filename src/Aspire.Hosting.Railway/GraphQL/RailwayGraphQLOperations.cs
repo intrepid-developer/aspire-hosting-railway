@@ -12,6 +12,14 @@ public static class RailwayGraphQLOperations
           projectCreate(input: $input) {
             id
             name
+            environments {
+              edges {
+                node {
+                  id
+                  name
+                }
+              }
+            }
           }
         }
         """;
@@ -107,11 +115,12 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Reads S3 credentials for a bucket. Endpoint is https://storage.railway.app.</summary>
+    /// <summary>Reads S3 credentials for a bucket. Endpoint is https://storage.railway.app. Callers must not persist the secret.</summary>
     public const string BucketS3Credentials = """
         query bucketS3Credentials($bucketId: String!, $environmentId: String!) {
           bucketS3Credentials(bucketId: $bucketId, environmentId: $environmentId) {
             accessKeyId
+            secretAccessKey
             endpoint
             region
             bucket

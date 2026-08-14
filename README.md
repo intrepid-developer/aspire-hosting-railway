@@ -25,7 +25,9 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using`. R
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var railway = builder.AddRailwayEnvironment("railway");
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+var railway = builder.AddRailwayEnvironment("railway")
+    .WithContainerRegistry(ghcr);
 
 var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
 var cache = builder.AddRedis("redis").PublishAsRailwayRedis();
@@ -58,7 +60,7 @@ builder.AddRailwayEnvironment("railway").AsExisting();
 // or pass parameters bound from RAILWAY_PROJECT_ID / RAILWAY_ENVIRONMENT_ID
 ```
 
-If a staging environment does not exist on deploy, the default is to duplicate production (`environmentCreate` with `sourceEnvironmentId`) when production exists. Empty create is opt-in (`CreateEmptyEnvironment`). Re-deploy must not create a second project; IDs will be persisted in `IDeploymentStateManager`.
+If a staging environment does not exist on deploy, the default is to duplicate production (`environmentCreate` with `sourceEnvironmentId`) when production exists. Empty create is opt-in (`CreateEmptyEnvironment`). Re-deploy does not create a second project: project, environment, service, bucket, and template ids are persisted in `IDeploymentStateManager`.
 
 PR / ephemeral environment APIs are not part of this release.
 
@@ -79,8 +81,8 @@ This integration uses Aspire 13.4 compute-environment + pipeline hooks (`Pipelin
 | --- | --- |
 | `prepare-deployment-targets-{name}` | Materializes `RailwayServiceResource` children and `DeploymentTargetAnnotation` |
 | `publish-{name}` | Writes `railway-plan.json` (expressions and parameter **names** only) plus a `.env.example` of captured parameter names |
-| `deploy-{name}` | Reports that GraphQL apply is **not implemented** yet. Does not contact Railway and does not fake success |
-| `destroy-{name}` | Reports that GraphQL teardown is not implemented yet |
+| `deploy-{name}` | Resolves the account/workspace token, applies the plan over GraphQL (`projectCreate` / adopt, `environmentCreate`, services, official templates, buckets), persists ids, and reports real progress or failures |
+| `destroy-{name}` | Warns that teardown is not implemented. Confirmed operations do not include project or environment delete |
 
 Railway has **no image registry**. Resolve `IContainerRegistry` from the model (for example `builder.AddContainerRegistry("ghcr", "ghcr.io")`). If it is missing, deploy of image-based services fails with a message to add GHCR or Docker Hub. This integration does not shell out to `railway up`. Railpack has no .NET support; use images or a Dockerfile.
 
@@ -90,9 +92,9 @@ Host addresses are host-only: `{service}.railway.internal` (lowercase). Endpoint
 
 Postgres and Redis stay official `AddPostgres` / `AddRedis`. `PublishAsRailway*` only changes deploy. `Aspire.Npgsql` and `Aspire.StackExchange.Redis` keep working. In publish mode, `WithReference` emits Railway references such as `${{postgres.DATABASE_URL}}` (private), never the local Docker connection string.
 
-Official DBs will be created later via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `serializedConfig` (never empty, never invented template UUIDs). `ApplyTemplateAsync` is a stub in this release.
+Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `serializedConfig` (never empty, never invented template UUIDs). `ApplyTemplateAsync` on the typed client performs that fetch-then-deploy sequence and polls `workflowStatus`.
 
-`AddRailwayBucket` is a real Aspire resource. Local run starts a maintained S3-compatible container ([Adobe S3Mock](https://github.com/adobe/S3Mock)); deploy will use `bucketCreate` + `bucketS3Credentials`. Railway buckets use `https://storage.railway.app`, virtual-hosted URLs, and an immutable region. They are not on private DNS.
+`AddRailwayBucket` is a real Aspire resource. Local run starts a maintained S3-compatible container ([Adobe S3Mock](https://github.com/adobe/S3Mock)); deploy uses `bucketCreate` + `bucketS3Credentials` and upserts the S3 connection variables. Railway buckets use `https://storage.railway.app`, virtual-hosted URLs, and an immutable region. They are not on private DNS. Bucket secrets are never written to `railway-plan.json` or deployment state.
 
 ### Storage client connection string
 

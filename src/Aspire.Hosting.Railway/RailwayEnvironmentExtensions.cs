@@ -132,7 +132,7 @@ public static class RailwayEnvironmentExtensions
 
     /// <summary>
     /// Adopts an existing Railway project and environment. Re-deploy must not create a second project;
-    /// IDs are also persisted in <see cref="IDeploymentStateManager"/> once GraphQL apply is implemented.
+    /// IDs are persisted in <see cref="IDeploymentStateManager"/> after GraphQL apply.
     /// </summary>
     /// <param name="builder">The environment builder.</param>
     /// <param name="projectId">Parameter bound from <c>RAILWAY_PROJECT_ID</c> (or equivalent).</param>
