@@ -1,0 +1,55 @@
+# Build
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+TestResults/
+*.binlog
+
+# IDE
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.rsuser
+*.sln.docstates
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# Secrets and local config — never commit these
+.env
+.env.*
+!.env.example
+*.env
+secrets/
+*.pem
+*.p12
+*.pfx
+*.key
+*.snk
+appsettings.*.local.json
+appsettings.Local.json
+secrets.json
+**/secrets.json
+**/UserSecrets/
+.nuget/NuGet.Config
+nuget.config
+NuGet.Config
+!NuGet.Config.example
+
+# Railway / cloud tokens
+.railway/
+railway.toml.local
+**/service-account*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage / tooling
+coverage/
+*.coverage
+*.coveragexml
