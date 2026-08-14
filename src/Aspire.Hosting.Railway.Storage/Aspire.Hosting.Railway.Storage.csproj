@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>IntrepidDeveloper.Aspire.Hosting.Railway.Storage</PackageId>
+    <Description>Aspire resource for a local S3-compatible container and a Railway bucket on deploy.</Description>
+    <RootNamespace>Aspire.Hosting.Railway.Storage</RootNamespace>
+    <NoWarn>$(NoWarn);ASPIREPIPELINES001;ASPIRECOMPUTE002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Railway\Aspire.Hosting.Railway.csproj" />
+  </ItemGroup>
+</Project>

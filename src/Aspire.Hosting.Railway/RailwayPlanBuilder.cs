@@ -1,0 +1,159 @@
+using System.Text.Json;
+
+using Aspire.Hosting.ApplicationModel;
+
+namespace Aspire.Hosting.Railway;
+
+/// <summary>
+/// Builds a secret-safe <see cref="RailwayPlan"/> from the application model.
+/// </summary>
+public static class RailwayPlanBuilder
+{
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
+    /// <summary>
+    /// Creates a plan that contains expressions and parameter names only.
+    /// </summary>
+    /// <param name="model">The application model.</param>
+    /// <param name="environment">The Railway compute environment.</param>
+    /// <param name="aspireEnvironmentName">Aspire <c>--environment</c> name used to map the Railway environment.</param>
+    /// <returns>The secret-safe plan.</returns>
+    public static RailwayPlan Create(
+        DistributedApplicationModel model,
+        RailwayEnvironmentResource environment,
+        string? aspireEnvironmentName)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(environment);
+
+        var plan = new RailwayPlan
+        {
+            ComputeEnvironment = environment.Name,
+            RailwayEnvironmentName = environment.GetRailwayEnvironmentName(aspireEnvironmentName),
+            AdoptExisting = environment.IsExisting,
+            DuplicateProductionWhenCreatingStaging = environment.DuplicateProductionWhenCreatingStaging,
+            CreateEmptyEnvironment = environment.CreateEmptyEnvironment
+        };
+
+        AddParameterName(plan, RailwayConstants.TokenConfigurationKey);
+        if (environment.ProjectIdParameter is not null)
+        {
+            AddParameterName(plan, RailwayConstants.ProjectIdConfigurationKey);
+        }
+
+        if (environment.EnvironmentIdParameter is not null)
+        {
+            AddParameterName(plan, RailwayConstants.EnvironmentIdConfigurationKey);
+        }
+
+        var registry = environment.ResolveContainerRegistry(model);
+        if (registry is not null)
+        {
+            plan.ContainerRegistryEndpoint = registry.Endpoint.ValueExpression;
+        }
+
+        foreach (var resource in model.Resources)
+        {
+            foreach (var managed in resource.Annotations.OfType<IRailwayManagedServiceAnnotation>())
+            {
+                plan.ManagedServices.Add(new RailwayPlanManagedService
+                {
+                    Name = managed.ServiceName,
+                    Kind = managed.Kind,
+                    TemplateCode = managed.TemplateCode,
+                    PrivateReferenceVariable = managed.PrivateReferenceVariable
+                });
+            }
+        }
+
+        foreach (var resource in model.GetComputeResources())
+        {
+            if (resource.Annotations.OfType<IRailwayManagedServiceAnnotation>().Any())
+            {
+                continue;
+            }
+
+            var assigned = resource.GetComputeEnvironment();
+            if (assigned is not null && !ReferenceEquals(assigned, environment))
+            {
+                continue;
+            }
+
+            var serviceName = environment.GetRailwayServiceName(resource);
+            var service = new RailwayPlanService
+            {
+                Name = serviceName
+            };
+
+            if (resource.TryGetContainerImageName(out var imageName))
+            {
+                service.Image = imageName;
+            }
+            else
+            {
+                service.Image = $"{{{resource.Name}.containerImage}}";
+            }
+
+            foreach (var managed in plan.ManagedServices)
+            {
+                if (string.IsNullOrWhiteSpace(managed.PrivateReferenceVariable))
+                {
+                    continue;
+                }
+
+                service.Environment[$"ConnectionStrings__{managed.Name}"] =
+                    RailwayReferenceExpressions.PrivateServiceVariable(managed.Name, managed.PrivateReferenceVariable);
+            }
+
+            plan.Services.Add(service);
+        }
+
+        return plan;
+    }
+
+    /// <summary>
+    /// Serializes <paramref name="plan"/> to JSON. The payload must not contain secret values.
+    /// </summary>
+    /// <param name="plan">The plan to serialize.</param>
+    /// <returns>Indented JSON.</returns>
+    public static string ToJson(RailwayPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return JsonSerializer.Serialize(plan, s_jsonOptions);
+    }
+
+    /// <summary>
+    /// Writes a <c>.env.example</c>-style file that lists captured parameter names with empty values.
+    /// </summary>
+    /// <param name="plan">The plan whose parameter names should be listed.</param>
+    /// <returns>Example env file contents.</returns>
+    public static string ToEnvExample(RailwayPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var lines = new List<string>
+        {
+            "# Generated by IntrepidDeveloper.Aspire.Hosting.Railway. Parameter names only — never commit values.",
+            ""
+        };
+
+        foreach (var name in plan.Parameters.Distinct(StringComparer.Ordinal))
+        {
+            lines.Add($"{name}=");
+        }
+
+        return string.Join('\n', lines) + "\n";
+    }
+
+    private static void AddParameterName(RailwayPlan plan, string name)
+    {
+        if (!plan.Parameters.Contains(name, StringComparer.Ordinal))
+        {
+            plan.Parameters.Add(name);
+        }
+    }
+}

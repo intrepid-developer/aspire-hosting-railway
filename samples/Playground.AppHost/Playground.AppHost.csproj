@@ -1,0 +1,20 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>intrepid-developer-aspire-railway-playground</UserSecretsId>
+    <RootNamespace>Playground.AppHost</RootNamespace>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Redis" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway\Aspire.Hosting.Railway.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway.PostgreSQL\Aspire.Hosting.Railway.PostgreSQL.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway.Redis\Aspire.Hosting.Railway.Redis.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway.Storage\Aspire.Hosting.Railway.Storage.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\Playground.Api\Api.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Playground.Api/Api.csproj" />
+    <Project Path="samples/Playground.AppHost/Playground.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Aspire.Hosting.Railway.PostgreSQL/Aspire.Hosting.Railway.PostgreSQL.csproj" />
+    <Project Path="src/Aspire.Hosting.Railway.Redis/Aspire.Hosting.Railway.Redis.csproj" />
+    <Project Path="src/Aspire.Hosting.Railway.Storage/Aspire.Hosting.Railway.Storage.csproj" />
+    <Project Path="src/Aspire.Hosting.Railway/Aspire.Hosting.Railway.csproj" />
+    <Project Path="src/Aspire.Railway.Storage/Aspire.Railway.Storage.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Aspire.Hosting.Railway.Tests/Aspire.Hosting.Railway.Tests.csproj" />
+  </Folder>
+</Solution>
