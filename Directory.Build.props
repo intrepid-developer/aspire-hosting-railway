@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Authors>Chris Vanderplank / Intrepid Developer</Authors>
+    <Copyright>Copyright (c) 2026 Chris Vanderplank / Intrepid Developer</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/intrepid-developer/aspire-hosting-railway</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/intrepid-developer/aspire-hosting-railway</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>aspire;railway;hosting;postgresql;redis;s3</PackageTags>
+    <Company>Intrepid Developer</Company>
+  </PropertyGroup>
+</Project>

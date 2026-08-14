@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL</PackageId>
+    <Description>Publish official Aspire Postgres resources as Railway-managed Postgres on deploy.</Description>
+    <RootNamespace>Aspire.Hosting.Railway.PostgreSQL</RootNamespace>
+    <NoWarn>$(NoWarn);ASPIREPIPELINES001;ASPIRECOMPUTE002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <ProjectReference Include="..\Aspire.Hosting.Railway\Aspire.Hosting.Railway.csproj" />
+  </ItemGroup>
+</Project>

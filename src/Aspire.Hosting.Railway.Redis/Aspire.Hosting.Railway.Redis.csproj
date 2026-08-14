@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>IntrepidDeveloper.Aspire.Hosting.Railway.Redis</PackageId>
+    <Description>Publish official Aspire Redis resources as Railway-managed Redis on deploy.</Description>
+    <RootNamespace>Aspire.Hosting.Railway.Redis</RootNamespace>
+    <NoWarn>$(NoWarn);ASPIREPIPELINES001;ASPIRECOMPUTE002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Redis" />
+    <ProjectReference Include="..\Aspire.Hosting.Railway\Aspire.Hosting.Railway.csproj" />
+  </ItemGroup>
+</Project>

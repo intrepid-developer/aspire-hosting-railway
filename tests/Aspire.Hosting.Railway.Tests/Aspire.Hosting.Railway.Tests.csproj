@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Aspire.Hosting.Railway.Tests</RootNamespace>
+    <NoWarn>$(NoWarn);ASPIREPIPELINES001;ASPIREPIPELINES002;ASPIRECOMPUTE002;CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Redis" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway\Aspire.Hosting.Railway.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway.PostgreSQL\Aspire.Hosting.Railway.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway.Redis\Aspire.Hosting.Railway.Redis.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Railway.Storage\Aspire.Hosting.Railway.Storage.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Railway.Storage\Aspire.Railway.Storage.csproj" />
+  </ItemGroup>
+</Project>
