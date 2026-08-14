@@ -39,15 +39,15 @@ public static class RailwayPlanBuilder
             CreateEmptyEnvironment = environment.CreateEmptyEnvironment
         };
 
-        AddParameterName(plan, environment.TokenParameter?.Name ?? RailwayConstants.TokenParameterName);
+        AddParameterName(plan, RailwayConstants.TokenConfigurationKey);
         if (environment.ProjectIdParameter is not null)
         {
-            AddParameterName(plan, environment.ProjectIdParameter.Name);
+            AddParameterName(plan, RailwayConstants.ProjectIdConfigurationKey);
         }
 
         if (environment.EnvironmentIdParameter is not null)
         {
-            AddParameterName(plan, environment.EnvironmentIdParameter.Name);
+            AddParameterName(plan, RailwayConstants.EnvironmentIdConfigurationKey);
         }
 
         var registry = environment.ResolveContainerRegistry(model);

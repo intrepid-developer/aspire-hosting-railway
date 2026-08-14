@@ -54,9 +54,8 @@ builder.AddRailwayBucketClient("uploads"); // IAmazonS3
 Adopt an existing canvas:
 
 ```csharp
-var projectId = builder.AddParameter("RAILWAY_PROJECT_ID");
-var environmentId = builder.AddParameter("RAILWAY_ENVIRONMENT_ID");
-builder.AddRailwayEnvironment("railway").AsExisting(projectId, environmentId);
+builder.AddRailwayEnvironment("railway").AsExisting();
+// or pass parameters bound from RAILWAY_PROJECT_ID / RAILWAY_ENVIRONMENT_ID
 ```
 
 If a staging environment does not exist on deploy, the default is to duplicate production (`environmentCreate` with `sourceEnvironmentId`) when production exists. Empty create is opt-in (`CreateEmptyEnvironment`). Re-deploy must not create a second project; IDs will be persisted in `IDeploymentStateManager`.
@@ -67,8 +66,9 @@ PR / ephemeral environment APIs are not part of this release.
 
 Use an **account or workspace** token. Project tokens cannot call `projectCreate`.
 
-- Prefer the Aspire parameter name `RAILWAY_TOKEN` in the AppHost
+- Aspire resource names cannot contain underscores, so the parameter resource is `railway-token`, bound from configuration key `RAILWAY_TOKEN`
 - CI may set `RAILWAY_API_TOKEN` or `RAILWAY_TOKEN`
+- Adopt-existing IDs use `railway-project-id` / `railway-environment-id`, bound from `RAILWAY_PROJECT_ID` / `RAILWAY_ENVIRONMENT_ID`
 - Local `aspire run` does not need a token
 
 ## Publish and deploy

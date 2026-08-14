@@ -86,8 +86,12 @@ public static class RailwayEnvironmentExtensions
             ? builder.CreateResourceBuilder(resource)
             : builder.AddResource(resource);
 
-        var token = builder.AddParameter(RailwayConstants.TokenParameterName, secret: true);
-        resource.TokenParameter = token.Resource;
+        BindAlternateTokenConfiguration(builder);
+        resource.TokenParameter = GetOrAddParameterFromConfiguration(
+            builder,
+            RailwayConstants.TokenParameterName,
+            RailwayConstants.TokenConfigurationKey,
+            secret: true);
 
         return resourceBuilder;
     }
@@ -131,8 +135,8 @@ public static class RailwayEnvironmentExtensions
     /// IDs are also persisted in <see cref="IDeploymentStateManager"/> once GraphQL apply is implemented.
     /// </summary>
     /// <param name="builder">The environment builder.</param>
-    /// <param name="projectId">Parameter named <c>RAILWAY_PROJECT_ID</c> (or equivalent).</param>
-    /// <param name="environmentId">Parameter named <c>RAILWAY_ENVIRONMENT_ID</c> (or equivalent).</param>
+    /// <param name="projectId">Parameter bound from <c>RAILWAY_PROJECT_ID</c> (or equivalent).</param>
+    /// <param name="environmentId">Parameter bound from <c>RAILWAY_ENVIRONMENT_ID</c> (or equivalent).</param>
     /// <returns>The same builder.</returns>
     public static IResourceBuilder<RailwayEnvironmentResource> AsExisting(
         this IResourceBuilder<RailwayEnvironmentResource> builder,
@@ -150,7 +154,7 @@ public static class RailwayEnvironmentExtensions
 
     /// <summary>
     /// Adopts an existing Railway canvas using the conventional
-    /// <c>RAILWAY_PROJECT_ID</c> and <c>RAILWAY_ENVIRONMENT_ID</c> parameters.
+    /// <c>RAILWAY_PROJECT_ID</c> and <c>RAILWAY_ENVIRONMENT_ID</c> configuration keys.
     /// </summary>
     /// <param name="builder">The environment builder.</param>
     /// <returns>The same builder.</returns>
@@ -159,9 +163,47 @@ public static class RailwayEnvironmentExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var projectId = builder.ApplicationBuilder.AddParameter(RailwayConstants.ProjectIdParameterName);
-        var environmentId = builder.ApplicationBuilder.AddParameter(RailwayConstants.EnvironmentIdParameterName);
-        return builder.AsExisting(projectId, environmentId);
+        var projectId = GetOrAddParameterFromConfiguration(
+            builder.ApplicationBuilder,
+            RailwayConstants.ProjectIdParameterName,
+            RailwayConstants.ProjectIdConfigurationKey);
+        var environmentId = GetOrAddParameterFromConfiguration(
+            builder.ApplicationBuilder,
+            RailwayConstants.EnvironmentIdParameterName,
+            RailwayConstants.EnvironmentIdConfigurationKey);
+        return builder.AsExisting(
+            builder.ApplicationBuilder.CreateResourceBuilder(projectId),
+            builder.ApplicationBuilder.CreateResourceBuilder(environmentId));
+    }
+
+    private static ParameterResource GetOrAddParameterFromConfiguration(
+        IDistributedApplicationBuilder builder,
+        string name,
+        string configurationKey,
+        bool secret = false)
+    {
+        var existing = builder.Resources.OfType<ParameterResource>()
+            .FirstOrDefault(parameter => string.Equals(parameter.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        return builder.AddParameterFromConfiguration(name, configurationKey, secret).Resource;
+    }
+
+    private static void BindAlternateTokenConfiguration(IDistributedApplicationBuilder builder)
+    {
+        if (!string.IsNullOrWhiteSpace(builder.Configuration[RailwayConstants.TokenConfigurationKey]))
+        {
+            return;
+        }
+
+        var apiToken = builder.Configuration[RailwayConstants.ApiTokenEnvironmentVariableName];
+        if (!string.IsNullOrWhiteSpace(apiToken))
+        {
+            builder.Configuration[RailwayConstants.TokenConfigurationKey] = apiToken;
+        }
     }
 
     /// <summary>

@@ -6,9 +6,15 @@ namespace Aspire.Hosting.Railway;
 public static class RailwayConstants
 {
     /// <summary>
-    /// Aspire parameter name for an account or workspace token. Project tokens cannot call <c>projectCreate</c>.
+    /// Aspire parameter resource name for the account/workspace token.
+    /// Resource names cannot contain underscores, so this is kebab-case.
     /// </summary>
-    public const string TokenParameterName = "RAILWAY_TOKEN";
+    public const string TokenParameterName = "railway-token";
+
+    /// <summary>
+    /// Configuration / environment variable name preferred in AppHosts and CI (<c>RAILWAY_TOKEN</c>).
+    /// </summary>
+    public const string TokenConfigurationKey = "RAILWAY_TOKEN";
 
     /// <summary>
     /// Alternate environment variable accepted in CI (Railway's documented API token name).
@@ -16,14 +22,24 @@ public static class RailwayConstants
     public const string ApiTokenEnvironmentVariableName = "RAILWAY_API_TOKEN";
 
     /// <summary>
-    /// Aspire parameter used to adopt an existing Railway project.
+    /// Aspire parameter resource name used to adopt an existing Railway project.
     /// </summary>
-    public const string ProjectIdParameterName = "RAILWAY_PROJECT_ID";
+    public const string ProjectIdParameterName = "railway-project-id";
 
     /// <summary>
-    /// Aspire parameter used to adopt an existing Railway environment.
+    /// Configuration / environment variable name for an existing Railway project id.
     /// </summary>
-    public const string EnvironmentIdParameterName = "RAILWAY_ENVIRONMENT_ID";
+    public const string ProjectIdConfigurationKey = "RAILWAY_PROJECT_ID";
+
+    /// <summary>
+    /// Aspire parameter resource name used to adopt an existing Railway environment.
+    /// </summary>
+    public const string EnvironmentIdParameterName = "railway-environment-id";
+
+    /// <summary>
+    /// Configuration / environment variable name for an existing Railway environment id.
+    /// </summary>
+    public const string EnvironmentIdConfigurationKey = "RAILWAY_ENVIRONMENT_ID";
 
     /// <summary>
     /// Railway GraphQL v2 endpoint.
