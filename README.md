@@ -18,6 +18,27 @@ These are first-class Aspire integrations: official resource types where they ex
 
 Pinned on Aspire.Hosting **13.4.6** / `net10.0`. Later: MySQL, MongoDB, HA / PgBouncer, cron, PR environment clones.
 
+## Preview packages (GitHub Packages)
+
+Preview builds are published to GitHub Packages, not nuget.org. First version: **0.1.0-preview.1**.
+
+Source: `https://nuget.pkg.github.com/intrepid-developer/index.json` (see `NuGet.Config.example`). Keep nuget.org as well for Aspire and other dependencies.
+
+GitHub Packages NuGet requires authentication even though this repository is public:
+
+- Locally: a personal access token with `read:packages`. Add the source once (`dotnet nuget add source https://nuget.pkg.github.com/intrepid-developer/index.json --name github-intrepid-developer --username YOUR_GITHUB_USERNAME --password YOUR_PAT --store-password-in-clear-text`) or put credentials in a user-level NuGet config, then `dotnet restore`.
+- GitHub Actions (private or public consumer repo): `permissions: packages: read` and authenticate `GITHUB_TOKEN` against that source (`dotnet nuget add source ... --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text`).
+
+Do not commit PATs or `packageSourceCredentials`.
+
+```xml
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.1" />
+```
+
 ## AppHost usage
 
 Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
