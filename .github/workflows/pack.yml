@@ -1,0 +1,72 @@
+name: Pack
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version to publish to GitHub Packages
+        required: false
+        default: "0.1.0-preview.1"
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="${TAG_NAME#v}"
+          fi
+          if [ -z "$version" ]; then
+            echo "Package version is empty" >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Pack
+        run: >
+          dotnet pack IntrepidDeveloper.Aspire.Hosting.Railway.slnx
+          --configuration Release
+          -p:Version=${{ steps.version.outputs.value }}
+          -o artifacts
+
+      - name: Push
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          packages=()
+          for pkg in artifacts/*.nupkg; do
+            [[ "$pkg" == *.symbols.nupkg ]] && continue
+            packages+=("$pkg")
+          done
+          if [ ${#packages[@]} -eq 0 ]; then
+            echo "No nupkg files to push" >&2
+            exit 1
+          fi
+          dotnet nuget push "${packages[@]}" \
+            --source https://nuget.pkg.github.com/intrepid-developer/index.json \
+            --api-key "$NUGET_AUTH_TOKEN"
