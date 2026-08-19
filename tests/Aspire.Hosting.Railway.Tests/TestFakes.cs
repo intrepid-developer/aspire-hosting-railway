@@ -161,6 +161,7 @@ internal static class GraphQLFixtures
     public const string ProductionEnvironmentId = "env_production_placeholder";
     public const string StagingEnvironmentId = "env_staging_placeholder";
     public const string ApiServiceId = "svc_api_placeholder";
+    public const string PostgresServiceId = "svc_postgres_placeholder";
     public const string UploadsServiceId = "svc_uploads_placeholder";
     public const string BucketId = "bucket_placeholder";
 
@@ -203,7 +204,60 @@ internal static class GraphQLFixtures
         """{"data":{"bucketCreate":{"id":"bucket_placeholder","name":"uploads"}}}""";
 
     public static string BucketCredentials =>
-        """{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucket":"uploads"}}}""";
+        """{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucketName":"uploads"}}}""";
+
+    public static string ProjectEmpty => ProjectQuery();
+
+    public static string ProjectWithExistingCanvas => ProjectQuery(
+        (PostgresServiceId, "Postgres"),
+        (ApiServiceId, "api"),
+        (UploadsServiceId, "uploads"));
+
+    public static string ProjectWithApi => ProjectQuery((ApiServiceId, "api"));
+
+    public static string ProjectQuery(params (string Id, string Name)[] services)
+    {
+        var serviceEdges = new JsonArray();
+        foreach (var (id, name) in services)
+        {
+            serviceEdges.Add(new JsonObject
+            {
+                ["node"] = new JsonObject
+                {
+                    ["id"] = id,
+                    ["name"] = name
+                }
+            });
+        }
+
+        var payload = new JsonObject
+        {
+            ["data"] = new JsonObject
+            {
+                ["project"] = new JsonObject
+                {
+                    ["name"] = "railway",
+                    ["services"] = new JsonObject { ["edges"] = serviceEdges },
+                    ["environments"] = new JsonObject
+                    {
+                        ["edges"] = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["node"] = new JsonObject
+                                {
+                                    ["id"] = ProductionEnvironmentId,
+                                    ["name"] = "production"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        return payload.ToJsonString();
+    }
 
     public static string ServiceDomainCreate =>
         """{"data":{"serviceDomainCreate":{"id":"domain_placeholder","domain":"api-placeholder.up.railway.app"}}}""";

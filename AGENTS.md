@@ -31,6 +31,6 @@ Per environment: `prepare-deployment-targets-{name}`, `publish-{name}`, `deploy-
 
 Publish writes `railway-plan.json` (expressions and parameter names only). Deploy calls `RailwayGraphQLApplyService` with the typed client in `GraphQL/` (confirmed operations only). Do not change the public AppHost surface when extending apply.
 
-Confirmed Railway operations: `projectCreate`, `environmentCreate`, `serviceCreate` (always pass `environmentId`), `serviceInstanceUpdate`, `serviceInstanceDeployV2`, `variableCollectionUpsert`, `serviceDomainCreate`, `template` + `templateDeployV2`, `workflowStatus`, `bucketCreate`, `bucketS3Credentials`, `environmentPatchCommitStaged`, `regions`.
+Confirmed Railway operations: `project` (documented `project(id)` query), `projectCreate`, `environmentCreate`, `serviceCreate` (always pass `environmentId`), `serviceInstanceUpdate`, `serviceInstanceDeployV2`, `variableCollectionUpsert`, `serviceDomainCreate`, `template` + `templateDeployV2`, `workflowStatus`, `bucketCreate`, `bucketS3Credentials` (`projectId` required; select `bucketName`), `environmentPatchCommitStaged`, `regions`.
 
 Railway has no image registry. Image-based deploy must fail clearly unless the model has `IContainerRegistry` (GHCR / Docker Hub). Do not shell out to `railway up`.

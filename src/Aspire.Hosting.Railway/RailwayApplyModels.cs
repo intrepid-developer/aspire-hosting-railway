@@ -118,6 +118,12 @@ internal static class RailwayDeploymentStateStore
     internal const string BucketsKey = "Buckets";
     internal const string TemplatesKey = "Templates";
 
+    /// <summary>
+    /// Older Maldric-style key that stored a JSON array string such as
+    /// <c>["postgres"]</c>. Preview.4 never read this; load migrates it.
+    /// </summary>
+    internal const string AppliedTemplateCodesKey = "AppliedTemplateCodes";
+
     public static async Task<RailwayDeploymentSnapshot> LoadAsync(
         IDeploymentStateManager stateManager,
         string computeEnvironmentName,
@@ -154,8 +160,9 @@ internal static class RailwayDeploymentStateStore
         CopyStringMap(bucketsRoot?["production"] as JsonObject, snapshot.ProductionBucketIds);
 
         var templatesRoot = section.Data[TemplatesKey] as JsonObject;
-        CopyTemplateCodes(templatesRoot?[railwayEnvironmentName] as JsonArray, snapshot.TemplateCodes);
-        CopyTemplateCodes(templatesRoot?["production"] as JsonArray, snapshot.ProductionTemplateCodes);
+        CopyTemplateCodes(templatesRoot?[railwayEnvironmentName], snapshot.TemplateCodes);
+        CopyTemplateCodes(templatesRoot?["production"], snapshot.ProductionTemplateCodes);
+        CopyTemplateCodes(section.Data[AppliedTemplateCodesKey], snapshot.TemplateCodes);
 
         return snapshot;
     }
@@ -185,10 +192,13 @@ internal static class RailwayDeploymentStateStore
         WriteScopedMap(section.Data, BucketsKey, railwayEnvironmentName, result.BucketIds);
 
         var templatesRoot = section.Data[TemplatesKey] as JsonObject ?? [];
-        var templates = new JsonArray();
+        // Persist as an object (not a JSON array). Aspire FileDeploymentStateManager
+        // flattens with colon keys and unflatten does not rebuild arrays — indexed
+        // keys become objects with "0", so a JsonArray cast would lose the codes.
+        var templates = new JsonObject();
         foreach (var code in result.AppliedTemplateCodes.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            templates.Add(code);
+            templates[code] = code;
         }
 
         templatesRoot[railwayEnvironmentName] = templates;
@@ -200,22 +210,83 @@ internal static class RailwayDeploymentStateStore
     private static string? ReadString(JsonObject data, string key) =>
         data[key]?.GetValue<string>();
 
-    private static void CopyTemplateCodes(JsonArray? source, HashSet<string> destination)
+    private static void CopyTemplateCodes(JsonNode? source, HashSet<string> destination)
     {
         if (source is null)
         {
             return;
         }
 
-        foreach (var item in source)
+        switch (source)
         {
-            var code = item?.GetValue<string>();
-            if (!string.IsNullOrWhiteSpace(code))
-            {
-                destination.Add(code);
-            }
+            case JsonArray array:
+                foreach (var item in array)
+                {
+                    AddTemplateCode(item?.GetValue<string>(), destination);
+                }
+
+                return;
+            case JsonObject obj:
+                foreach (var pair in obj)
+                {
+                    var fromValue = TryGetString(pair.Value);
+                    if (!string.IsNullOrWhiteSpace(fromValue) && !IsFlattenedArrayIndex(fromValue))
+                    {
+                        destination.Add(fromValue);
+                    }
+                    else if (!IsFlattenedArrayIndex(pair.Key))
+                    {
+                        AddTemplateCode(pair.Key, destination);
+                    }
+                }
+
+                return;
+            default:
+                CopyTemplateCodesFromString(TryGetString(source), destination);
+                return;
         }
     }
+
+    private static void CopyTemplateCodesFromString(string? raw, HashSet<string> destination)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return;
+        }
+
+        var trimmed = raw.Trim();
+        if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
+        {
+            try
+            {
+                CopyTemplateCodes(JsonNode.Parse(trimmed), destination);
+                return;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Fall through and treat the value as a comma-separated list.
+            }
+        }
+
+        foreach (var part in trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            AddTemplateCode(part.Trim('"'), destination);
+        }
+    }
+
+    private static void AddTemplateCode(string? code, HashSet<string> destination)
+    {
+        if (!string.IsNullOrWhiteSpace(code) && !IsFlattenedArrayIndex(code))
+        {
+            destination.Add(code);
+        }
+    }
+
+    private static bool IsFlattenedArrayIndex(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && int.TryParse(value, out _);
+
+    private static string? TryGetString(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     private static void CopyStringMap(JsonObject? source, Dictionary<string, string> destination)
     {

@@ -110,6 +110,16 @@ public sealed class RailwayGraphQLApplyService
             SeedFromProduction(snapshot, result);
         }
 
+        if (!createdProject)
+        {
+            await AdoptExistingProjectResourcesAsync(
+                plan,
+                request,
+                result,
+                reportingStep,
+                cancellationToken).ConfigureAwait(false);
+        }
+
         async Task PersistAsync()
         {
             if (stateManager is null)
@@ -299,15 +309,16 @@ public sealed class RailwayGraphQLApplyService
                 continue;
             }
 
-            if (result.AppliedTemplateCodes.Contains(managed.TemplateCode, StringComparer.OrdinalIgnoreCase))
+            if (ShouldSkipTemplateDeploy(managed, result))
             {
+                RecordAppliedTemplate(managed, result);
                 var skipTask = await reportingStep.CreateTaskAsync(
                     new MarkdownString($"Template `{managed.TemplateCode}` already applied"),
                     cancellationToken).ConfigureAwait(false);
                 await using (skipTask.ConfigureAwait(false))
                 {
                     await skipTask.CompleteAsync(
-                        "Skipping templateDeployV2 because this template code is already in deployment state.",
+                        "Skipping templateDeployV2 because a matching service already exists on the project or this template code is already in deployment state.",
                         CompletionState.Completed,
                         cancellationToken).ConfigureAwait(false);
                 }
@@ -428,6 +439,7 @@ public sealed class RailwayGraphQLApplyService
                 var credentialsResponse = await _client.BucketS3CredentialsAsync(
                     bucketId,
                     result.EnvironmentId,
+                    result.ProjectId,
                     request.Token,
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(credentialsResponse, "bucketS3Credentials");
@@ -482,7 +494,9 @@ public sealed class RailwayGraphQLApplyService
                                 : credentials.Endpoint,
                             ["ACCESS_KEY_ID"] = credentials.AccessKeyId,
                             ["SECRET_ACCESS_KEY"] = credentials.SecretAccessKey,
-                            ["BUCKET"] = string.IsNullOrWhiteSpace(credentials.Bucket) ? managed.Name : credentials.Bucket,
+                            ["BUCKET"] = string.IsNullOrWhiteSpace(credentials.BucketName)
+                                ? managed.Name
+                                : credentials.BucketName,
                             ["REGION"] = string.IsNullOrWhiteSpace(credentials.Region) ? "auto" : credentials.Region
                         }
                     },
@@ -666,6 +680,92 @@ public sealed class RailwayGraphQLApplyService
 
         return variables;
     }
+
+    private async Task AdoptExistingProjectResourcesAsync(
+        RailwayPlan plan,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        IReportingStep reportingStep,
+        CancellationToken cancellationToken)
+    {
+        var task = await reportingStep.CreateTaskAsync(
+            new MarkdownString($"List existing Railway project `{result.ProjectId}` services"),
+            cancellationToken).ConfigureAwait(false);
+        await using (task.ConfigureAwait(false))
+        {
+            var response = await _client.ProjectAsync(result.ProjectId, request.Token, cancellationToken)
+                .ConfigureAwait(false);
+            RailwayGraphQLClient.ThrowIfFailed(response, "project");
+
+            var adopted = 0;
+            if (response.Data?.Project?.Services?.Edges is { } edges)
+            {
+                foreach (var edge in edges)
+                {
+                    if (edge.Node is not { } node ||
+                        string.IsNullOrWhiteSpace(node.Id) ||
+                        string.IsNullOrWhiteSpace(node.Name))
+                    {
+                        continue;
+                    }
+
+                    result.ServiceIds[node.Name] = node.Id;
+                    adopted++;
+
+                    foreach (var managed in plan.ManagedServices)
+                    {
+                        if (!ServiceNameMatches(managed, node.Name))
+                        {
+                            continue;
+                        }
+
+                        result.ServiceIds[managed.Name] = node.Id;
+                        if (!string.IsNullOrWhiteSpace(managed.TemplateCode))
+                        {
+                            RecordAppliedTemplate(managed, result);
+                        }
+                    }
+                }
+            }
+
+            await task.CompleteAsync(
+                adopted == 0
+                    ? "No existing Railway services matched plan names."
+                    : $"Adopted {adopted} existing Railway service id(s) by name.",
+                CompletionState.Completed,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static bool ShouldSkipTemplateDeploy(RailwayPlanManagedService managed, RailwayApplyResult result)
+    {
+        if (result.AppliedTemplateCodes.Contains(managed.TemplateCode, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return HasServiceId(result, managed.Name) ||
+               HasServiceId(result, managed.TemplateCode);
+    }
+
+    private static void RecordAppliedTemplate(RailwayPlanManagedService managed, RailwayApplyResult result)
+    {
+        if (!string.IsNullOrWhiteSpace(managed.TemplateCode) &&
+            !result.AppliedTemplateCodes.Contains(managed.TemplateCode, StringComparer.OrdinalIgnoreCase))
+        {
+            result.AppliedTemplateCodes.Add(managed.TemplateCode);
+        }
+    }
+
+    private static bool ServiceNameMatches(RailwayPlanManagedService managed, string railwayServiceName) =>
+        string.Equals(managed.Name, railwayServiceName, StringComparison.OrdinalIgnoreCase) ||
+        (!string.IsNullOrWhiteSpace(managed.TemplateCode) &&
+         string.Equals(managed.TemplateCode, railwayServiceName, StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasServiceId(RailwayApplyResult result, string? name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        result.ServiceIds.TryGetValue(name, out var serviceId) &&
+        !string.IsNullOrWhiteSpace(serviceId);
 
     private static void SeedFromProduction(RailwayDeploymentSnapshot snapshot, RailwayApplyResult result)
     {
