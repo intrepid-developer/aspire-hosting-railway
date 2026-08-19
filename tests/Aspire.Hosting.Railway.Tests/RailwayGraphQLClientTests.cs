@@ -107,6 +107,25 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task BucketS3Credentials_LiveArrayPayload_TakesFirstCredential()
+    {
+        var handler = new RecordingHandler(
+            """{"data":{"bucketS3Credentials":[{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucketName":"uploads"}]}}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.BucketS3CredentialsAsync(
+            "bucket_placeholder",
+            "env_placeholder",
+            "proj_placeholder",
+            "placeholder-token");
+
+        RailwayGraphQLClient.ThrowIfFailed(response, "bucketS3Credentials");
+        Assert.Equal("uploads", response.Data?.BucketS3Credentials?.BucketName);
+        Assert.Equal("placeholder-access-key", response.Data?.BucketS3Credentials?.AccessKeyId);
+        Assert.Equal("https://storage.railway.app", response.Data?.BucketS3Credentials?.Endpoint);
+    }
+
+    [Fact]
     public async Task Project_PostsDocumentedQueryWithServiceIds()
     {
         var handler = new RecordingHandler(GraphQLFixtures.ProjectWithExistingCanvas);

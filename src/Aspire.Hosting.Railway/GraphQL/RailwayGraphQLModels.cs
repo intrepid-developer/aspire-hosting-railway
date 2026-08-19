@@ -289,8 +289,12 @@ public sealed class BucketCreateData
 /// <summary>Data wrapper for <c>bucketS3Credentials</c>.</summary>
 public sealed class BucketS3CredentialsData
 {
-    /// <summary>Gets or sets the credentials. Callers must not persist the secret to plan files or deployment state.</summary>
+    /// <summary>
+    /// Gets or sets the credentials. Railway currently returns an array; a single object
+    /// is still accepted. Callers must not persist the secret to plan files or deployment state.
+    /// </summary>
     [JsonPropertyName("bucketS3Credentials")]
+    [JsonConverter(typeof(BucketS3CredentialsJsonConverter))]
     public BucketS3Credentials? BucketS3Credentials { get; set; }
 }
 
@@ -344,4 +348,36 @@ public sealed class TemplateData
     /// <summary>Gets or sets the template.</summary>
     [JsonPropertyName("template")]
     public RailwayTemplate? Template { get; set; }
+}
+
+/// <summary>
+/// Railway's live <c>bucketS3Credentials</c> field returns an array of credential objects.
+/// Older snapshots returned a single object. Accept both without failing deserialize.
+/// </summary>
+internal sealed class BucketS3CredentialsJsonConverter : JsonConverter<BucketS3Credentials>
+{
+    private static readonly JsonSerializerOptions InnerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    public override BucketS3Credentials? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.Null:
+                return null;
+            case JsonTokenType.StartObject:
+                return JsonSerializer.Deserialize<BucketS3Credentials>(ref reader, InnerOptions);
+            case JsonTokenType.StartArray:
+                var list = JsonSerializer.Deserialize<List<BucketS3Credentials>>(ref reader, InnerOptions);
+                return list is { Count: > 0 } ? list[0] : null;
+            default:
+                throw new JsonException($"Unexpected token {reader.TokenType} for bucketS3Credentials.");
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, BucketS3Credentials value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, value, InnerOptions);
 }
