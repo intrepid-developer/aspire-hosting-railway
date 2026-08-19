@@ -132,7 +132,7 @@ internal static class RailwayDeploymentStateStore
     internal const string TemplatesKey = "Templates";
 
     /// <summary>
-    /// Older Maldric-style key that stored a JSON array string such as
+    /// Legacy key that stored a JSON array string such as
     /// <c>["postgres"]</c>. Preview.4 never read this; load migrates it.
     /// </summary>
     internal const string AppliedTemplateCodesKey = "AppliedTemplateCodes";

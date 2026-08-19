@@ -1,6 +1,8 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var railway = builder.AddRailwayEnvironment("railway");
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+var railway = builder.AddRailwayEnvironment("railway")
+    .WithContainerRegistry(ghcr);
 
 var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
 var cache = builder.AddRedis("redis").PublishAsRailwayRedis();
