@@ -558,6 +558,7 @@ public sealed class RailwayGraphQLApplyService
                     }
 
                     result.ServiceIds[service.Name] = serviceId;
+                    result.AdoptedRailwayServiceNames.Add(service.Name);
                     await persistAsync().ConfigureAwait(false);
                 }
 
@@ -572,7 +573,7 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(update, "serviceInstanceUpdate");
 
-                var variables = ResolveServiceEnvironment(service, request);
+                var variables = ResolveServiceEnvironment(service, request, result);
                 if (variables.Count > 0)
                 {
                     var upsert = await _client.VariableCollectionUpsertAsync(
@@ -661,20 +662,34 @@ public sealed class RailwayGraphQLApplyService
 
     private static Dictionary<string, string> ResolveServiceEnvironment(
         RailwayPlanService service,
-        RailwayApplyRequest request)
+        RailwayApplyRequest request,
+        RailwayApplyResult result)
     {
         var variables = new Dictionary<string, string>(service.Environment, StringComparer.Ordinal);
-        if (!request.ResolvedServiceEnvironment.TryGetValue(service.Name, out var resolved) ||
-            resolved is null)
+        if (request.ResolvedServiceEnvironment.TryGetValue(service.Name, out var resolved) &&
+            resolved is not null)
         {
-            return variables;
+            foreach (var pair in resolved)
+            {
+                if (!string.IsNullOrWhiteSpace(pair.Value))
+                {
+                    variables[pair.Key] = pair.Value;
+                }
+            }
         }
 
-        foreach (var pair in resolved)
+        foreach (var pair in variables.ToArray())
         {
-            if (!string.IsNullOrWhiteSpace(pair.Value))
+            variables[pair.Key] = RailwayReferenceExpressions.RewriteServiceName(
+                pair.Value,
+                result.AdoptedRailwayServiceNames);
+        }
+
+        foreach (var pair in variables.ToArray())
+        {
+            if (string.IsNullOrWhiteSpace(pair.Value))
             {
-                variables[pair.Key] = pair.Value;
+                variables.Remove(pair.Key);
             }
         }
 
@@ -710,6 +725,7 @@ public sealed class RailwayGraphQLApplyService
                     }
 
                     result.ServiceIds[node.Name] = node.Id;
+                    result.AdoptedRailwayServiceNames.Add(node.Name);
                     adopted++;
 
                     foreach (var managed in plan.ManagedServices)
