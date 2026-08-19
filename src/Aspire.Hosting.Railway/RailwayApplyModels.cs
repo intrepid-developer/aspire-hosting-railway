@@ -77,6 +77,13 @@ public sealed class RailwayApplyResult
 
     /// <summary>Gets warning messages that were reported without failing the apply.</summary>
     public List<string> Warnings { get; init; } = [];
+
+    /// <summary>
+    /// Gets resolved S3 connection strings keyed by bucket resource name.
+    /// In-memory only — never written to plan files or deployment state.
+    /// </summary>
+    public Dictionary<string, string> BucketConnectionStrings { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
