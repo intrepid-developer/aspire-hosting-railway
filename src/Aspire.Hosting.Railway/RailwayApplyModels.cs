@@ -63,6 +63,12 @@ public sealed class RailwayApplyResult
     /// <summary>Gets service ids keyed by Railway service name.</summary>
     public Dictionary<string, string> ServiceIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Gets service names as Railway returned them from <c>project(id)</c> (original casing).
+    /// Used to rewrite <c>${{postgres.DATABASE_URL}}</c> to the live service name.
+    /// </summary>
+    public HashSet<string> AdoptedRailwayServiceNames { get; init; } = new(StringComparer.Ordinal);
+
     /// <summary>Gets bucket ids keyed by Aspire resource name.</summary>
     public Dictionary<string, string> BucketIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 

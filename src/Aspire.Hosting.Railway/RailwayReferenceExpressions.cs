@@ -18,4 +18,41 @@ public static class RailwayReferenceExpressions
         ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
         return $"${{{{{serviceName}.{variableName}}}}}";
     }
+
+    /// <summary>
+    /// Rewrites <c>${{name.VAR}}</c> to use a Railway service name from
+    /// <paramref name="railwayServiceNames"/> when the names differ only by case
+    /// (for example <c>postgres</c> vs <c>Postgres</c>).
+    /// </summary>
+    public static string RewriteServiceName(string expression, IEnumerable<string> railwayServiceNames)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expression);
+        ArgumentNullException.ThrowIfNull(railwayServiceNames);
+
+        const string prefix = "${{";
+        const string suffix = "}}";
+        if (!expression.StartsWith(prefix, StringComparison.Ordinal) ||
+            !expression.EndsWith(suffix, StringComparison.Ordinal))
+        {
+            return expression;
+        }
+
+        var inner = expression[prefix.Length..^suffix.Length];
+        var separator = inner.IndexOf('.');
+        if (separator <= 0)
+        {
+            return expression;
+        }
+
+        var serviceName = inner[..separator];
+        var variableName = inner[(separator + 1)..];
+        var match = railwayServiceNames.FirstOrDefault(name =>
+            string.Equals(name, serviceName, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(match) || string.Equals(match, serviceName, StringComparison.Ordinal))
+        {
+            return expression;
+        }
+
+        return PrivateServiceVariable(match, variableName);
+    }
 }

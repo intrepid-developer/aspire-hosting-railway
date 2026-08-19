@@ -101,6 +101,7 @@ public static class RailwayPlanBuilder
                 service.Image = $"{{{resource.Name}.containerImage}}";
             }
 
+            AddCapturedEnvironment(plan, service, resource);
             AddReferencedConnectionStrings(plan, service, resource);
             plan.Services.Add(service);
         }
@@ -159,6 +160,91 @@ public static class RailwayPlanBuilder
         return environmentKey.StartsWith(ConnectionStringPrefix, StringComparison.Ordinal)
             ? environmentKey[ConnectionStringPrefix.Length..]
             : null;
+    }
+
+    private static void AddCapturedEnvironment(
+        RailwayPlan plan,
+        RailwayPlanService service,
+        IResource resource)
+    {
+        if (!resource.TryGetEnvironmentVariables(out var annotations) || annotations is null)
+        {
+            return;
+        }
+
+        var values = new Dictionary<string, object>(StringComparer.Ordinal);
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish);
+        var callbackContext = new EnvironmentCallbackContext(
+            executionContext,
+            resource,
+            values,
+            CancellationToken.None);
+
+        foreach (var annotation in annotations)
+        {
+            try
+            {
+                annotation.Callback(callbackContext).GetAwaiter().GetResult();
+            }
+            catch (InvalidOperationException)
+            {
+                // Publish-mode callbacks may not be able to resolve run-time endpoints.
+            }
+        }
+
+        foreach (var pair in values)
+        {
+            CaptureEnvironmentValue(plan, service, pair.Key, pair.Value);
+        }
+    }
+
+    private static void CaptureEnvironmentValue(
+        RailwayPlan plan,
+        RailwayPlanService service,
+        string key,
+        object? value)
+    {
+        switch (value)
+        {
+            case ParameterResource parameter:
+                AddParameterName(plan, parameter.Name);
+                service.Environment[key] = parameter.Name;
+                break;
+
+            case string text when !string.IsNullOrWhiteSpace(text):
+                service.Environment[key] = text;
+                break;
+
+            case IManifestExpressionProvider expression:
+                var expressionText = expression.ValueExpression;
+                if (IsRailwayReferenceExpression(expressionText))
+                {
+                    service.Environment[key] = expressionText;
+                    break;
+                }
+
+                if (TryGetParameterNameFromExpression(expressionText, out var parameterName))
+                {
+                    AddParameterName(plan, parameterName);
+                    service.Environment[key] = parameterName;
+                }
+
+                break;
+        }
+    }
+
+    private static bool TryGetParameterNameFromExpression(string expression, out string name)
+    {
+        name = "";
+        if (string.IsNullOrWhiteSpace(expression) ||
+            expression[0] != '{' ||
+            !expression.EndsWith(".value}", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        name = expression[1..^".value}".Length];
+        return !string.IsNullOrWhiteSpace(name);
     }
 
     private static void AddReferencedConnectionStrings(

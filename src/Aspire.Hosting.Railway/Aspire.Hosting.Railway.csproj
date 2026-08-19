@@ -3,7 +3,7 @@
     <PackageId>IntrepidDeveloper.Aspire.Hosting.Railway</PackageId>
     <Description>Aspire 13.4 compute environment and pipeline hooks so aspire publish / aspire deploy can target Railway.</Description>
     <RootNamespace>Aspire.Hosting.Railway</RootNamespace>
-    <NoWarn>$(NoWarn);ASPIREPIPELINES001;ASPIREPIPELINES002;ASPIREPIPELINES003;ASPIREPIPELINES004;ASPIRECOMPUTE002</NoWarn>
+    <NoWarn>$(NoWarn);ASPIREPIPELINES001;ASPIREPIPELINES002;ASPIREPIPELINES003;ASPIREPIPELINES004;ASPIRECOMPUTE002;ASPIRECOMPUTE003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting" />

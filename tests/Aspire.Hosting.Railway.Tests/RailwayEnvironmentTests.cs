@@ -82,7 +82,7 @@ public class RailwayEnvironmentTests
     {
         var builder = TestAppBuilder.CreatePublish();
         var railway = builder.AddRailwayEnvironment("railway");
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/demo");
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "northwind-samples/harbor");
         railway.WithContainerRegistry(ghcr);
         var api = builder.AddContainer("api", "nginx");
 
@@ -114,6 +114,41 @@ public class RailwayEnvironmentTests
     }
 
     [Fact]
+    public void Plan_DatabaseChildReference_EmitsCatalogConnectionStringAndParameterEnv()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var postgres = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        var database = postgres.AddDatabase("catalog");
+        var secret = builder.AddParameter("billing-secret-key", "sk_test_placeholder", secret: true);
+        builder.AddContainer("api", "nginx")
+            .WithReference(database)
+            .WithEnvironment("Billing__SecretKey", secret)
+            .WithEnvironment("Storage__RequireBucket", "true");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var api = Assert.Single(plan.Services, service => service.Name == "api");
+
+        Assert.Equal("${{postgres.DATABASE_URL}}", api.Environment["ConnectionStrings__catalog"]);
+        Assert.False(api.Environment.ContainsKey("ConnectionStrings__postgres"));
+        Assert.Equal("billing-secret-key", api.Environment["Billing__SecretKey"]);
+        Assert.Equal("true", api.Environment["Storage__RequireBucket"]);
+        Assert.Contains("billing-secret-key", plan.Parameters);
+        Assert.DoesNotContain("sk_test_placeholder", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RailwayReference_RewritesServiceNameCasing()
+    {
+        var rewritten = RailwayReferenceExpressions.RewriteServiceName(
+            "${{postgres.DATABASE_URL}}",
+            ["Postgres", "api"]);
+
+        Assert.Equal("${{Postgres.DATABASE_URL}}", rewritten);
+    }
+
+    [Fact]
     public void PlanJson_ContainsNoSecrets()
     {
         var builder = TestAppBuilder.CreatePublish();
@@ -133,8 +168,8 @@ public class RailwayEnvironmentTests
         Assert.Contains("RAILWAY_TOKEN", json, StringComparison.Ordinal);
         Assert.Contains("${{postgres.DATABASE_URL}}", json, StringComparison.Ordinal);
         Assert.Contains("${{redis.REDIS_URL}}", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("password", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("secret", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("postgres-password", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("Password=", json, StringComparison.Ordinal);
         Assert.DoesNotContain("Bearer", json, StringComparison.OrdinalIgnoreCase);
     }
 
