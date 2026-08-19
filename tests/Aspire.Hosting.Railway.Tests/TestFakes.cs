@@ -217,11 +217,46 @@ internal static class GraphQLFixtures
 
     public static string ProjectQuery(params (string Id, string Name)[] services)
     {
-        var edges = services.Length == 0
-            ? ""
-            : string.Join(",", services.Select(service =>
-                $$$"""{"node":{"id":"{{{service.Id}}}","name":"{{{service.Name}}}"}}"""));
-        return $$$"""{"data":{"project":{"name":"railway","services":{"edges":[{{{edges}}}]},"environments":{"edges":[{"node":{"id":"env_production_placeholder","name":"production"}}]}}}}""";
+        var serviceEdges = new JsonArray();
+        foreach (var (id, name) in services)
+        {
+            serviceEdges.Add(new JsonObject
+            {
+                ["node"] = new JsonObject
+                {
+                    ["id"] = id,
+                    ["name"] = name
+                }
+            });
+        }
+
+        var payload = new JsonObject
+        {
+            ["data"] = new JsonObject
+            {
+                ["project"] = new JsonObject
+                {
+                    ["name"] = "railway",
+                    ["services"] = new JsonObject { ["edges"] = serviceEdges },
+                    ["environments"] = new JsonObject
+                    {
+                        ["edges"] = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["node"] = new JsonObject
+                                {
+                                    ["id"] = ProductionEnvironmentId,
+                                    ["name"] = "production"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        return payload.ToJsonString();
     }
 
     public static string ServiceDomainCreate =>
