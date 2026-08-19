@@ -503,6 +503,17 @@ public sealed class RailwayGraphQLApplyService
                     request.Token,
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(upsert, "variableCollectionUpsert");
+
+                var endpoint = string.IsNullOrWhiteSpace(credentials.Endpoint)
+                    ? RailwayConstants.BucketS3Endpoint
+                    : credentials.Endpoint;
+                var bucketName = string.IsNullOrWhiteSpace(credentials.BucketName)
+                    ? managed.Name
+                    : credentials.BucketName;
+                var region = string.IsNullOrWhiteSpace(credentials.Region) ? "auto" : credentials.Region;
+                result.BucketConnectionStrings[managed.Name] =
+                    $"Endpoint={endpoint};AccessKeyId={credentials.AccessKeyId};SecretAccessKey={credentials.SecretAccessKey};Bucket={bucketName};Region={region};ForcePathStyle=false";
+
                 await persistAsync().ConfigureAwait(false);
 
                 await task.CompleteAsync(
@@ -676,6 +687,11 @@ public sealed class RailwayGraphQLApplyService
                     variables[pair.Key] = pair.Value;
                 }
             }
+        }
+
+        foreach (var pair in result.BucketConnectionStrings)
+        {
+            variables[$"ConnectionStrings__{pair.Key}"] = pair.Value;
         }
 
         foreach (var pair in variables.ToArray())
