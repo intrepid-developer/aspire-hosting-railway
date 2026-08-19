@@ -54,7 +54,7 @@ public static class RailwayBucketExtensions
             var emulator = builder.AddContainer($"{name}-s3", LocalS3Image, LocalS3ImageTag)
                 .WithHttpEndpoint(targetPort: 9090, name: "s3")
                 .WithEnvironment("initialBuckets", resolvedBucketName)
-                .WithHttpHealthCheck("/");
+                .WithHttpHealthCheck("/", endpointName: "s3");
 
             resource.Emulator = emulator.Resource;
             resource.EmulatorEndpoint = emulator.GetEndpoint("s3");

@@ -6,7 +6,7 @@ namespace Aspire.Hosting.Railway.Storage;
 /// Aspire resource for an object bucket. Locally this is backed by an S3-compatible container;
 /// on deploy it becomes a Railway bucket (S3 endpoint <c>https://storage.railway.app</c>).
 /// </summary>
-public sealed class RailwayBucketResource : Resource, IResourceWithConnectionString, IResourceWithWaitSupport
+public sealed class RailwayBucketResource : Resource, IResourceWithConnectionString, IResourceWithWaitSupport, IResourceWithoutLifetime
 {
     /// <summary>
     /// Initializes a new bucket resource.
