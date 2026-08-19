@@ -168,7 +168,6 @@ public class RailwayEnvironmentTests
         Assert.Contains("RAILWAY_TOKEN", json, StringComparison.Ordinal);
         Assert.Contains("${{postgres.DATABASE_URL}}", json, StringComparison.Ordinal);
         Assert.Contains("${{redis.REDIS_URL}}", json, StringComparison.Ordinal);
-        Assert.Contains("postgres-password", json, StringComparison.Ordinal);
         Assert.DoesNotContain("Password=", json, StringComparison.Ordinal);
         Assert.DoesNotContain("Bearer", json, StringComparison.OrdinalIgnoreCase);
     }
@@ -214,6 +213,57 @@ public class RailwayEnvironmentTests
         Assert.False(marketing.Environment.ContainsKey("ConnectionStrings__chat"));
         Assert.DoesNotContain("placeholder-openai-key", json, StringComparison.Ordinal);
         Assert.DoesNotContain("sk-", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_KeepsLiteralEnvironmentValuesAndSkipsUnknownManifestParameters()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .WithEnvironment("Storage__RequireBucket", "true")
+            .WithEnvironment("OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY", "in_memory")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["OTEL_EXPORTER_OTLP_ENDPOINT"] =
+                    new ManifestExpression("{in_memory.value}");
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var api = Assert.Single(plan.Services, service => service.Name == "api");
+
+        Assert.Equal("true", api.Environment["Storage__RequireBucket"]);
+        Assert.Equal("in_memory", api.Environment["OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY"]);
+        Assert.False(api.Environment.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"));
+        Assert.DoesNotContain("in_memory", plan.Parameters);
+    }
+
+    [Fact]
+    public void Coalesce_UsesLiteralsWhenTheValueIsNotACapturedParameter()
+    {
+        Assert.Equal(
+            "in_memory",
+            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue("in_memory", null, []));
+        Assert.Equal(
+            "true",
+            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue("true", null, ["billing-secret-key"]));
+        Assert.Equal(
+            "resolved-secret",
+            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue(
+                "billing-secret-key",
+                "resolved-secret",
+                ["billing-secret-key"]));
+        Assert.Null(
+            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue(
+                "billing-secret-key",
+                null,
+                ["billing-secret-key"]));
+    }
+
+    private sealed class ManifestExpression(string value) : IManifestExpressionProvider
+    {
+        public string ValueExpression { get; } = value;
     }
 
     [Fact]

@@ -480,7 +480,7 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
                 request.ExternalHttpServices.Add(service.Name);
             }
 
-            await ResolveServiceEnvironmentAsync(context, service, request).ConfigureAwait(false);
+            await ResolveServiceEnvironmentAsync(context, plan, service, request).ConfigureAwait(false);
         }
 
         return request;
@@ -559,6 +559,7 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
 
     private static async Task ResolveServiceEnvironmentAsync(
         PipelineStepContext context,
+        RailwayPlan plan,
         RailwayPlanService service,
         RailwayApplyRequest request)
     {
@@ -574,7 +575,8 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
                     context,
                     service.Name,
                     pair.Key,
-                    pair.Value)
+                    pair.Value,
+                    plan.Parameters)
                 .ConfigureAwait(false);
 
             if (string.IsNullOrWhiteSpace(resolvedValue))
@@ -598,7 +600,8 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         PipelineStepContext context,
         string serviceName,
         string environmentKey,
-        string planValue)
+        string planValue,
+        IReadOnlyCollection<string> capturedParameterNames)
     {
         var resourceName = RailwayPlanBuilder.TryGetConnectionStringResourceName(environmentKey);
         if (!string.IsNullOrWhiteSpace(resourceName))
@@ -631,7 +634,12 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         var parameter = context.Model.Resources.OfType<ParameterResource>()
             .FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, planValue, StringComparison.OrdinalIgnoreCase));
-        return await TryGetParameterValueAsync(parameter, context.CancellationToken).ConfigureAwait(false);
+        var parameterValue = await TryGetParameterValueAsync(parameter, context.CancellationToken)
+            .ConfigureAwait(false);
+        return RailwayPlanBuilder.CoalesceCapturedEnvironmentValue(
+            planValue,
+            parameterValue,
+            capturedParameterNames);
     }
 
     private static async Task<string?> TryGetParameterValueAsync(

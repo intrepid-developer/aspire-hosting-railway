@@ -20,7 +20,7 @@ Pinned on Aspire.Hosting **13.4.6** / `net10.0`. Later: MySQL, MongoDB, HA / PgB
 
 ## Preview packages (GitHub Packages)
 
-Preview builds are published to GitHub Packages, not nuget.org. Current version: **0.1.0-preview.9**.
+Preview builds are published to GitHub Packages, not nuget.org. Current version: **0.1.0-preview.10**.
 
 Source: `https://nuget.pkg.github.com/intrepid-developer/index.json` (see `NuGet.Config.example`). Keep nuget.org as well for Aspire and other dependencies.
 
@@ -32,11 +32,11 @@ GitHub Packages NuGet requires authentication even though this repository is pub
 Do not commit PATs or `packageSourceCredentials`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.9" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.9" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.9" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.9" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.9" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.10" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.10" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.10" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.10" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.10" />
 ```
 
 ## AppHost usage

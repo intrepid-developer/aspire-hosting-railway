@@ -101,7 +101,7 @@ public static class RailwayPlanBuilder
                 service.Image = $"{{{resource.Name}.containerImage}}";
             }
 
-            AddCapturedEnvironment(plan, service, resource);
+            AddCapturedEnvironment(plan, service, resource, model);
             AddReferencedConnectionStrings(plan, service, resource);
             plan.Services.Add(service);
         }
@@ -165,7 +165,8 @@ public static class RailwayPlanBuilder
     private static void AddCapturedEnvironment(
         RailwayPlan plan,
         RailwayPlanService service,
-        IResource resource)
+        IResource resource,
+        DistributedApplicationModel model)
     {
         if (!resource.TryGetEnvironmentVariables(out var annotations) || annotations is null)
         {
@@ -194,13 +195,14 @@ public static class RailwayPlanBuilder
 
         foreach (var pair in values)
         {
-            CaptureEnvironmentValue(plan, service, pair.Key, pair.Value);
+            CaptureEnvironmentValue(plan, service, model, pair.Key, pair.Value);
         }
     }
 
     private static void CaptureEnvironmentValue(
         RailwayPlan plan,
         RailwayPlanService service,
+        DistributedApplicationModel model,
         string key,
         object? value)
     {
@@ -223,7 +225,8 @@ public static class RailwayPlanBuilder
                     break;
                 }
 
-                if (TryGetParameterNameFromExpression(expressionText, out var parameterName))
+                if (TryGetParameterNameFromExpression(expressionText, out var parameterName)
+                    && IsParameterResource(model, parameterName))
                 {
                     AddParameterName(plan, parameterName);
                     service.Environment[key] = parameterName;
@@ -232,6 +235,34 @@ public static class RailwayPlanBuilder
                 break;
         }
     }
+
+    /// <summary>
+    /// Returns a resolved environment value. Captured Aspire parameters are looked
+    /// up; everything else (for example <c>OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY=in_memory</c>)
+    /// is a literal.
+    /// </summary>
+    internal static string? CoalesceCapturedEnvironmentValue(
+        string planValue,
+        string? resolvedParameterValue,
+        IReadOnlyCollection<string> capturedParameterNames)
+    {
+        if (!string.IsNullOrWhiteSpace(resolvedParameterValue))
+        {
+            return resolvedParameterValue;
+        }
+
+        if (capturedParameterNames.Any(name =>
+                string.Equals(name, planValue, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        return planValue;
+    }
+
+    private static bool IsParameterResource(DistributedApplicationModel model, string name) =>
+        model.Resources.OfType<ParameterResource>()
+            .Any(parameter => string.Equals(parameter.Name, name, StringComparison.Ordinal));
 
     private static bool TryGetParameterNameFromExpression(string expression, out string name)
     {

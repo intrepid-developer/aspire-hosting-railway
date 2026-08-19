@@ -87,7 +87,7 @@ public sealed class RailwayPlanService
     public string? Image { get; set; }
 
     /// <summary>
-    /// Gets or sets environment entries as Railway reference expressions or parameter names.
+    /// Gets or sets environment entries as Railway reference expressions, parameter names, or literals.
     /// </summary>
     [JsonPropertyName("environment")]
     public Dictionary<string, string> Environment { get; set; } = new(StringComparer.Ordinal);
