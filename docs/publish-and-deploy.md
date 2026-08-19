@@ -23,7 +23,7 @@ A `validate-railway` step (registered once) fails publish-mode apps that call `P
 | Secrets | Parameter names and `${{service.VAR}}` expressions | Token and resolved values in memory only |
 | Output | `railway-plan.json`, `.env.example` | Created or adopted Railway ids |
 
-The plan never contains resolved tokens, passwords, or bucket credentials. Deploy fills `RailwayApplyRequest.ResolvedServiceEnvironment` from Aspire parameters and connection strings, then upserts variables.
+The plan never contains resolved tokens, passwords, or bucket credentials. Deploy fills `RailwayApplyRequest.ResolvedServiceEnvironment` from Aspire parameters and connection strings, then upserts variables. An empty optional captured parameter is omitted instead of aborting deploy. A missing required parameter still fails.
 
 `WithReference` on official Railway databases emits expressions such as `${{postgres.DATABASE_URL}}` (private) onto services that actually referenced the database — never the local Docker connection string. Non-Railway connection strings (for example another Aspire connection-string resource) are captured as secret parameter **names** in the plan and resolved on deploy.
 

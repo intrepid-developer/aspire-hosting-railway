@@ -579,11 +579,16 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
                     plan.Parameters)
                 .ConfigureAwait(false);
 
-            if (string.IsNullOrWhiteSpace(resolvedValue))
+            if (resolvedValue is null)
             {
                 throw new InvalidOperationException(
                     $"Cannot resolve '{pair.Key}' for Railway service '{service.Name}'. " +
                     $"The plan captured parameter '{pair.Value}' but no connection string or parameter value was available.");
+            }
+
+            if (resolvedValue.Length == 0)
+            {
+                continue;
             }
 
             resolved ??= new Dictionary<string, string>(StringComparer.Ordinal);
@@ -634,12 +639,33 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         var parameter = context.Model.Resources.OfType<ParameterResource>()
             .FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, planValue, StringComparison.OrdinalIgnoreCase));
-        var parameterValue = await TryGetParameterValueAsync(parameter, context.CancellationToken)
+        var (valueRead, parameterValue) = await TryReadParameterValueAsync(parameter, context.CancellationToken)
             .ConfigureAwait(false);
         return RailwayPlanBuilder.CoalesceCapturedEnvironmentValue(
             planValue,
+            valueRead,
             parameterValue,
             capturedParameterNames);
+    }
+
+    private static async Task<(bool ValueRead, string? Value)> TryReadParameterValueAsync(
+        ParameterResource? parameter,
+        CancellationToken cancellationToken)
+    {
+        if (parameter is null)
+        {
+            return (false, null);
+        }
+
+        try
+        {
+            var value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            return (true, value);
+        }
+        catch (InvalidOperationException)
+        {
+            return (false, null);
+        }
     }
 
     private static async Task<string?> TryGetParameterValueAsync(

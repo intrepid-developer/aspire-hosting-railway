@@ -244,19 +244,28 @@ public class RailwayEnvironmentTests
     {
         Assert.Equal(
             "in_memory",
-            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue("in_memory", null, []));
+            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue("in_memory", valueRead: false, null, []));
         Assert.Equal(
             "true",
-            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue("true", null, ["billing-secret-key"]));
+            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue("true", valueRead: false, null, ["billing-secret-key"]));
         Assert.Equal(
             "resolved-secret",
             RailwayPlanBuilder.CoalesceCapturedEnvironmentValue(
                 "billing-secret-key",
+                valueRead: true,
                 "resolved-secret",
                 ["billing-secret-key"]));
+        Assert.Equal(
+            "",
+            RailwayPlanBuilder.CoalesceCapturedEnvironmentValue(
+                "stripe-webhook-secret",
+                valueRead: true,
+                "",
+                ["stripe-webhook-secret"]));
         Assert.Null(
             RailwayPlanBuilder.CoalesceCapturedEnvironmentValue(
                 "billing-secret-key",
+                valueRead: false,
                 null,
                 ["billing-secret-key"]));
     }

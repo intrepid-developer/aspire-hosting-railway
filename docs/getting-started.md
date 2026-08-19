@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on GitHub Packages, not nuget.org. Current version is **0.1.0-preview.10** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
+Preview packages live on GitHub Packages, not nuget.org. Current version is **0.1.0-preview.11** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
 
 ## Restore from GitHub Packages
 
@@ -31,11 +31,11 @@ dotnet nuget add source https://nuget.pkg.github.com/intrepid-developer/index.js
 ```
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.10" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.11" />
 ```
 
 This repo's playground sample references the projects directly and does not need GitHub Packages.

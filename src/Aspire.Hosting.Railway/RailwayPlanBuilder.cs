@@ -241,14 +241,26 @@ public static class RailwayPlanBuilder
     /// up; everything else (for example <c>OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY=in_memory</c>)
     /// is a literal.
     /// </summary>
+    /// <summary>
+    /// Resolves a captured environment value. Returns the parameter value when
+    /// present, an empty string when the parameter exists but is blank (omit on
+    /// deploy), <see langword="null"/> when a required captured parameter is
+    /// missing, or the literal plan value otherwise.
+    /// </summary>
     internal static string? CoalesceCapturedEnvironmentValue(
         string planValue,
+        bool valueRead,
         string? resolvedParameterValue,
         IReadOnlyCollection<string> capturedParameterNames)
     {
         if (!string.IsNullOrWhiteSpace(resolvedParameterValue))
         {
             return resolvedParameterValue;
+        }
+
+        if (valueRead)
+        {
+            return "";
         }
 
         if (capturedParameterNames.Any(name =>

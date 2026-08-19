@@ -6,7 +6,7 @@ Locally you keep the normal Aspire resource model: official Postgres and Redis, 
 
 ## Status
 
-Preview on [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). Current version: **0.1.0-preview.10** (from `Directory.Build.props`). Not on nuget.org. MIT. Pinned to Aspire.Hosting **13.4.6** / `net10.0`.
+Preview on [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). Current version: **0.1.0-preview.11** (from `Directory.Build.props`). Not on nuget.org. MIT. Pinned to Aspire.Hosting **13.4.6** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -43,7 +43,7 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-`AddContainerRegistry` is required for image deploy. Railway has no registry of its own; without `IContainerRegistry` (GHCR or Docker Hub), deploy of image-based services fails. Aspire currently marks the registry APIs experimental (`ASPIRECOMPUTE003`).
+`AddContainerRegistry` is required for image deploy. Railway has no registry of its own; without `IContainerRegistry` (GHCR or Docker Hub), deploy of image-based services fails. Aspire currently marks the registry APIs experimental (`ASPIRECOMPUTE003`). The playground sample matches this snippet.
 
 In the API project:
 
@@ -61,11 +61,11 @@ Restore preview packages from GitHub Packages. Keep nuget.org for Aspire and oth
 Do not commit PATs or `packageSourceCredentials`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.10" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.10" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.11" />
 ```
 
 ## Auth
@@ -107,6 +107,7 @@ Local `aspire run` needs no token.
 - [Publish and deploy](docs/publish-and-deploy.md) — pipeline, plan vs apply, adopt, staging, state, images
 - [Storage](docs/storage.md) — buckets, local S3Mock, `IAmazonS3`, connection strings
 - [GraphQL](docs/graphql.md) — confirmed operations only
+- [CHANGELOG.md](CHANGELOG.md) — preview.11 and later
 - [AGENTS.md](AGENTS.md) — contract for coding agents working this repo
 - [SECURITY.md](SECURITY.md) — never commit secrets; how to report issues
 

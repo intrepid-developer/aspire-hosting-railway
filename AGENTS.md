@@ -14,6 +14,7 @@ This repository is a public Aspire 13.4 / `net10.0` hosting integration for Rail
 | `tests/Aspire.Hosting.Railway.Tests` | Unit tests (no live Railway, no token required) |
 | `samples/Playground.AppHost` | Compiling AppHost using the public APIs |
 | `docs/` | Human + agent docs (getting started, publish/deploy, storage, GraphQL) |
+| `CHANGELOG.md` | Preview.11 and later. Do not send readers to closed issues. |
 
 NuGet IDs use the `IntrepidDeveloper.` prefix. C# AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
 
