@@ -13,4 +13,4 @@ Use `.env.example` and `Parameters__*` / environment variables on the machine th
 
 ## Reporting a vulnerability
 
-If you find a secret or security issue in this repo, do not open a public issue. Contact Chris via [intrepid-developer.com](https://intrepid-developer.com) and rotate the leaked credential immediately.
+If you find a secret or security issue in this repo, do not open a public issue. Report it privately through [GitHub security advisories](https://github.com/intrepid-developer/aspire-hosting-railway/security/advisories/new) or contact Chris via [intrepid-developer.com](https://intrepid-developer.com). Rotate the leaked credential immediately.

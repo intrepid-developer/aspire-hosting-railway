@@ -4,7 +4,7 @@
     <IsPackable>false</IsPackable>
     <UserSecretsId>intrepid-developer-aspire-railway-playground</UserSecretsId>
     <RootNamespace>Playground.AppHost</RootNamespace>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;ASPIRECOMPUTE003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />

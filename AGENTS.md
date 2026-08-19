@@ -1,6 +1,6 @@
 # Agent notes
 
-This repository is a public Aspire 13.4 / `net10.0` hosting integration for Railway.
+This repository is a public Aspire 13.4 / `net10.0` hosting integration for Railway. Humans read [README.md](README.md) and [docs/](docs/). This file is the contract for coding agents.
 
 ## Layout
 
@@ -13,24 +13,29 @@ This repository is a public Aspire 13.4 / `net10.0` hosting integration for Rail
 | `src/Aspire.Railway.Storage` | `AddRailwayBucketClient` → `IAmazonS3` |
 | `tests/Aspire.Hosting.Railway.Tests` | Unit tests (no live Railway, no token required) |
 | `samples/Playground.AppHost` | Compiling AppHost using the public APIs |
+| `docs/` | Human + agent docs (getting started, publish/deploy, storage, GraphQL) |
+| `CHANGELOG.md` | Preview.11 and later. Do not send readers to closed issues. |
 
 NuGet IDs use the `IntrepidDeveloper.` prefix. C# AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
 
 ## Hard rules
 
+- Aspire 13.4 compute-environment + pipeline hooks only (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`). Do not use the obsolete publisher-callback model (`IDistributedApplicationPublisher`, `DeployingCallbackAnnotation`).
+- Official resource types: `AddPostgres` / `AddRedis` + `PublishAsRailway*`. Buckets: `AddRailwayBucket` + `AddRailwayBucketClient` (`IAmazonS3`). Do not invent public AppHost APIs.
 - Core must not reference `Aspire.Hosting.PostgreSQL`, `Aspire.Hosting.Redis`, or the Storage hosting package. Satellites implement `IRailwayManagedServiceAnnotation`.
-- Never commit secrets, tokens, `.env` files, user-secrets, NuGet API keys, or real Railway project/environment IDs.
-- Do not call live Railway from unit tests. Do not fake GraphQL success.
-- Do not add Solo Buddy / Maldric / Helian content. Playground names: `api`, `postgres`, `redis`, `uploads`.
-- Use Aspire 13.4 pipeline types (`PipelineStepAnnotation`, `WellKnownPipelineSteps`). Do not use obsolete `IDistributedApplicationPublisher` / `DeployingCallbackAnnotation`.
+- GraphQL only, confirmed operations only. Never invent mutation or query names. Never `pluginCreate`. Endpoint: `https://backboard.railway.com/graphql/v2`. See [docs/graphql.md](docs/graphql.md).
+- Railway has no image registry. Image-based deploy must fail clearly unless the model has `IContainerRegistry` (GHCR / Docker Hub). Do not shell out to `railway up`.
+- Public repo: never commit secrets, tokens, `.env` files, user-secrets, NuGet API keys, or real Railway project/environment IDs. Placeholders only.
+- Do not add names or examples from other products; playground resources stay `api` / `postgres` / `redis` / `uploads`.
+- Unit tests stay offline. Do not call live Railway. Do not fake GraphQL success.
 - Suppress `ASPIREPIPELINES001` / `ASPIRECOMPUTE002` inside the library only.
 
 ## Pipeline
 
 Per environment: `prepare-deployment-targets-{name}`, `publish-{name}`, `deploy-{name}`, `destroy-{name}`.
 
-Publish writes `railway-plan.json` (expressions and parameter names only). Deploy calls `RailwayGraphQLApplyService` with the typed client in `GraphQL/` (confirmed operations only). Do not change the public AppHost surface when extending apply.
+Publish writes `railway-plan.json`. Parameter names and Railway expressions stay secret-safe; `WithEnvironment` string literals are written as-is. Deploy calls `RailwayGraphQLApplyService` with the typed client in `GraphQL/` (confirmed operations only). Do not change the public AppHost surface when extending apply.
 
 Confirmed Railway operations: `project` (documented `project(id)` query), `projectCreate`, `environmentCreate`, `serviceCreate` (always pass `environmentId`), `serviceInstanceUpdate`, `serviceInstanceDeployV2`, `variableCollectionUpsert`, `serviceDomainCreate`, `template` + `templateDeployV2`, `workflowStatus`, `bucketCreate`, `bucketS3Credentials` (`projectId` required; select `bucketName`), `environmentPatchCommitStaged`, `regions`.
 
-Railway has no image registry. Image-based deploy must fail clearly unless the model has `IContainerRegistry` (GHCR / Docker Hub). Do not shell out to `railway up`.
+`IDeploymentStateManager` ids must be flatten-safe objects (Aspire's file state manager does not round-trip JSON arrays). Tokens and bucket secrets stay out of plan files and state.
