@@ -110,6 +110,13 @@ public sealed class TemplateDeployV2Input
     [JsonPropertyName("environmentId")]
     public required string EnvironmentId { get; set; }
 
+    /// <summary>
+    /// Gets or sets the template id returned by <c>template(code:)</c>. Required by Railway.
+    /// Never invent or hardcode this value.
+    /// </summary>
+    [JsonPropertyName("templateId")]
+    public required string TemplateId { get; set; }
+
     /// <summary>Gets or sets serialized config fetched from <c>template(code:)</c>. Never empty and never invented.</summary>
     [JsonPropertyName("serializedConfig")]
     public JsonElement SerializedConfig { get; set; }

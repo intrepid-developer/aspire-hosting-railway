@@ -30,6 +30,14 @@ public sealed class RailwayApplyRequest
 
     /// <summary>Gets or sets Railway service names that should receive a public HTTP domain.</summary>
     public HashSet<string> ExternalHttpServices { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets resolved environment values keyed by Railway service name, then variable name.
+    /// Deploy fills this with connection-string / parameter values; the plan itself stays
+    /// secret-safe (parameter names and Railway expressions only).
+    /// </summary>
+    public Dictionary<string, Dictionary<string, string>> ResolvedServiceEnvironment { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>

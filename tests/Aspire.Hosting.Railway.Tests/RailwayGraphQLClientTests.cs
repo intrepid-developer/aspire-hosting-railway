@@ -102,6 +102,44 @@ public class RailwayGraphQLClientTests
         Assert.Equal(new[] { "template", "templateDeployV2" }, handler.Operations);
         Assert.Contains("serializedConfig", handler.Bodies[1], StringComparison.Ordinal);
         Assert.DoesNotContain("placeholder-token", handler.Bodies[1], StringComparison.Ordinal);
+
+        var fetchedId = GraphQLFixtures.ReadTemplateIdFromResponse(GraphQLFixtures.TemplatePostgres);
+        Assert.Equal("tpl_postgres_placeholder", fetchedId);
+        Assert.Equal(fetchedId, GraphQLFixtures.ReadTemplateIdFromDeployBody(handler.Bodies[1]));
+    }
+
+    [Fact]
+    public async Task ApplyTemplateAsync_MissingTemplateId_DoesNotCallTemplateDeployV2()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("template", """{"data":{"template":{"code":"postgres","serializedConfig":{"services":{"postgres":{}}}}}}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ApplyTemplateAsync(
+            "postgres",
+            GraphQLFixtures.ProjectId,
+            GraphQLFixtures.ProductionEnvironmentId,
+            "placeholder-token"));
+
+        Assert.Contains("did not return id", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("templateId", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, handler.Count("templateDeployV2"));
+    }
+
+    [Fact]
+    public async Task SendAsync_Http400_SurfacesRailwayErrorText()
+    {
+        var handler = new RecordingHandler(
+            """{"errors":[{"message":"Field \"templateId\" of required type \"String!\" was not provided."}]}""",
+            HttpStatusCode.BadRequest);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            client.TemplateAsync("postgres", "placeholder-token"));
+
+        Assert.Contains("templateId", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("400", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -121,7 +159,7 @@ public class RailwayGraphQLClientTests
         Assert.Equal(0, handler.Count("templateDeployV2"));
     }
 
-    private sealed class RecordingHandler(string responseJson) : HttpMessageHandler
+    private sealed class RecordingHandler(string responseJson, HttpStatusCode statusCode = HttpStatusCode.OK) : HttpMessageHandler
     {
         public string Body { get; private set; } = "";
         public Uri? Uri { get; private set; }
@@ -137,7 +175,7 @@ public class RailwayGraphQLClientTests
             AuthorizationParameter = request.Headers.Authorization?.Parameter;
             Body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
 
-            return new HttpResponseMessage(HttpStatusCode.OK)
+            return new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
             };

@@ -558,7 +558,8 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(update, "serviceInstanceUpdate");
 
-                if (service.Environment.Count > 0)
+                var variables = ResolveServiceEnvironment(service, request);
+                if (variables.Count > 0)
                 {
                     var upsert = await _client.VariableCollectionUpsertAsync(
                         new VariableCollectionUpsertInput
@@ -566,7 +567,7 @@ public sealed class RailwayGraphQLApplyService
                             ProjectId = result.ProjectId,
                             EnvironmentId = result.EnvironmentId,
                             ServiceId = serviceId,
-                            Variables = new Dictionary<string, string>(service.Environment, StringComparer.Ordinal)
+                            Variables = variables
                         },
                         request.Token,
                         cancellationToken).ConfigureAwait(false);
@@ -642,6 +643,28 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    private static Dictionary<string, string> ResolveServiceEnvironment(
+        RailwayPlanService service,
+        RailwayApplyRequest request)
+    {
+        var variables = new Dictionary<string, string>(service.Environment, StringComparer.Ordinal);
+        if (!request.ResolvedServiceEnvironment.TryGetValue(service.Name, out var resolved) ||
+            resolved is null)
+        {
+            return variables;
+        }
+
+        foreach (var pair in resolved)
+        {
+            if (!string.IsNullOrWhiteSpace(pair.Value))
+            {
+                variables[pair.Key] = pair.Value;
+            }
+        }
+
+        return variables;
     }
 
     private static void SeedFromProduction(RailwayDeploymentSnapshot snapshot, RailwayApplyResult result)

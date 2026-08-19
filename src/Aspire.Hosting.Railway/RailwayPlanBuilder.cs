@@ -9,6 +9,9 @@ namespace Aspire.Hosting.Railway;
 /// </summary>
 public static class RailwayPlanBuilder
 {
+    private const string ConnectionStringPrefix = "ConnectionStrings__";
+    private const string ReferenceRelationshipType = "Reference";
+
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
         WriteIndented = true,
@@ -98,17 +101,7 @@ public static class RailwayPlanBuilder
                 service.Image = $"{{{resource.Name}.containerImage}}";
             }
 
-            foreach (var managed in plan.ManagedServices)
-            {
-                if (string.IsNullOrWhiteSpace(managed.PrivateReferenceVariable))
-                {
-                    continue;
-                }
-
-                service.Environment[$"ConnectionStrings__{managed.Name}"] =
-                    RailwayReferenceExpressions.PrivateServiceVariable(managed.Name, managed.PrivateReferenceVariable);
-            }
-
+            AddReferencedConnectionStrings(plan, service, resource);
             plan.Services.Add(service);
         }
 
@@ -147,6 +140,152 @@ public static class RailwayPlanBuilder
         }
 
         return string.Join('\n', lines) + "\n";
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="value"/> is a Railway <c>${{service.VAR}}</c> expression
+    /// (or a connection string composed of those expressions).
+    /// </summary>
+    public static bool IsRailwayReferenceExpression(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Contains("${{", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Returns the referenced resource name for a <c>ConnectionStrings__{name}</c> variable, or
+    /// <see langword="null"/> when the key is not a connection-string variable.
+    /// </summary>
+    public static string? TryGetConnectionStringResourceName(string environmentKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentKey);
+        return environmentKey.StartsWith(ConnectionStringPrefix, StringComparison.Ordinal)
+            ? environmentKey[ConnectionStringPrefix.Length..]
+            : null;
+    }
+
+    private static void AddReferencedConnectionStrings(
+        RailwayPlan plan,
+        RailwayPlanService service,
+        IResource resource)
+    {
+        foreach (var referenced in GetReferencedResources(resource))
+        {
+            var managed = FindManagedAnnotation(referenced);
+            if (managed is not null && !string.IsNullOrWhiteSpace(managed.PrivateReferenceVariable))
+            {
+                service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] =
+                    RailwayReferenceExpressions.PrivateServiceVariable(
+                        managed.ServiceName,
+                        managed.PrivateReferenceVariable);
+                continue;
+            }
+
+            if (referenced is not IResourceWithConnectionString withConnectionString)
+            {
+                continue;
+            }
+
+            var expression = withConnectionString.ConnectionStringExpression.ValueExpression;
+            if (IsRailwayReferenceExpression(expression))
+            {
+                service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] = expression;
+                continue;
+            }
+
+            var parameters = CollectParameterResources(withConnectionString);
+            foreach (var parameter in parameters)
+            {
+                AddParameterName(plan, parameter.Name);
+            }
+
+            var captureName = parameters.FirstOrDefault(static parameter => parameter.Secret)?.Name
+                ?? parameters.FirstOrDefault()?.Name
+                ?? referenced.Name;
+            AddParameterName(plan, captureName);
+            service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] = captureName;
+        }
+    }
+
+    private static IEnumerable<IResource> GetReferencedResources(IResource resource)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var relationship in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
+        {
+            if (!string.Equals(relationship.Type, ReferenceRelationshipType, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (relationship.Resource is null || !seen.Add(relationship.Resource.Name))
+            {
+                continue;
+            }
+
+            yield return relationship.Resource;
+        }
+    }
+
+    private static IRailwayManagedServiceAnnotation? FindManagedAnnotation(IResource resource)
+    {
+        var managed = resource.Annotations.OfType<IRailwayManagedServiceAnnotation>().FirstOrDefault();
+        if (managed is not null)
+        {
+            return managed;
+        }
+
+        return resource is IResourceWithParent { Parent: { } parent }
+            ? FindManagedAnnotation(parent)
+            : null;
+    }
+
+    private static List<ParameterResource> CollectParameterResources(IResourceWithConnectionString resource)
+    {
+        var parameters = new List<ParameterResource>();
+        var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        CollectParameters(resource, parameters, seen);
+        return parameters;
+    }
+
+    private static void CollectParameters(object? value, List<ParameterResource> parameters, HashSet<object> seen)
+    {
+        if (value is null || !seen.Add(value))
+        {
+            return;
+        }
+
+        switch (value)
+        {
+            case ParameterResource parameter:
+                if (!parameters.Exists(existing => string.Equals(existing.Name, parameter.Name, StringComparison.Ordinal)))
+                {
+                    parameters.Add(parameter);
+                }
+
+                break;
+
+            case IResourceWithConnectionString connectionString:
+                if (connectionString.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var redirect))
+                {
+                    CollectParameters(redirect.Resource, parameters, seen);
+                }
+
+                CollectParameters(connectionString.ConnectionStringExpression, parameters, seen);
+                break;
+
+            case ReferenceExpression expression:
+                foreach (var provider in expression.ValueProviders)
+                {
+                    CollectParameters(provider, parameters, seen);
+                }
+
+                break;
+
+            case IValueWithReferences withReferences:
+                foreach (var reference in withReferences.References)
+                {
+                    CollectParameters(reference, parameters, seen);
+                }
+
+                break;
+        }
     }
 
     private static void AddParameterName(RailwayPlan plan, string name)

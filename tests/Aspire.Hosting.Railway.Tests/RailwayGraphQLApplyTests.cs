@@ -253,8 +253,51 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(2, handler.Count("template"));
         Assert.Equal(2, handler.Count("templateDeployV2"));
         Assert.Equal(1, handler.Count("bucketCreate"));
+        var deployBodies = handler.Bodies.Where(body => body.Contains("templateDeployV2", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, deployBodies.Length);
+        Assert.Equal(
+            GraphQLFixtures.ReadTemplateIdFromResponse(GraphQLFixtures.TemplatePostgres),
+            GraphQLFixtures.ReadTemplateIdFromDeployBody(deployBodies[0]));
+        Assert.Equal(
+            GraphQLFixtures.ReadTemplateIdFromResponse(GraphQLFixtures.TemplateRedis),
+            GraphQLFixtures.ReadTemplateIdFromDeployBody(deployBodies[1]));
         Assert.Contains("secretAccessKey", handler.Bodies.Single(body => body.Contains("bucketS3Credentials", StringComparison.Ordinal)), StringComparison.Ordinal);
         Assert.DoesNotContain(GraphQLFixtures.Token, string.Join('\n', handler.Bodies), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_UpsertsResolvedNonRailwayConnectionString()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Environment["ConnectionStrings__chat"] = "xai-api-key";
+        plan.Parameters.Add("xai-api-key");
+
+        var request = GraphQLFixtures.CreateRequest();
+        request.ResolvedServiceEnvironment["api"] = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ConnectionStrings__chat"] = "Endpoint=https://api.example.test/v1;Key=placeholder-openai-key"
+        };
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            request,
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var upsert = handler.Bodies.Single(body => body.Contains("variableCollectionUpsert", StringComparison.Ordinal));
+        Assert.Contains("ConnectionStrings__chat", upsert, StringComparison.Ordinal);
+        Assert.Contains("placeholder-openai-key", upsert, StringComparison.Ordinal);
+        Assert.Contains("${{postgres.DATABASE_URL}}", upsert, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"xai-api-key\"", upsert, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -349,6 +392,45 @@ public class RailwayGraphQLApplyTests
             new MemoryDeploymentStateManager()));
 
         Assert.Contains("template workflow failed", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeployAsync_WithNonRailwayConnectionString_UpsertsResolvedValue()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        var key = builder.AddParameter("xai-api-key", "placeholder-openai-key", secret: true);
+        var chat = builder.AddResource(new FakeChatConnectionStringResource("chat", key.Resource));
+        builder.AddContainer("api", "nginx").WithReference(chat);
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var upsert = handler.Bodies.Single(body => body.Contains("variableCollectionUpsert", StringComparison.Ordinal));
+        Assert.Contains("ConnectionStrings__chat", upsert, StringComparison.Ordinal);
+        Assert.Contains("placeholder-openai-key", upsert, StringComparison.Ordinal);
+        Assert.Contains("https://api.example.test/v1", upsert, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"xai-api-key\"", upsert, StringComparison.Ordinal);
     }
 
     [Fact]
