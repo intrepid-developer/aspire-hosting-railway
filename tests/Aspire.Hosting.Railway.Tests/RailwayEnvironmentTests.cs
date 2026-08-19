@@ -120,7 +120,7 @@ public class RailwayEnvironmentTests
         var railway = builder.AddRailwayEnvironment("railway");
         var postgres = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
         var database = postgres.AddDatabase("catalog");
-        var secret = builder.AddParameter("billing-secret-key", "sk_test_placeholder", secret: true);
+        var secret = builder.AddParameter("billing-secret-key", "test-placeholder-value", secret: true);
         builder.AddContainer("api", "nginx")
             .WithReference(database)
             .WithEnvironment("Billing__SecretKey", secret)
@@ -135,7 +135,7 @@ public class RailwayEnvironmentTests
         Assert.Equal("billing-secret-key", api.Environment["Billing__SecretKey"]);
         Assert.Equal("true", api.Environment["Storage__RequireBucket"]);
         Assert.Contains("billing-secret-key", plan.Parameters);
-        Assert.DoesNotContain("sk_test_placeholder", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
+        Assert.DoesNotContain("test-placeholder-value", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
     }
 
     [Fact]
