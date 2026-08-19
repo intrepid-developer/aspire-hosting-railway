@@ -43,7 +43,7 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-`AddContainerRegistry` is required for image deploy. Railway has no registry of its own; without `IContainerRegistry` (GHCR or Docker Hub), deploy of image-based services fails.
+`AddContainerRegistry` is required for image deploy. Railway has no registry of its own; without `IContainerRegistry` (GHCR or Docker Hub), deploy of image-based services fails. Aspire currently marks the registry APIs experimental (`ASPIRECOMPUTE003`).
 
 In the API project:
 

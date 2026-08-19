@@ -67,7 +67,7 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-`AddContainerRegistry` + `WithContainerRegistry` is required for image deploy. Railway has no image registry. The playground sample includes this so `aspire deploy` can resolve `source.image`. Local `aspire run` still works without talking to Railway.
+`AddContainerRegistry` + `WithContainerRegistry` is required for image deploy. Railway has no image registry. Aspire currently marks those APIs experimental (`ASPIRECOMPUTE003`); the playground AppHost suppresses that diagnostic so the sample still compiles with warnings-as-errors. Local `aspire run` still works without talking to Railway.
 
 In the API project:
 
