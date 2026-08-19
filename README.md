@@ -20,7 +20,7 @@ Pinned on Aspire.Hosting **13.4.6** / `net10.0`. Later: MySQL, MongoDB, HA / PgB
 
 ## Preview packages (GitHub Packages)
 
-Preview builds are published to GitHub Packages, not nuget.org. Current version: **0.1.0-preview.4**.
+Preview builds are published to GitHub Packages, not nuget.org. Current version: **0.1.0-preview.5**.
 
 Source: `https://nuget.pkg.github.com/intrepid-developer/index.json` (see `NuGet.Config.example`). Keep nuget.org as well for Aspire and other dependencies.
 
@@ -32,11 +32,11 @@ GitHub Packages NuGet requires authentication even though this repository is pub
 Do not commit PATs or `packageSourceCredentials`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.4" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.4" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.4" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.4" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.4" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.5" />
 ```
 
 ## AppHost usage
@@ -81,7 +81,9 @@ builder.AddRailwayEnvironment("railway").AsExisting();
 // or pass parameters bound from RAILWAY_PROJECT_ID / RAILWAY_ENVIRONMENT_ID
 ```
 
-If a staging environment does not exist on deploy, the default is to duplicate production (`environmentCreate` with `sourceEnvironmentId`) when production exists. Empty create is opt-in (`CreateEmptyEnvironment`). Re-deploy does not create a second project: project, environment, service, bucket, and template ids are persisted in `IDeploymentStateManager`.
+If a staging environment does not exist on deploy, the default is to duplicate production (`environmentCreate` with `sourceEnvironmentId`) when production exists. Empty create is opt-in (`CreateEmptyEnvironment`). Re-deploy does not create a second project: project, environment, service, bucket, and template ids are persisted in `IDeploymentStateManager` as flatten-safe objects (Aspire's file state manager does not round-trip JSON arrays).
+
+On adopt (`AsExisting`) and later applies against an existing project id, apply lists `project.services` (the documented `project(id)` query) and matches names case-insensitively (`Postgres` / `postgres`, `api`, `uploads` when it appears as a service). Matching services skip `templateDeployV2` and `serviceCreate`; apply continues with `serviceInstanceUpdate`, variable upsert, and deploy. Bucket create is skipped when flatten-safe local state already has that bucket id.
 
 PR / ephemeral environment APIs are not part of this release.
 
@@ -129,7 +131,7 @@ Endpoint=https://storage.railway.app;AccessKeyId=...;SecretAccessKey=...;Bucket=
 
 ## GraphQL
 
-The integration talks to `https://backboard.railway.com/graphql/v2`. Confirmed operations used by the typed client: `projectCreate`, `environmentCreate`, `serviceCreate` (always pass `environmentId`), `serviceInstanceUpdate`, `serviceInstanceDeployV2`, `variableCollectionUpsert`, `serviceDomainCreate`, `template` + `templateDeployV2`, `workflowStatus`, `bucketCreate`, `bucketS3Credentials`, `environmentPatchCommitStaged`, `regions`.
+The integration talks to `https://backboard.railway.com/graphql/v2`. Confirmed operations used by the typed client: `project` (documented `project(id)` query; lists `services` and `environments`), `projectCreate`, `environmentCreate`, `serviceCreate` (always pass `environmentId`), `serviceInstanceUpdate`, `serviceInstanceDeployV2`, `variableCollectionUpsert`, `serviceDomainCreate`, `template` + `templateDeployV2`, `workflowStatus`, `bucketCreate`, `bucketS3Credentials` (`projectId` required; payload field `bucketName`), `environmentPatchCommitStaged`, `regions`.
 
 Deprecated and unused: `pluginCreate`, `templateDeploy` v1.
 

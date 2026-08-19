@@ -1,11 +1,41 @@
 namespace Aspire.Hosting.Railway;
 
 /// <summary>
-/// Confirmed Railway GraphQL v2 operation documents. Do not invent extra mutations.
+/// Confirmed Railway GraphQL v2 operation documents plus the documented
+/// <c>project(id)</c> query. Do not invent extra mutations.
 /// Deprecated: <c>pluginCreate</c>, <c>templateDeploy</c> v1.
 /// </summary>
 public static class RailwayGraphQLOperations
 {
+    /// <summary>
+    /// Lists a project's services and environments. Documented in Railway's
+    /// GraphQL overview; service nodes include <c>id</c> so apply can adopt
+    /// existing resources by name.
+    /// </summary>
+    public const string Project = """
+        query project($id: String!) {
+          project(id: $id) {
+            name
+            services {
+              edges {
+                node {
+                  id
+                  name
+                }
+              }
+            }
+            environments {
+              edges {
+                node {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+        """;
+
     /// <summary>Creates a Railway project. Requires an account or workspace token.</summary>
     public const string ProjectCreate = """
         mutation projectCreate($input: ProjectCreateInput!) {
@@ -116,15 +146,19 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Reads S3 credentials for a bucket. Endpoint is https://storage.railway.app. Callers must not persist the secret.</summary>
+    /// <summary>
+    /// Reads S3 credentials for a bucket. <c>projectId</c> is required by Railway.
+    /// The payload field is <c>bucketName</c> (not <c>bucket</c>). Endpoint is
+    /// https://storage.railway.app. Callers must not persist the secret.
+    /// </summary>
     public const string BucketS3Credentials = """
-        query bucketS3Credentials($bucketId: String!, $environmentId: String!) {
-          bucketS3Credentials(bucketId: $bucketId, environmentId: $environmentId) {
+        query bucketS3Credentials($bucketId: String!, $environmentId: String!, $projectId: String!) {
+          bucketS3Credentials(bucketId: $bucketId, environmentId: $environmentId, projectId: $projectId) {
             accessKeyId
             secretAccessKey
             endpoint
             region
-            bucket
+            bucketName
           }
         }
         """;

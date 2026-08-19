@@ -184,6 +184,18 @@ public sealed class RailwayProject
     /// <summary>Gets or sets environments created with the project (typically <c>production</c>).</summary>
     [JsonPropertyName("environments")]
     public RailwayNamedResourceConnection? Environments { get; set; }
+
+    /// <summary>Gets or sets services already on the project (used to adopt existing resources).</summary>
+    [JsonPropertyName("services")]
+    public RailwayNamedResourceConnection? Services { get; set; }
+}
+
+/// <summary>Data wrapper for the documented <c>project(id)</c> query.</summary>
+public sealed class ProjectData
+{
+    /// <summary>Gets or sets the project.</summary>
+    [JsonPropertyName("project")]
+    public RailwayProject? Project { get; set; }
 }
 
 /// <summary>Data wrapper for <c>projectCreate</c>.</summary>
@@ -301,9 +313,9 @@ public sealed class BucketS3Credentials
     [JsonPropertyName("region")]
     public string? Region { get; set; }
 
-    /// <summary>Gets or sets the bucket name.</summary>
-    [JsonPropertyName("bucket")]
-    public string? Bucket { get; set; }
+    /// <summary>Gets or sets the S3 bucket name returned as <c>bucketName</c>.</summary>
+    [JsonPropertyName("bucketName")]
+    public string? BucketName { get; set; }
 }
 
 /// <summary>Data wrapper for <c>serviceDomainCreate</c>.</summary>

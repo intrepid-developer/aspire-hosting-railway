@@ -45,9 +45,44 @@ public class RailwayGraphQLApplyTests
     }
 
     [Fact]
+    public async Task Apply_AdoptsExistingPostgresService_SkipsTemplateDeployV2()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(adoptExisting: true, includePostgres: true),
+            GraphQLFixtures.CreateRequest(
+                adoptedProjectId: GraphQLFixtures.ProjectId,
+                adoptedEnvironmentId: GraphQLFixtures.ProductionEnvironmentId),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.False(result.CreatedProject);
+        Assert.Contains("postgres", result.AppliedTemplateCodes);
+        Assert.Equal(GraphQLFixtures.PostgresServiceId, result.ServiceIds["postgres"]);
+        Assert.Equal(GraphQLFixtures.ApiServiceId, result.ServiceIds["api"]);
+        Assert.Equal(1, handler.Count("project"));
+        Assert.Equal(0, handler.Count("template"));
+        Assert.Equal(0, handler.Count("templateDeployV2"));
+        Assert.Equal(0, handler.Count("serviceCreate"));
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(1, handler.Count("serviceInstanceDeployV2"));
+        var projectBody = handler.Bodies.Single(body => body.Contains("\"operationName\":\"project\"", StringComparison.Ordinal));
+        Assert.Contains(GraphQLFixtures.ProjectId, projectBody, StringComparison.Ordinal);
+        Assert.Contains("services", projectBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Apply_AdoptsExistingProjectAndEnvironment_DoesNotCreate()
     {
         var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("project", GraphQLFixtures.ProjectEmpty);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -87,6 +122,7 @@ public class RailwayGraphQLApplyTests
 
         var stagingHandler = new ScriptedGraphQLHandler();
         stagingHandler.Enqueue("environmentCreate", GraphQLFixtures.EnvironmentCreateStaging);
+        stagingHandler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
         stagingHandler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         stagingHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         stagingHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
@@ -142,6 +178,7 @@ public class RailwayGraphQLApplyTests
         Assert.Contains("postgres", snapshot.TemplateCodes);
 
         var retryHandler = new ScriptedGraphQLHandler();
+        retryHandler.Enqueue("project", GraphQLFixtures.ProjectEmpty);
         retryHandler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
         retryHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         retryHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -261,7 +298,10 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(
             GraphQLFixtures.ReadTemplateIdFromResponse(GraphQLFixtures.TemplateRedis),
             GraphQLFixtures.ReadTemplateIdFromDeployBody(deployBodies[1]));
-        Assert.Contains("secretAccessKey", handler.Bodies.Single(body => body.Contains("bucketS3Credentials", StringComparison.Ordinal)), StringComparison.Ordinal);
+        var credentialsBody = handler.Bodies.Single(body => body.Contains("bucketS3Credentials", StringComparison.Ordinal));
+        Assert.Contains("secretAccessKey", credentialsBody, StringComparison.Ordinal);
+        Assert.Contains("projectId", credentialsBody, StringComparison.Ordinal);
+        Assert.Contains("bucketName", credentialsBody, StringComparison.Ordinal);
         Assert.DoesNotContain(GraphQLFixtures.Token, string.Join('\n', handler.Bodies), StringComparison.Ordinal);
     }
 
@@ -339,6 +379,7 @@ public class RailwayGraphQLApplyTests
             state);
 
         var secondHandler = new ScriptedGraphQLHandler();
+        secondHandler.Enqueue("project", GraphQLFixtures.ProjectWithApi);
         secondHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         secondHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         secondHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);

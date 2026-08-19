@@ -156,6 +156,21 @@ public sealed class RailwayGraphQLClient
             _ => false
         };
 
+    /// <summary>Sends the documented <c>project(id)</c> query.</summary>
+    public Task<RailwayGraphQLResponse<ProjectData>> ProjectAsync(
+        string id,
+        string token,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ProjectData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.Project,
+                OperationName = "project",
+                Variables = new { id }
+            },
+            token,
+            cancellationToken);
+
     /// <summary>Sends <c>projectCreate</c>.</summary>
     public Task<RailwayGraphQLResponse<ProjectCreateData>> ProjectCreateAsync(
         ProjectCreateInput input,
@@ -347,6 +362,7 @@ public sealed class RailwayGraphQLClient
     public Task<RailwayGraphQLResponse<BucketS3CredentialsData>> BucketS3CredentialsAsync(
         string bucketId,
         string environmentId,
+        string projectId,
         string token,
         CancellationToken cancellationToken = default) =>
         SendAsync<BucketS3CredentialsData>(
@@ -354,7 +370,7 @@ public sealed class RailwayGraphQLClient
             {
                 Query = RailwayGraphQLOperations.BucketS3Credentials,
                 OperationName = "bucketS3Credentials",
-                Variables = new { bucketId, environmentId }
+                Variables = new { bucketId, environmentId, projectId }
             },
             token,
             cancellationToken);

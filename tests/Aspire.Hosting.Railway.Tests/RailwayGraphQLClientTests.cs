@@ -85,6 +85,43 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task BucketS3Credentials_RequestIncludesProjectIdAndSelectsBucketName()
+    {
+        var handler = new RecordingHandler(
+            """{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucketName":"uploads"}}}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.BucketS3CredentialsAsync(
+            "bucket_placeholder",
+            "env_placeholder",
+            "proj_placeholder",
+            "placeholder-token");
+
+        Assert.Equal("uploads", response.Data?.BucketS3Credentials?.BucketName);
+        Assert.Contains("projectId", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("proj_placeholder", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("bucketName", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("$projectId: String!", RailwayGraphQLOperations.BucketS3Credentials, StringComparison.Ordinal);
+        Assert.Contains("bucketName", RailwayGraphQLOperations.BucketS3Credentials, StringComparison.Ordinal);
+        Assert.DoesNotContain("region\n            bucket\n", RailwayGraphQLOperations.BucketS3Credentials, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Project_PostsDocumentedQueryWithServiceIds()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.ProjectWithExistingCanvas);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.ProjectAsync(GraphQLFixtures.ProjectId, "placeholder-token");
+
+        Assert.Equal("Postgres", response.Data?.Project?.Services?.Edges?[0].Node?.Name);
+        Assert.Contains("\"operationName\":\"project\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("services", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environments", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("id", RailwayGraphQLOperations.Project, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ApplyTemplateAsync_FetchesSerializedConfigThenDeploys()
     {
         var handler = new ScriptedGraphQLHandler();
