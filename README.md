@@ -2,7 +2,7 @@
 
 Aspire 13.4 hosting so `aspire publish` and `aspire deploy` provision [Railway](https://railway.com).
 
-Locally you keep the normal Aspire resource model: official Postgres and Redis, `WithReference`, `WaitFor`, health checks, and the dashboard. Publish writes a secret-safe plan. Deploy talks to Railway over GraphQL. `aspire run` never needs a Railway token and never calls Railway.
+Locally you keep the normal Aspire resource model: official Postgres and Redis, `WithReference`, `WaitFor`, health checks, and the dashboard. Publish writes `railway-plan.json`. Deploy talks to Railway over GraphQL. `aspire run` never needs a Railway token and never calls Railway.
 
 ## Status
 
@@ -25,7 +25,7 @@ AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Host
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
 var railway = builder.AddRailwayEnvironment("railway")
     .WithContainerRegistry(ghcr);
 
@@ -43,7 +43,7 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-`AddContainerRegistry` is required for image deploy. Railway has no registry of its own; without `IContainerRegistry` (GHCR or Docker Hub), deploy of image-based services fails. Aspire currently marks the registry APIs experimental (`ASPIRECOMPUTE003`). The playground sample matches this snippet.
+`AddContainerRegistry` is required for image deploy. Pass the GHCR namespace as the third argument (`<owner>/<repository>`). The two-argument form has no owner/repo, so Aspire would push `ghcr.io/api` and GHCR rejects it. Railway has no registry of its own; without `IContainerRegistry` (GHCR or Docker Hub), deploy of image-based services fails. Aspire currently marks the registry APIs experimental (`ASPIRECOMPUTE003`). The playground sample matches this snippet.
 
 In the API project:
 
@@ -60,12 +60,21 @@ Restore preview packages from GitHub Packages. Keep nuget.org for Aspire and oth
 
 Do not commit PATs or `packageSourceCredentials`.
 
+AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
+
 ```xml
 <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.11" />
 <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.11" />
 <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.11" />
 <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.11" />
+```
+
+API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
+
+```xml
 <PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.11" />
+<PackageReference Include="Aspire.Npgsql" Version="13.4.6" />
+<PackageReference Include="Aspire.StackExchange.Redis" Version="13.4.6" />
 ```
 
 ## Auth
@@ -88,7 +97,7 @@ Local `aspire run` needs no token.
 | Command | `aspire publish` | `aspire deploy` |
 | Talks to Railway? | No | Yes (GraphQL) |
 | Output | `railway-plan.json` plus a `.env.example` of captured parameter names | Created or adopted Railway project, environment, services, templates, buckets |
-| Secrets | Parameter **names** and Railway expressions only | Resolves the token and connection values in memory; never writes them to the plan or deployment state |
+| Secrets | Parameter **names** and Railway expressions when you use `AddParameter`. `WithEnvironment` string literals are written as-is | Resolves the token and parameter values in memory; never writes those to the plan or deployment state |
 
 `AddRailwayEnvironment` is the Railway **project** (compute environment). The Railway environment name is mapped from Aspire `--environment`: Production → `production`, Staging → `staging` (lowercase). Override with `WithRailwayEnvironmentName`.
 

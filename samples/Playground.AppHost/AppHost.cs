@@ -1,6 +1,6 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
 var railway = builder.AddRailwayEnvironment("railway")
     .WithContainerRegistry(ghcr);
 

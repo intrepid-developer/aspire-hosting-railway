@@ -9,7 +9,7 @@ Per Railway environment resource named `{name}`:
 | Step | What it does |
 | --- | --- |
 | `prepare-deployment-targets-{name}` | Materializes `RailwayServiceResource` children and `DeploymentTargetAnnotation`. Depends on `ValidateComputeEnvironments`; required by `BeforeStart`. |
-| `publish-{name}` | Writes `railway-plan.json` (expressions and parameter **names** only) plus a `.env.example` of captured parameter names. Required by the well-known `Publish` step. |
+| `publish-{name}` | Writes `railway-plan.json` plus a `.env.example` of captured parameter names. Required by the well-known `Publish` step. Parameter names and Railway expressions stay secret-safe; `WithEnvironment` string literals are written as-is. |
 | `deploy-{name}` | Resolves the account/workspace token, applies the plan over GraphQL, persists ids, reports real progress or failures. Depends on `DeployPrereq` and `publish-{name}`. Image push steps run before this when the model has build-and-push resources. |
 | `destroy-{name}` | Stub. Warns that teardown is not implemented. Confirmed operations do not include project or environment delete. |
 
@@ -20,10 +20,10 @@ A `validate-railway` step (registered once) fails publish-mode apps that call `P
 | | Publish (`RailwayPlanBuilder`) | Deploy (`RailwayGraphQLApplyService`) |
 | --- | --- | --- |
 | Network | None | Railway GraphQL v2 |
-| Secrets | Parameter names and `${{service.VAR}}` expressions | Token and resolved values in memory only |
+| Secrets | Stay out of the plan only when modeled as Aspire parameters (`AddParameter(secret: true)`). `WithEnvironment("API_KEY", value)` literals are written as-is | Token and resolved parameter values in memory only |
 | Output | `railway-plan.json`, `.env.example` | Created or adopted Railway ids |
 
-The plan never contains resolved tokens, passwords, or bucket credentials. Deploy fills `RailwayApplyRequest.ResolvedServiceEnvironment` from Aspire parameters and connection strings, then upserts variables. An empty optional captured parameter is omitted instead of aborting deploy. A missing required parameter still fails.
+The plan is not unconditionally secret-safe. `CaptureEnvironmentValue` writes string literals from `WithEnvironment("API_KEY", value)` into `railway-plan.json` as-is. Secrets stay out of the plan only when they are Aspire parameters (`AddParameter(secret: true)`), which are stored as parameter **names**. Railway `${{service.VAR}}` expressions, the deploy token, and bucket credentials from `bucketS3Credentials` are not written to the plan. Deploy fills `RailwayApplyRequest.ResolvedServiceEnvironment` from Aspire parameters and connection strings, then upserts variables. An empty optional captured parameter is omitted instead of aborting deploy. A missing required parameter still fails.
 
 `WithReference` on official Railway databases emits expressions such as `${{postgres.DATABASE_URL}}` (private) onto services that actually referenced the database — never the local Docker connection string. Non-Railway connection strings (for example another Aspire connection-string resource) are captured as secret parameter **names** in the plan and resolved on deploy.
 
@@ -53,7 +53,9 @@ builder.AddRailwayEnvironment("railway")
     .WithProperties(env => env.CreateEmptyEnvironment = true);
 ```
 
-`DuplicateProductionWhenCreatingStaging` defaults to `true` on `RailwayEnvironmentResource`. Creating staging without a known production environment id fails unless you adopt with `railway-environment-id`, deploy production first, or opt into `CreateEmptyEnvironment`.
+`DuplicateProductionWhenCreatingStaging` defaults to `true` on `RailwayEnvironmentResource`. Creating staging without a known production environment id fails unless you deploy production first or opt into `CreateEmptyEnvironment`.
+
+`EnsureEnvironmentAsync` treats `AdoptedEnvironmentId` (`railway-environment-id`) as the **target** environment, not a production source for duplication. Passing the production id on a staging deploy applies that deploy onto production. Adopt with `railway-environment-id` only when that environment already exists.
 
 PR / ephemeral Railway environment APIs are not part of this release.
 
@@ -68,10 +70,12 @@ A legacy `AppliedTemplateCodes` key that stored a JSON array string such as `["p
 Railway has **no image registry**. Deploy of image-based services requires `IContainerRegistry` on the model:
 
 ```csharp
-var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
 var railway = builder.AddRailwayEnvironment("railway")
     .WithContainerRegistry(ghcr);
 ```
+
+Pass the GHCR namespace as the third argument (`<owner>/<repository>`). The two-argument form has no owner/repo, so Aspire would push `ghcr.io/api` and GHCR rejects it.
 
 If the registry is missing, deploy throws and tells you to add GHCR or Docker Hub. This integration does not shell out to `railway up`. Railpack has no .NET support; use an image or a Dockerfile.
 

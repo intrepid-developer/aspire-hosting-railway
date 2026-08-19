@@ -34,7 +34,7 @@ NuGet IDs use the `IntrepidDeveloper.` prefix. C# AppHost extensions live in `As
 
 Per environment: `prepare-deployment-targets-{name}`, `publish-{name}`, `deploy-{name}`, `destroy-{name}`.
 
-Publish writes `railway-plan.json` (expressions and parameter names only). Deploy calls `RailwayGraphQLApplyService` with the typed client in `GraphQL/` (confirmed operations only). Do not change the public AppHost surface when extending apply.
+Publish writes `railway-plan.json`. Parameter names and Railway expressions stay secret-safe; `WithEnvironment` string literals are written as-is. Deploy calls `RailwayGraphQLApplyService` with the typed client in `GraphQL/` (confirmed operations only). Do not change the public AppHost surface when extending apply.
 
 Confirmed Railway operations: `project` (documented `project(id)` query), `projectCreate`, `environmentCreate`, `serviceCreate` (always pass `environmentId`), `serviceInstanceUpdate`, `serviceInstanceDeployV2`, `variableCollectionUpsert`, `serviceDomainCreate`, `template` + `templateDeployV2`, `workflowStatus`, `bucketCreate`, `bucketS3Credentials` (`projectId` required; select `bucketName`), `environmentPatchCommitStaged`, `regions`.
 
