@@ -78,6 +78,42 @@ public class RailwayEnvironmentTests
     }
 
     [Fact]
+    public async Task ResolveDeployImage_PrefersFullRemoteImageNameOverPlanPlaceholder()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/demo");
+        railway.WithContainerRegistry(ghcr);
+        var api = builder.AddContainer("api", "nginx");
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var resolved = await RailwayEnvironmentResource.ResolveDeployImageAsync(
+            api.Resource,
+            railway.Resource.ResolveContainerRegistry(TestAppBuilder.GetModel(app)),
+            "{api.containerImage}",
+            CancellationToken.None);
+
+        Assert.False(string.IsNullOrWhiteSpace(resolved));
+        Assert.DoesNotContain("{", resolved, StringComparison.Ordinal);
+        Assert.Contains("ghcr.io", resolved, StringComparison.Ordinal);
+        Assert.Contains("api", resolved, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResolveDeployImage_IgnoresPlanPlaceholderWhenNoRegistry()
+    {
+        var resolved = await RailwayEnvironmentResource.ResolveDeployImageAsync(
+            resource: null,
+            registry: null,
+            planImage: "{api.containerImage}",
+            CancellationToken.None);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
     public void PlanJson_ContainsNoSecrets()
     {
         var builder = TestAppBuilder.CreatePublish();

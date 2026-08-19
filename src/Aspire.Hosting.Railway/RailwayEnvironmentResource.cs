@@ -464,15 +464,15 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         {
             var resource = context.Model.Resources.FirstOrDefault(candidate =>
                 string.Equals(GetRailwayServiceName(candidate), service.Name, StringComparison.OrdinalIgnoreCase));
-            if (resource is not null &&
-                resource.TryGetContainerImageName(out var imageName) &&
-                !string.IsNullOrWhiteSpace(imageName))
+            var image = await ResolveDeployImageAsync(
+                    resource,
+                    ResolveContainerRegistry(context.Model),
+                    service.Image,
+                    context.CancellationToken)
+                .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(image))
             {
-                request.ServiceImages[service.Name] = imageName;
-            }
-            else if (!string.IsNullOrWhiteSpace(service.Image) && !service.Image.StartsWith('{'))
-            {
-                request.ServiceImages[service.Name] = service.Image;
+                request.ServiceImages[service.Name] = image;
             }
 
             if (resource is not null && HasExternalHttpEndpoint(resource))
@@ -485,6 +485,77 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
 
         return request;
     }
+
+    /// <summary>
+    /// Prefers the registry-qualified image Aspire pushed. Project resources have no
+    /// <c>ContainerImageAnnotation</c>, so <c>TryGetContainerImageName</c> is empty and the
+    /// publish plan keeps a <c>{name.containerImage}</c> placeholder.
+    /// </summary>
+    internal static async Task<string?> ResolveDeployImageAsync(
+        IResource? resource,
+        IContainerRegistry? registry,
+        string? planImage,
+        CancellationToken cancellationToken)
+    {
+        registry ??= resource?.GetDeploymentTargetAnnotation()?.ContainerRegistry;
+        if (resource is not null && registry is not null)
+        {
+            try
+            {
+                var remote = await GetPushedImageNameAsync(resource, registry, cancellationToken)
+                    .ConfigureAwait(false);
+                if (IsResolvedImage(remote))
+                {
+                    return remote;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Registry endpoint/repository not resolvable yet.
+            }
+        }
+
+        if (resource is not null &&
+            resource.TryGetContainerImageName(out var imageName) &&
+            IsResolvedImage(imageName))
+        {
+            return imageName;
+        }
+
+        return IsResolvedImage(planImage) ? planImage : null;
+    }
+
+    private static async Task<string> GetPushedImageNameAsync(
+        IResource resource,
+        IContainerRegistry registry,
+        CancellationToken cancellationToken)
+    {
+        var options = new ContainerImagePushOptions
+        {
+            RemoteImageName = resource.Name
+        };
+
+        foreach (var annotation in resource.Annotations.OfType<ContainerImagePushOptionsCallbackAnnotation>())
+        {
+            var context = new ContainerImagePushOptionsCallbackContext
+            {
+                Resource = resource,
+                Options = options,
+                CancellationToken = cancellationToken
+            };
+            await annotation.Callback(context).ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(options.RemoteImageName))
+        {
+            options.RemoteImageName = resource.Name;
+        }
+
+        return await options.GetFullRemoteImageNameAsync(registry, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool IsResolvedImage(string? image) =>
+        !string.IsNullOrWhiteSpace(image) && !image.StartsWith('{');
 
     private static async Task ResolveServiceEnvironmentAsync(
         PipelineStepContext context,
