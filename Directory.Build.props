@@ -7,7 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <Deterministic>true</Deterministic>
-    <Version>0.1.0-preview.2</Version>
+    <Version>0.1.0-preview.4</Version>
     <IsPackable>false</IsPackable>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <Authors>Chris Vanderplank / Intrepid Developer</Authors>
