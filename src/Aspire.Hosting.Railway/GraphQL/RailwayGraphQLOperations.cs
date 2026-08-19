@@ -75,7 +75,7 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Fetches a template by code. Use the returned <c>serializedConfig</c>; never invent template UUIDs.</summary>
+    /// <summary>Fetches a template by code. Pass the returned <c>id</c> as <c>templateId</c> and use <c>serializedConfig</c>; never invent template UUIDs.</summary>
     public const string Template = """
         query template($code: String) {
           template(code: $code) {
@@ -86,7 +86,7 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Deploys a template using the fetched serialized config.</summary>
+    /// <summary>Deploys a template using the fetched <c>templateId</c> and serialized config.</summary>
     public const string TemplateDeployV2 = """
         mutation templateDeployV2($input: TemplateDeployV2Input!) {
           templateDeployV2(input: $input) {

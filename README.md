@@ -20,7 +20,7 @@ Pinned on Aspire.Hosting **13.4.6** / `net10.0`. Later: MySQL, MongoDB, HA / PgB
 
 ## Preview packages (GitHub Packages)
 
-Preview builds are published to GitHub Packages, not nuget.org. First version: **0.1.0-preview.1**.
+Preview builds are published to GitHub Packages, not nuget.org. Current version: **0.1.0-preview.2**.
 
 Source: `https://nuget.pkg.github.com/intrepid-developer/index.json` (see `NuGet.Config.example`). Keep nuget.org as well for Aspire and other dependencies.
 
@@ -32,11 +32,11 @@ GitHub Packages NuGet requires authentication even though this repository is pub
 Do not commit PATs or `packageSourceCredentials`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.2" />
 ```
 
 ## AppHost usage
@@ -111,9 +111,11 @@ Host addresses are host-only: `{service}.railway.internal` (lowercase). Endpoint
 
 ### Databases and buckets
 
-Postgres and Redis stay official `AddPostgres` / `AddRedis`. `PublishAsRailway*` only changes deploy. `Aspire.Npgsql` and `Aspire.StackExchange.Redis` keep working. In publish mode, `WithReference` emits Railway references such as `${{postgres.DATABASE_URL}}` (private), never the local Docker connection string.
+Postgres and Redis stay official `AddPostgres` / `AddRedis`. `PublishAsRailway*` only changes deploy. `Aspire.Npgsql` and `Aspire.StackExchange.Redis` keep working. In publish mode, `WithReference` emits Railway references such as `${{postgres.DATABASE_URL}}` (private), never the local Docker connection string. Those expressions are written only onto services that actually `WithReference` the database.
 
-Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `serializedConfig` (never empty, never invented template UUIDs). `ApplyTemplateAsync` on the typed client fetches that config and calls `templateDeployV2`. `RailwayGraphQLApplyService` polls `workflowStatus` and fails if `workflowId` is missing.
+Non-Railway `WithReference` connection strings (for example `AddOpenAI("xai").AddModel("chat")`) are captured as secret parameter **names** in `railway-plan.json` (`ConnectionStrings__chat` → `xai-openai-apikey`) and resolved + `variableCollectionUpsert`ed on deploy. The plan never contains the resolved secret.
+
+Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `templateId` and `serializedConfig` (never empty, never invented template UUIDs). `ApplyTemplateAsync` on the typed client fetches that id/config and calls `templateDeployV2`. `RailwayGraphQLApplyService` polls `workflowStatus` and fails if `workflowId` is missing.
 
 `AddRailwayBucket` is a real Aspire resource. Local run starts a maintained S3-compatible container ([Adobe S3Mock](https://github.com/adobe/S3Mock)); deploy uses `bucketCreate` + `bucketS3Credentials` and upserts the S3 connection variables. Railway buckets use `https://storage.railway.app`, virtual-hosted URLs, and an immutable region. They are not on private DNS. Bucket secrets are never written to `railway-plan.json` or deployment state.
 

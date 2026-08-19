@@ -59,7 +59,16 @@ public sealed class RailwayGraphQLClient
         message.Content = JsonContent.Create(request, options: s_json);
 
         using var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = response.Content is null
+                ? null
+                : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            throw new HttpRequestException(
+                FormatHttpFailure(response.StatusCode, errorBody),
+                inner: null,
+                statusCode: response.StatusCode);
+        }
 
         var payload = await response.Content
             .ReadFromJsonAsync<RailwayGraphQLResponse<T>>(s_json, cancellationToken)
@@ -92,6 +101,49 @@ public sealed class RailwayGraphQLClient
         {
             throw new InvalidOperationException($"Railway GraphQL {operationName} returned no data.");
         }
+    }
+
+    /// <summary>
+    /// Builds an HTTP failure message that includes Railway's GraphQL error text when present.
+    /// </summary>
+    internal static string FormatHttpFailure(System.Net.HttpStatusCode statusCode, string? body)
+    {
+        var railwayError = TryReadGraphQLErrorText(body);
+        return string.IsNullOrWhiteSpace(railwayError)
+            ? $"Railway GraphQL returned HTTP {(int)statusCode} ({statusCode})."
+            : $"Railway GraphQL returned HTTP {(int)statusCode}: {railwayError}";
+    }
+
+    private static string? TryReadGraphQLErrorText(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.TryGetProperty("errors", out var errors) &&
+                errors.ValueKind == JsonValueKind.Array)
+            {
+                var messages = errors.EnumerateArray()
+                    .Select(error => error.TryGetProperty("message", out var message) ? message.GetString() : null)
+                    .Where(static message => !string.IsNullOrWhiteSpace(message))
+                    .ToArray();
+                if (messages.Length > 0)
+                {
+                    return string.Join("; ", messages);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Fall through and return a trimmed copy of the raw body.
+        }
+
+        var trimmed = body.Trim();
+        return trimmed.Length <= 1024 ? trimmed : trimmed[..1024];
     }
 
     /// <summary>Returns whether <paramref name="serializedConfig"/> is a fetched, non-empty template document.</summary>
@@ -236,6 +288,13 @@ public sealed class RailwayGraphQLClient
         string token,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(input.TemplateId))
+        {
+            throw new ArgumentException(
+                "templateId must be the id returned by template(code). Never invent template UUIDs.",
+                nameof(input));
+        }
+
         if (!HasSerializedConfig(input.SerializedConfig))
         {
             throw new ArgumentException(
@@ -330,7 +389,8 @@ public sealed class RailwayGraphQLClient
 
     /// <summary>
     /// Fetches <c>template(code)</c> and deploys it with <c>templateDeployV2</c> using the returned
-    /// <c>serializedConfig</c>. Does not invent template UUIDs or send an empty config.
+    /// <c>id</c> (as <c>templateId</c>) and <c>serializedConfig</c>. Does not invent template UUIDs
+    /// or send an empty config.
     /// </summary>
     /// <param name="templateCode">Railway template code such as <c>postgres</c> or <c>redis</c>.</param>
     /// <param name="projectId">Railway project id.</param>
@@ -360,11 +420,18 @@ public sealed class RailwayGraphQLClient
                 $"template(code: \"{templateCode}\") did not return serializedConfig. Cannot call templateDeployV2 with an empty or invented config.");
         }
 
+        if (string.IsNullOrWhiteSpace(template.Id))
+        {
+            throw new InvalidOperationException(
+                $"template(code: \"{templateCode}\") did not return id. Cannot call templateDeployV2 without templateId.");
+        }
+
         var deployResponse = await TemplateDeployV2Async(
             new TemplateDeployV2Input
             {
                 ProjectId = projectId,
                 EnvironmentId = environmentId,
+                TemplateId = template.Id,
                 SerializedConfig = template.SerializedConfig
             },
             token,

@@ -82,9 +82,11 @@ public class RailwayEnvironmentTests
     {
         var builder = TestAppBuilder.CreatePublish();
         var railway = builder.AddRailwayEnvironment("railway");
-        builder.AddPostgres("postgres").PublishAsRailwayPostgres();
-        builder.AddRedis("redis").PublishAsRailwayRedis();
-        builder.AddContainer("api", "nginx");
+        var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        var cache = builder.AddRedis("redis").PublishAsRailwayRedis();
+        builder.AddContainer("api", "nginx")
+            .WithReference(db)
+            .WithReference(cache);
 
         using var app = builder.Build();
         var model = TestAppBuilder.GetModel(app);
@@ -94,9 +96,53 @@ public class RailwayEnvironmentTests
         Assert.Equal("production", plan.RailwayEnvironmentName);
         Assert.Contains("RAILWAY_TOKEN", json, StringComparison.Ordinal);
         Assert.Contains("${{postgres.DATABASE_URL}}", json, StringComparison.Ordinal);
+        Assert.Contains("${{redis.REDIS_URL}}", json, StringComparison.Ordinal);
         Assert.DoesNotContain("password", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("secret", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Bearer", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_OnlyEmitsConnectionStringsForServicesThatWithReference()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        builder.AddContainer("api", "nginx").WithReference(db);
+        builder.AddContainer("marketing", "nginx");
+
+        using var app = builder.Build();
+        var model = TestAppBuilder.GetModel(app);
+        var plan = RailwayPlanBuilder.Create(model, railway.Resource, "Production");
+
+        var api = Assert.Single(plan.Services, service => service.Name == "api");
+        var marketing = Assert.Single(plan.Services, service => service.Name == "marketing");
+        Assert.Equal("${{postgres.DATABASE_URL}}", api.Environment["ConnectionStrings__postgres"]);
+        Assert.False(marketing.Environment.ContainsKey("ConnectionStrings__postgres"));
+    }
+
+    [Fact]
+    public void Plan_CapturesNonRailwayConnectionStringAsParameterName()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var key = builder.AddParameter("xai-api-key", "placeholder-openai-key", secret: true);
+        var chat = builder.AddResource(new FakeChatConnectionStringResource("chat", key.Resource));
+        builder.AddContainer("api", "nginx").WithReference(chat);
+        builder.AddContainer("marketing", "nginx");
+
+        using var app = builder.Build();
+        var model = TestAppBuilder.GetModel(app);
+        var plan = RailwayPlanBuilder.Create(model, railway.Resource, "Production");
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        var api = Assert.Single(plan.Services, service => service.Name == "api");
+        var marketing = Assert.Single(plan.Services, service => service.Name == "marketing");
+        Assert.Equal("xai-api-key", api.Environment["ConnectionStrings__chat"]);
+        Assert.Contains("xai-api-key", plan.Parameters);
+        Assert.False(marketing.Environment.ContainsKey("ConnectionStrings__chat"));
+        Assert.DoesNotContain("placeholder-openai-key", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("sk-", json, StringComparison.Ordinal);
     }
 
     [Fact]

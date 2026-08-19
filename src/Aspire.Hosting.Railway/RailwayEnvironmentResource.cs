@@ -479,9 +479,88 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
             {
                 request.ExternalHttpServices.Add(service.Name);
             }
+
+            await ResolveServiceEnvironmentAsync(context, service, request).ConfigureAwait(false);
         }
 
         return request;
+    }
+
+    private static async Task ResolveServiceEnvironmentAsync(
+        PipelineStepContext context,
+        RailwayPlanService service,
+        RailwayApplyRequest request)
+    {
+        Dictionary<string, string>? resolved = null;
+        foreach (var pair in service.Environment)
+        {
+            if (RailwayPlanBuilder.IsRailwayReferenceExpression(pair.Value))
+            {
+                continue;
+            }
+
+            var resolvedValue = await TryResolveEnvironmentValueAsync(
+                    context,
+                    service.Name,
+                    pair.Key,
+                    pair.Value)
+                .ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(resolvedValue))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot resolve '{pair.Key}' for Railway service '{service.Name}'. " +
+                    $"The plan captured parameter '{pair.Value}' but no connection string or parameter value was available.");
+            }
+
+            resolved ??= new Dictionary<string, string>(StringComparer.Ordinal);
+            resolved[pair.Key] = resolvedValue;
+        }
+
+        if (resolved is not null)
+        {
+            request.ResolvedServiceEnvironment[service.Name] = resolved;
+        }
+    }
+
+    private static async Task<string?> TryResolveEnvironmentValueAsync(
+        PipelineStepContext context,
+        string serviceName,
+        string environmentKey,
+        string planValue)
+    {
+        var resourceName = RailwayPlanBuilder.TryGetConnectionStringResourceName(environmentKey);
+        if (!string.IsNullOrWhiteSpace(resourceName))
+        {
+            var connectionStringResource = context.Model.Resources
+                .OfType<IResourceWithConnectionString>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, resourceName, StringComparison.OrdinalIgnoreCase));
+            if (connectionStringResource is not null)
+            {
+                try
+                {
+                    var connectionString = await connectionStringResource
+                        .GetConnectionStringAsync(context.CancellationToken)
+                        .ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(connectionString))
+                    {
+                        return connectionString;
+                    }
+                }
+                catch (InvalidOperationException exception)
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot resolve connection string '{resourceName}' for Railway service '{serviceName}': {exception.Message}",
+                        exception);
+                }
+            }
+        }
+
+        var parameter = context.Model.Resources.OfType<ParameterResource>()
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, planValue, StringComparison.OrdinalIgnoreCase));
+        return await TryGetParameterValueAsync(parameter, context.CancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<string?> TryGetParameterValueAsync(

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 
 using Microsoft.Extensions.Logging;
@@ -40,6 +41,11 @@ internal sealed class ScriptedGraphQLHandler : HttpMessageHandler
             ? name.GetString() ?? ""
             : "";
         Operations.Add(operationName);
+
+        if (string.Equals(operationName, "templateDeployV2", StringComparison.Ordinal))
+        {
+            GraphQLFixtures.ReadTemplateIdFromDeployBody(body);
+        }
 
         if (!_responses.TryGetValue(operationName, out var queue) || queue.Count == 0)
         {
@@ -205,6 +211,32 @@ internal static class GraphQLFixtures
     public static string GraphQLError(string message) =>
         $$"""{"errors":[{"message":"{{message}}"}]}""";
 
+    public static string ReadTemplateIdFromResponse(string templateQueryResponse)
+    {
+        using var document = JsonDocument.Parse(templateQueryResponse);
+        return document.RootElement.GetProperty("data").GetProperty("template").GetProperty("id").GetString()
+            ?? throw new InvalidOperationException("template fixture is missing data.template.id.");
+    }
+
+    public static string ReadTemplateIdFromDeployBody(string templateDeployV2RequestBody)
+    {
+        using var document = JsonDocument.Parse(templateDeployV2RequestBody);
+        if (!document.RootElement.TryGetProperty("variables", out var variables) ||
+            !variables.TryGetProperty("input", out var input) ||
+            !input.TryGetProperty("templateId", out var templateId))
+        {
+            throw new InvalidOperationException("templateDeployV2 variables.input.templateId is required.");
+        }
+
+        var value = templateId.GetString();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException("templateDeployV2 variables.input.templateId is required.");
+        }
+
+        return value;
+    }
+
     public static RailwayPlan CreatePlan(
         string railwayEnvironmentName = "production",
         bool adoptExisting = false,
@@ -304,4 +336,15 @@ internal static class GraphQLFixtures
             WorkflowTimeout = TimeSpan.FromSeconds(5)
         });
     }
+}
+
+internal sealed class FakeChatConnectionStringResource : Resource, IResourceWithConnectionString
+{
+    public FakeChatConnectionStringResource(string name, ParameterResource key)
+        : base(name)
+    {
+        ConnectionStringExpression = ReferenceExpression.Create($"Endpoint=https://api.example.test/v1;Key={key}");
+    }
+
+    public ReferenceExpression ConnectionStringExpression { get; }
 }
