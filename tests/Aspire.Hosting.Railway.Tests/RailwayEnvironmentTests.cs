@@ -942,12 +942,20 @@ public class RailwayEnvironmentTests
             "/bin/sh -c \"exec dotnet MyApp.dll --urls http://*:$PORT\"",
             service.StartCommand);
         Assert.Equal(["dotnet MyApp.dll --migrate"], service.PreDeployCommand);
-        Assert.Contains(
-            "\"startCommand\": \"/bin/sh -c \\\"exec dotnet MyApp.dll --urls http://*:$PORT\\\"\"",
-            json,
-            StringComparison.Ordinal);
+        using (var document = System.Text.Json.JsonDocument.Parse(json))
+        {
+            var planned = document.RootElement.GetProperty("services")[0];
+            Assert.Equal(
+                "/bin/sh -c \"exec dotnet MyApp.dll --urls http://*:$PORT\"",
+                planned.GetProperty("startCommand").GetString());
+            Assert.Equal(1, planned.GetProperty("preDeployCommand").GetArrayLength());
+            Assert.Equal(
+                "dotnet MyApp.dll --migrate",
+                planned.GetProperty("preDeployCommand")[0].GetString());
+        }
+
+        Assert.Contains("\"startCommand\":", json, StringComparison.Ordinal);
         Assert.Contains("\"preDeployCommand\": [", json, StringComparison.Ordinal);
-        Assert.Contains("\"dotnet MyApp.dll --migrate\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("StartCommand", json, StringComparison.Ordinal);
         Assert.DoesNotContain("PreDeployCommand", json, StringComparison.Ordinal);
     }
