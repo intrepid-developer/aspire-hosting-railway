@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- nuget.org is the default restore path. The GitHub Packages source below is optional. -->
 <configuration>
   <packageSources>
     <clear />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <!-- Optional: GitHub Packages (requires a PAT with read:packages). See docs/getting-started.md. -->
     <add key="github-intrepid-developer" value="https://nuget.pkg.github.com/intrepid-developer/index.json" />
   </packageSources>
 </configuration>

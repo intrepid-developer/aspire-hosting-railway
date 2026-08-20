@@ -1,6 +1,6 @@
 # Changelog
 
-Versions match `Directory.Build.props`. Preview packages are on GitHub Packages and nuget.org. This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
+Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
 ## 0.1.0-preview.12
 
@@ -10,6 +10,7 @@ Versions match `Directory.Build.props`. Preview packages are on GitHub Packages 
 - Bucket secrets stay out of plan files and deployment state; only flatten-safe bucket ids are persisted.
 - Successful Pack jobs also publish a GitHub Release for the packed version.
 - Pack also publishes to nuget.org via Trusted Publishing (OIDC, no stored key).
+- Docs now point at nuget.org as the default restore path.
 
 ## 0.1.0-preview.11
 

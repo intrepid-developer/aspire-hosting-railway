@@ -1,22 +1,25 @@
 # Aspire Hosting for Railway
 
+[![NuGet](https://img.shields.io/nuget/vpre/IntrepidDeveloper.Aspire.Hosting.Railway.svg?label=nuget)](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Aspire 13.4 hosting so `aspire publish` and `aspire deploy` provision [Railway](https://railway.com).
 
 Locally you keep the normal Aspire resource model: official Postgres and Redis, `WithReference`, `WaitFor`, health checks, and the dashboard. Publish writes `railway-plan.json`. Deploy talks to Railway over GraphQL. `aspire run` never needs a Railway token and never calls Railway.
 
 ## Status
 
-Preview on [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json) and nuget.org. Pack also publishes a GitHub Release. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **0.1.0-preview.12** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.4.6** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **0.1.0-preview.12** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.4.6** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
 | Package | Role |
 | --- | --- |
-| `IntrepidDeveloper.Aspire.Hosting.Railway` | Compute environment, pipeline, GraphQL client, `PublishAsRailwayService` |
-| `IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL` | `AddPostgres` locally; `PublishAsRailwayPostgres` on deploy |
-| `IntrepidDeveloper.Aspire.Hosting.Railway.Redis` | `AddRedis` locally; `PublishAsRailwayRedis` on deploy |
-| `IntrepidDeveloper.Aspire.Hosting.Railway.Storage` | `AddRailwayBucket`: local S3-compatible container; Railway bucket on deploy |
-| `IntrepidDeveloper.Aspire.Railway.Storage` | Client: `AddRailwayBucketClient` registers `IAmazonS3` |
+| [`IntrepidDeveloper.Aspire.Hosting.Railway`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway) | Compute environment, pipeline, GraphQL client, `PublishAsRailwayService` |
+| [`IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL) | `AddPostgres` locally; `PublishAsRailwayPostgres` on deploy |
+| [`IntrepidDeveloper.Aspire.Hosting.Railway.Redis`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway.Redis) | `AddRedis` locally; `PublishAsRailwayRedis` on deploy |
+| [`IntrepidDeveloper.Aspire.Hosting.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway.Storage) | `AddRailwayBucket`: local S3-compatible container; Railway bucket on deploy |
+| [`IntrepidDeveloper.Aspire.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Railway.Storage) | Client: `AddRailwayBucketClient` registers `IAmazonS3` |
 
 AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
 
@@ -53,12 +56,17 @@ builder.AddRedisClient("redis");
 builder.AddRailwayBucketClient("uploads"); // IAmazonS3
 ```
 
-Restore preview packages from GitHub Packages. Keep nuget.org for Aspire and other dependencies. See `NuGet.Config.example`. GitHub Packages NuGet requires authentication even though this repo is public:
+Restore from [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). No extra feed or PAT. These are prerelease packages, so use `--prerelease` or pin the version in `PackageReference` as below.
 
-- Local: a PAT with `read:packages`. Add the source once (`dotnet nuget add source https://nuget.pkg.github.com/intrepid-developer/index.json --name github-intrepid-developer --username YOUR_GITHUB_USERNAME --password YOUR_PAT --store-password-in-clear-text`) or put credentials in a user-level NuGet config, then `dotnet restore`.
-- GitHub Actions: `permissions: packages: read` and authenticate `GITHUB_TOKEN` against that source.
+```bash
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Redis --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Storage --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
+```
 
-Do not commit PATs or `packageSourceCredentials`.
+GitHub Packages is still published if you want that feed; see [Getting started](docs/getting-started.md). Do not commit PATs or `packageSourceCredentials`.
 
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 

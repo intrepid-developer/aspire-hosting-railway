@@ -1,10 +1,24 @@
 # Getting started
 
-Preview packages live on GitHub Packages and nuget.org. Pack publishes to nuget.org via Trusted Publishing (OIDC, no stored key). Current version is **0.1.0-preview.12** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
+Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **0.1.0-preview.12** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
 
-## Restore from GitHub Packages
+## Restore from nuget.org
 
-Keep nuget.org for Aspire and other dependencies. Add the Intrepid Developer GitHub Packages source. See `NuGet.Config.example`.
+No extra feed or PAT. Add the packages with `--prerelease` (or pin the version in `PackageReference` as below):
+
+```bash
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Redis --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Storage --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
+```
+
+This repo's playground sample references the projects directly and does not need a package restore of these IDs.
+
+## Restore from GitHub Packages (optional)
+
+GitHub Packages is still published. Use this feed only if you want it. Keep nuget.org for Aspire and other dependencies. See `NuGet.Config.example`.
 
 GitHub Packages NuGet requires authentication even though this repository is public. Do not commit PATs or `packageSourceCredentials`.
 
@@ -29,8 +43,6 @@ dotnet nuget add source https://nuget.pkg.github.com/intrepid-developer/index.js
   --password ${{ secrets.GITHUB_TOKEN }} \
   --store-password-in-clear-text
 ```
-
-This repo's playground sample references the projects directly and does not need GitHub Packages.
 
 ## AppHost
 
