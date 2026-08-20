@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on GitHub Packages, not nuget.org. Current version is **0.1.0-preview.11** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
+Preview packages live on GitHub Packages, not nuget.org. Current version is **0.1.0-preview.12** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
 
 ## Restore from GitHub Packages
 
@@ -39,10 +39,10 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using`. R
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.12" />
 ```
 
 ```csharp
@@ -71,7 +71,7 @@ builder.Build().Run();
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.12" />
 <PackageReference Include="Aspire.Npgsql" Version="13.4.6" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.4.6" />
 ```

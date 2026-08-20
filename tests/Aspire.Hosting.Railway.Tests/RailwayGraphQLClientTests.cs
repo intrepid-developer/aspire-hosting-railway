@@ -137,7 +137,25 @@ public class RailwayGraphQLClientTests
         Assert.Contains("\"operationName\":\"project\"", handler.Body, StringComparison.Ordinal);
         Assert.Contains("services", handler.Body, StringComparison.Ordinal);
         Assert.Contains("environments", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("buckets", handler.Body, StringComparison.Ordinal);
         Assert.Contains("id", RailwayGraphQLOperations.Project, StringComparison.Ordinal);
+        Assert.Contains("buckets", RailwayGraphQLOperations.Project, StringComparison.Ordinal);
+        Assert.DoesNotContain("pluginCreate", RailwayGraphQLOperations.Project, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Project_DeserializesExistingBucketsByName()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.ProjectWithExistingBucket);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.ProjectAsync(GraphQLFixtures.ProjectId, "placeholder-token");
+
+        var bucket = Assert.Single(response.Data?.Project?.Buckets?.Edges ?? []);
+        Assert.Equal(GraphQLFixtures.BucketId, bucket.Node?.Id);
+        Assert.Equal("Uploads", bucket.Node?.Name);
+        Assert.Equal(GraphQLFixtures.UploadsServiceId, response.Data?.Project?.Services?.Edges?[1].Node?.Id);
+        Assert.NotEqual(bucket.Node?.Id, response.Data?.Project?.Services?.Edges?[1].Node?.Id);
     }
 
     [Fact]

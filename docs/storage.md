@@ -13,9 +13,13 @@
 
 The hosting package is `IntrepidDeveloper.Aspire.Hosting.Railway.Storage`. It is not the deprecated CommunityToolkit MinIO package. Region is immutable after `bucketCreate`. Railway buckets are **not** on private DNS.
 
+On deploy of an adopted project, apply lists `project.buckets` from the documented `project(id)` query (same confirmed operation that lists services — verified on Railway's GraphQL schema as a Relay connection of `Bucket { id name }`; this is not a new query name). If a planned `Kind = bucket` resource matches a bucket display name (case-insensitive), that id is recorded in `BucketIds` and `bucketCreate` is skipped. `bucketCreate` runs only when no matching bucket exists. A same-name **service** is unrelated and is never passed to `bucketS3Credentials`.
+
+After a real `bucketCreate`, apply retries `bucketS3Credentials` with backoff until a `BucketInstance` exists in the target environment (or the wait times out). Credentials are then used in memory only.
+
 Apply also creates an image-less Railway service with the bucket resource name so `${{uploads.ENDPOINT}}` (and related) variables exist for `WithReference`. That service is not a compute target and is not deployed with `serviceInstanceDeployV2`.
 
-Bucket secrets are never written to `railway-plan.json` or `IDeploymentStateManager`.
+Bucket **secrets** are never written to `railway-plan.json` or `IDeploymentStateManager`. Flatten-safe bucket **ids** are persisted as JSON objects (not arrays) so a local retry can skip create; CI / a new machine without that file adopts by name from `project.buckets`.
 
 ## Client
 

@@ -6,7 +6,7 @@ Locally you keep the normal Aspire resource model: official Postgres and Redis, 
 
 ## Status
 
-Preview on [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). Current version: **0.1.0-preview.11** (from `Directory.Build.props`). Not on nuget.org. MIT. Pinned to Aspire.Hosting **13.4.6** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Preview on [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). Current version: **0.1.0-preview.12** (from `Directory.Build.props`). Not on nuget.org. MIT. Pinned to Aspire.Hosting **13.4.6** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -63,16 +63,16 @@ Do not commit PATs or `packageSourceCredentials`.
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.12" />
 ```
 
 API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.12" />
 <PackageReference Include="Aspire.Npgsql" Version="13.4.6" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.4.6" />
 ```

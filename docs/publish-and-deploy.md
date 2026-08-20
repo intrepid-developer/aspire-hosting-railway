@@ -40,7 +40,9 @@ builder.AddRailwayEnvironment("railway").AsExisting();
 
 `AsExisting()` binds `railway-project-id` / `railway-environment-id` from `RAILWAY_PROJECT_ID` / `RAILWAY_ENVIRONMENT_ID`. Both ids are required when adopt is set.
 
-On adopt, and on later applies against an existing project id, apply lists `project.services` (the documented `project(id)` query) and matches names case-insensitively (`Postgres` / `postgres`, `api`, `uploads` when it appears as a service). Matching services skip `templateDeployV2` and `serviceCreate`; apply continues with `serviceInstanceUpdate`, variable upsert, and deploy. Bucket create is skipped when flatten-safe local state already has that bucket id.
+On adopt, and on later applies against an existing project id, apply lists `project.services` and `project.buckets` (the documented `project(id)` query — `buckets` is a field on that same confirmed operation, not a new query). Service names match case-insensitively (`Postgres` / `postgres`, `api`). Matching services skip `templateDeployV2` and `serviceCreate`; apply continues with `serviceInstanceUpdate`, variable upsert, and deploy.
+
+Planned `Kind = bucket` resources match `project.buckets` by display name (case-insensitive). A match records the bucket id in `BucketIds` and skips `bucketCreate`. `bucketCreate` runs only when no matching bucket exists. A same-name service is not a bucket id and is never passed to `bucketS3Credentials`. After a real `bucketCreate`, apply retries `bucketS3Credentials` until a `BucketInstance` exists. Flatten-safe local state still stores bucket **ids** (not S3 secrets) so a local retry can skip create; CI / a new machine without that file relies on name-based adopt.
 
 Re-deploy does not create a second project.
 

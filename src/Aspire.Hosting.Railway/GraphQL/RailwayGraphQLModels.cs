@@ -188,6 +188,13 @@ public sealed class RailwayProject
     /// <summary>Gets or sets services already on the project (used to adopt existing resources).</summary>
     [JsonPropertyName("services")]
     public RailwayNamedResourceConnection? Services { get; set; }
+
+    /// <summary>
+    /// Gets or sets buckets already on the project (used to adopt existing
+    /// <c>Kind = bucket</c> resources by name). Never treat a service id as a bucket id.
+    /// </summary>
+    [JsonPropertyName("buckets")]
+    public RailwayNamedResourceConnection? Buckets { get; set; }
 }
 
 /// <summary>Data wrapper for the documented <c>project(id)</c> query.</summary>

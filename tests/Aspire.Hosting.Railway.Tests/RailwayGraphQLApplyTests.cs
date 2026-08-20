@@ -76,6 +76,7 @@ public class RailwayGraphQLApplyTests
         var projectBody = handler.Bodies.Single(body => body.Contains("\"operationName\":\"project\"", StringComparison.Ordinal));
         Assert.Contains(GraphQLFixtures.ProjectId, projectBody, StringComparison.Ordinal);
         Assert.Contains("services", projectBody, StringComparison.Ordinal);
+        Assert.Contains("buckets", projectBody, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -254,6 +255,183 @@ public class RailwayGraphQLApplyTests
 
         Assert.Contains("production environment id is unknown", exception.Message, StringComparison.Ordinal);
         Assert.Equal(0, handler.Count("environmentCreate"));
+    }
+
+    [Fact]
+    public async Task Apply_AdoptsExistingBucketByName_SkipsBucketCreate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingBucket);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var state = new MemoryDeploymentStateManager();
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(adoptExisting: true, includeBucket: true),
+            GraphQLFixtures.CreateRequest(
+                adoptedProjectId: GraphQLFixtures.ProjectId,
+                adoptedEnvironmentId: GraphQLFixtures.ProductionEnvironmentId),
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.Equal(GraphQLFixtures.UploadsServiceId, result.ServiceIds["uploads"]);
+        Assert.NotEqual(result.ServiceIds["uploads"], result.BucketIds["uploads"]);
+        Assert.Equal(0, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("bucketS3Credentials"));
+        Assert.Equal(0, handler.Count("serviceCreate"));
+        var credentialsBody = handler.Bodies.Single(body => body.Contains("bucketS3Credentials", StringComparison.Ordinal));
+        Assert.Contains(GraphQLFixtures.BucketId, credentialsBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.UploadsServiceId, credentialsBody, StringComparison.Ordinal);
+
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.Equal(GraphQLFixtures.BucketId, snapshot.BucketIds["uploads"]);
+        var section = await state.AcquireSectionAsync("Railway:railway");
+        var persisted = section.Data.ToJsonString();
+        Assert.DoesNotContain("placeholder-access-key", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain("SecretAccessKey", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.Token, persisted, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.BucketId, persisted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_MissingBucket_StillCreates()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("project", GraphQLFixtures.ProjectWithApi);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(adoptExisting: true, includeBucket: true),
+            GraphQLFixtures.CreateRequest(
+                adoptedProjectId: GraphQLFixtures.ProjectId,
+                adoptedEnvironmentId: GraphQLFixtures.ProductionEnvironmentId),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("bucketS3Credentials"));
+        Assert.Equal(1, handler.Count("serviceCreate"));
+        var createBody = handler.Bodies.Single(body => body.Contains("bucketCreate", StringComparison.Ordinal));
+        Assert.Contains("uploads", createBody, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.ProductionEnvironmentId, createBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_SameNameService_IsNotUsedAsBucketId()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("project", GraphQLFixtures.ProjectWithUploadsServiceOnly);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(adoptExisting: true, includeBucket: true),
+            GraphQLFixtures.CreateRequest(
+                adoptedProjectId: GraphQLFixtures.ProjectId,
+                adoptedEnvironmentId: GraphQLFixtures.ProductionEnvironmentId),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(GraphQLFixtures.UploadsServiceId, result.ServiceIds["uploads"]);
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.NotEqual(result.ServiceIds["uploads"], result.BucketIds["uploads"]);
+        Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(0, handler.Count("serviceCreate"));
+        var credentialsBody = handler.Bodies.Single(body => body.Contains("bucketS3Credentials", StringComparison.Ordinal));
+        Assert.Contains(GraphQLFixtures.BucketId, credentialsBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.UploadsServiceId, credentialsBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_BucketCreate_RetriesCredentialsUntilInstanceExists()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.GraphQLError("BucketInstance not found"));
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(2, handler.Count("bucketS3Credentials"));
+    }
+
+    [Fact]
+    public async Task Apply_BucketSecrets_AreNotWrittenToPlanOrState()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var state = new MemoryDeploymentStateManager();
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var plan = GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true);
+        var planJson = RailwayPlanBuilder.ToJson(plan);
+        Assert.DoesNotContain("placeholder-access-key", planJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", planJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("SecretAccessKey", planJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.Token, planJson, StringComparison.Ordinal);
+
+        var result = await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Contains("placeholder-secret-key", result.BucketConnectionStrings["uploads"], StringComparison.Ordinal);
+
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.Equal(GraphQLFixtures.BucketId, snapshot.BucketIds["uploads"]);
+        Assert.DoesNotContain("placeholder-access-key", snapshot.BucketIds.Values, StringComparer.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", snapshot.BucketIds.Values, StringComparer.Ordinal);
+
+        await RailwayDeploymentStateStoreTests.FlattenUnflattenSectionAsync(state, "Railway:railway");
+        var flattenedSnapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.Equal(GraphQLFixtures.BucketId, flattenedSnapshot.BucketIds["uploads"]);
+
+        var section = await state.AcquireSectionAsync("Railway:railway");
+        Assert.IsType<System.Text.Json.Nodes.JsonObject>(section.Data[RailwayDeploymentStateStore.BucketsKey]?["production"]);
+        Assert.IsNotType<System.Text.Json.Nodes.JsonArray>(section.Data[RailwayDeploymentStateStore.BucketsKey]?["production"]);
+        var persisted = section.Data.ToJsonString();
+        Assert.DoesNotContain("placeholder-access-key", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.Token, persisted, StringComparison.Ordinal);
     }
 
     [Fact]
