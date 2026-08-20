@@ -142,10 +142,60 @@ Local `aspire run` needs no token.
 
 Full mapping and constraints (5-minute cron floor, no replicas with volumes, cron vs replicas/serverless, DNS TXT for custom domains, image start is exec form / wrap `$PORT`) live in [Publish and deploy](docs/publish-and-deploy.md).
 
+Kitchen-sink service: region, CPU/RAM, sleep-when-idle, healthcheck timeout, restart, start / pre-deploy, overlap / drain, and a custom hostname. Image start is exec form — wrap `$PORT`.
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithReplicas(2)
+    .WithHttpHealthCheck("/health")
+    .WithComputeEnvironment(railway)
+    .PublishAsRailwayService(s =>
+    {
+        s.Region = RailwayRegion.EuropeWest4;
+        s.Cpu = 1;
+        s.MemoryGb = 2;
+        s.Serverless = true;
+        s.HealthcheckTimeoutSeconds = 120;
+        s.RestartPolicy = RailwayRestartPolicy.OnFailure;
+        s.RestartPolicyMaxRetries = 10;
+        s.StartCommand = "/bin/sh -c \"exec dotnet MyApp.dll --urls http://*:$PORT\"";
+        s.PreDeployCommand = "dotnet MyApp.dll --migrate";
+        s.OverlapSeconds = 60;
+        s.DrainingSeconds = 10;
+        s.CustomDomains.Add("api.example.com");
+    });
+```
+
+Cron worker: five-field crontab, UTC. The service must exit. Do not combine with replicas greater than 1 or `Serverless`.
+
+```csharp
+builder.AddProject<Projects.Worker>("nightly")
+    .PublishAsRailwayService(s =>
+    {
+        s.CronSchedule = "0 3 * * *"; // 03:00 UTC
+    });
+```
+
+Multi-region: `ReplicaRegions` wins over `WithReplicas` + `Region`.
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithComputeEnvironment(railway)
+    .PublishAsRailwayService(s =>
+    {
+        s.ReplicaRegions = new()
+        {
+            [RailwayRegion.UsWest2] = 2,
+            [RailwayRegion.EuropeWest4] = 1
+        };
+        s.Serverless = false;
+    });
+```
+
 ## Docs
 
 - [Getting started](docs/getting-started.md) — restore, AppHost, first publish/deploy, token setup
-- [Publish and deploy](docs/publish-and-deploy.md) — pipeline, plan vs apply, adopt, staging, state, images
+- [Publish and deploy](docs/publish-and-deploy.md) — pipeline, plan vs apply, adopt, staging, images, settings
 - [Storage](docs/storage.md) — buckets, local S3Mock, `IAmazonS3`, connection strings
 - [GraphQL](docs/graphql.md) — confirmed operations only
 - [CHANGELOG.md](CHANGELOG.md) — preview.11 and later
