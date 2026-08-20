@@ -364,4 +364,80 @@ public static class RailwayGraphQLOperations
           }
         }
         """;
+
+    /// <summary>
+    /// Reads an environment including <c>volumeInstances</c>. Confirmed
+    /// <c>environment(id: String!, projectId: String)</c> (live schema
+    /// 2026-08-20). <c>Environment.volumeInstances</c> is
+    /// <c>EnvironmentVolumeInstancesConnection</c> with Relay
+    /// <c>edges</c> / <c>pageInfo</c>. Edge type is
+    /// <c>EnvironmentVolumeInstancesConnectionEdge</c> (<c>cursor</c>,
+    /// <c>node</c>). <c>VolumeInstance</c> fields used here:
+    /// <c>id</c>, <c>serviceId</c>, <c>volumeId</c>,
+    /// <c>environmentId</c>, <c>mountPath</c>. Optional connection args
+    /// <c>after</c> / <c>first</c> are omitted when unset. Do not use
+    /// <c>adminVolumeInstancesForVolume</c>. <c>volumeInstance(id)</c>
+    /// is not used unless the id is already known. Service has no
+    /// <c>volumes</c> field; ServiceInstance has no <c>volume</c> field.
+    /// </summary>
+    public const string Environment = """
+        query environment($id: String!, $projectId: String, $after: String, $first: Int) {
+          environment(id: $id, projectId: $projectId) {
+            volumeInstances(after: $after, first: $first) {
+              edges {
+                node {
+                  id
+                  serviceId
+                  volumeId
+                  environmentId
+                  mountPath
+                }
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Lists volume backup schedules. Confirmed
+    /// <c>volumeInstanceBackupScheduleList(volumeInstanceId: String!)</c>
+    /// (live schema 2026-08-20) returns
+    /// <c>[VolumeInstanceBackupSchedule]</c> (a list, not a connection).
+    /// Fields: <c>id</c>, <c>kind</c>, <c>name</c>, <c>cron</c>,
+    /// <c>createdAt</c>, <c>retentionSeconds</c>.
+    /// </summary>
+    public const string VolumeInstanceBackupScheduleList = """
+        query volumeInstanceBackupScheduleList($volumeInstanceId: String!) {
+          volumeInstanceBackupScheduleList(volumeInstanceId: $volumeInstanceId) {
+            id
+            kind
+            name
+            cron
+            createdAt
+            retentionSeconds
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Replaces the volume backup schedule kinds set. Confirmed
+    /// <c>volumeInstanceBackupScheduleUpdate(kinds: [VolumeInstanceBackupScheduleKind!]!, volumeInstanceId: String!)</c>
+    /// returns <c>Boolean!</c> (live schema 2026-08-20). Enum values:
+    /// <c>DAILY</c>, <c>WEEKLY</c>, <c>MONTHLY</c>. No input wrapper.
+    /// Do not send <c>null</c>. Apply unions requested kinds with
+    /// already-present kinds so a dashboard schedule this plan did not
+    /// mention is not removed. Do not call
+    /// <c>volumeInstanceBackupCreate</c> / <c>Delete</c> / <c>Lock</c> /
+    /// <c>Restore</c>, <c>volumeInstancePITRRestore</c>,
+    /// <c>enablePitrForHaCluster</c>, or <c>pluginCreate</c>.
+    /// </summary>
+    public const string VolumeInstanceBackupScheduleUpdate = """
+        mutation volumeInstanceBackupScheduleUpdate($kinds: [VolumeInstanceBackupScheduleKind!]!, $volumeInstanceId: String!) {
+          volumeInstanceBackupScheduleUpdate(kinds: $kinds, volumeInstanceId: $volumeInstanceId)
+        }
+        """;
 }

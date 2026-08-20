@@ -27,17 +27,39 @@ public static class RailwayPostgresExtensions
     /// <param name="builder">The official Postgres server resource.</param>
     /// <returns>The same resource builder.</returns>
     public static IResourceBuilder<PostgresServerResource> PublishAsRailwayPostgres(
-        this IResourceBuilder<PostgresServerResource> builder)
+        this IResourceBuilder<PostgresServerResource> builder) =>
+        PublishAsRailwayPostgres(builder, configure: null);
+
+    /// <summary>
+    /// Marks a Postgres server so deploy uses the Railway Postgres template,
+    /// optionally requesting volume backup schedules. PITR enable is not
+    /// part of this slice (HA-only mutations on the live schema).
+    /// </summary>
+    /// <param name="builder">The official Postgres server resource.</param>
+    /// <param name="configure">
+    /// Optional Railway-specific settings. At least one
+    /// <c>VolumeBackup*</c> boolean must be true to write schedule kinds
+    /// into the plan. All false / no callback omits the field so deploy
+    /// leaves the dashboard as-is.
+    /// </param>
+    /// <returns>The same resource builder.</returns>
+    public static IResourceBuilder<PostgresServerResource> PublishAsRailwayPostgres(
+        this IResourceBuilder<PostgresServerResource> builder,
+        Action<RailwayPostgresSettings>? configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.ApplicationBuilder.AddRailwayInfrastructureCore();
 
+        var settings = new RailwayPostgresSettings();
+        configure?.Invoke(settings);
+
         builder.WithAnnotation(new RailwayManagedServiceAnnotation(
             kind: TemplateCode,
             serviceName: builder.Resource.Name,
             templateCode: TemplateCode,
-            privateReferenceVariable: PrivateReferenceVariable));
+            privateReferenceVariable: PrivateReferenceVariable,
+            volumeBackupScheduleKinds: ToVolumeBackupScheduleKinds(settings)));
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
@@ -49,5 +71,26 @@ public static class RailwayPostgresExtensions
         }
 
         return builder;
+    }
+
+    private static IReadOnlyList<string>? ToVolumeBackupScheduleKinds(RailwayPostgresSettings settings)
+    {
+        var kinds = new List<string>();
+        if (settings.VolumeBackupDaily)
+        {
+            kinds.Add("DAILY");
+        }
+
+        if (settings.VolumeBackupWeekly)
+        {
+            kinds.Add("WEEKLY");
+        }
+
+        if (settings.VolumeBackupMonthly)
+        {
+            kinds.Add("MONTHLY");
+        }
+
+        return kinds.Count == 0 ? null : kinds;
     }
 }

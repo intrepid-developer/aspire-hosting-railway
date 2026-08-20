@@ -63,7 +63,7 @@ PR / ephemeral Railway environment APIs are not part of this release.
 
 ## Flatten-safe deployment state
 
-Project, environment, service, bucket, custom-domain, and template ids are persisted in `IDeploymentStateManager` under `Railway:{computeEnvironmentName}`. Aspire's file state manager flattens with colon keys and does **not** round-trip JSON arrays. This integration therefore stores maps as JSON objects (for example template codes as `{ "postgres": "postgres" }`, custom domains as `{ "api.example.com": "cdom_placeholder" }`), not arrays.
+Project, environment, service, bucket, custom-domain, volume-instance, volume-backup-schedule, and template ids are persisted in `IDeploymentStateManager` under `Railway:{computeEnvironmentName}`. Aspire's file state manager flattens with colon keys and does **not** round-trip JSON arrays. This integration therefore stores maps as JSON objects (for example template codes as `{ "postgres": "postgres" }`, custom domains as `{ "api.example.com": "cdom_placeholder" }`, volume instances as `{ "postgres": "volinst_placeholder" }`), not arrays.
 
 A legacy `AppliedTemplateCodes` key that stored a JSON array string such as `["postgres"]` is still read and migrated on load. Preview.4 never read that key. Tokens and bucket secrets are never written to state.
 
@@ -189,4 +189,35 @@ Publish writes `customDomains` (hostnames only) into `railway-plan.json`. Verifi
 See [working with domains](https://docs.railway.com/networking/domains/working-with-domains) and [manage domains](https://docs.railway.com/integrations/api/manage-domains). `customDomainDelete` and `customDomainIssueCertificate` are not called. Destroy of domains belongs to [#22](https://github.com/intrepid-developer/aspire-hosting-railway/issues/22). TCP proxies are out of scope. Flatten-safe custom-domain **ids** are persisted; tokens stay out of state.
 
 Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` / `healthcheckPath` / `healthcheckTimeout` / `restartPolicyType` / `restartPolicyMaxRetries` / `startCommand` / `preDeployCommand` / `overlapSeconds` / `drainingSeconds` / `cronSchedule` / custom domains for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM, healthcheck, restart-policy, start-command, pre-deploy, teardown, cron, or custom-domain fields. Volume-backed services still have a cutover gap even when a healthcheck is configured.
+
+## Official Postgres volume backup schedules
+
+AppHosts request Railway volume backup schedules on official Postgres only:
+
+```csharp
+builder.AddPostgres("postgres")
+    .PublishAsRailwayPostgres(s =>
+    {
+        s.VolumeBackupDaily = true;
+        s.VolumeBackupWeekly = true;
+        // s.VolumeBackupMonthly = true;
+    });
+```
+
+Booleans match the Railway dashboard kinds. Unset / false omits that kind. All false / no callback omits `volumeBackupScheduleKinds` from `railway-plan.json` so deploy leaves the dashboard as-is. At least one true kind is required to send the mutation. Empty or invalid deserialized kind strings fail honestly. Only `DAILY` / `WEEKLY` / `MONTHLY`.
+
+`PublishAsRailwayRedis` is unchanged and does not silently enable backups. Buckets and app services do not get this field.
+
+Product retention is mapping only (do not hardcode as API): Daily (24h, keep 6 days), Weekly (7d, keep 1 month), Monthly (30d, keep 3 months). Multiple kinds are allowed. Wiping a volume deletes its backups. See [volume backups](https://docs.railway.com/volumes/backups), [Postgres backups](https://docs.railway.com/guides/postgres-backups-restores), and [manage volumes](https://docs.railway.com/integrations/api/manage-volumes).
+
+Deploy, after the official Postgres template service id exists (from `templateDeployV2` adopt or `project(id)`):
+
+1. Query confirmed `environment(id)` (optional `projectId`) and select `volumeInstances { edges { node { id serviceId } } pageInfo }`. Live schema 2026-08-20: connection type `EnvironmentVolumeInstancesConnection`, edge type `EnvironmentVolumeInstancesConnectionEdge` (`cursor`, `node`). Match `node.serviceId` to the persisted Postgres service id. Retry like bucket credentials if the volume instance is not visible yet (template just finished). Fail honestly if none matches. Do not use `adminVolumeInstancesForVolume` or `volumeInstance(id)` unless the id is already known. Service has no `volumes` field; ServiceInstance has no `volume` field.
+2. `volumeInstanceBackupScheduleList(volumeInstanceId)` — a list of `VolumeInstanceBackupSchedule`, not a connection.
+3. Confirmed `volumeInstanceBackupScheduleUpdate(kinds: [VolumeInstanceBackupScheduleKind!]!, volumeInstanceId: String!)` returns `Boolean!` and **replaces** the kinds set. Apply unions requested kinds with already-present kinds so a dashboard schedule this plan did not mention is not removed. If requested kinds are already a subset of existing, skip the mutation.
+4. Report the kinds applied. Deploy does not wait for a backup to complete.
+
+Do not call `volumeInstanceBackupCreate` / `Delete` / `Lock` / `Restore`, `volumeInstancePITRRestore`, `enablePitrForHaCluster`, `pluginCreate`, or `environmentPatchCommitStaged` for backups. PITR enable on the live schema is `enablePitrForHaCluster` / `disablePitrForHaCluster` only; non-HA PITR enable is not a confirmed public mutation. This slice does not invent `WAL_ARCHIVE_*` or `bucketCreate` of `Postgres-PITR`. Restore is later. [#22](https://github.com/intrepid-developer/aspire-hosting-railway/issues/22) destroy must not invent backup or volume deletes. [#30](https://github.com/intrepid-developer/aspire-hosting-railway/issues/30) stays open for PITR enable.
+
+Flatten-safe volume instance and schedule **ids** are persisted. Backup payloads stay out of plan and state.
 

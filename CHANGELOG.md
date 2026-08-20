@@ -2,6 +2,16 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.11
+
+- `PublishAsRailwayPostgres` can request Railway volume backup schedules via a callback (`VolumeBackupDaily` / `VolumeBackupWeekly` / `VolumeBackupMonthly`). The no-arg overload is unchanged. Unset / false omits that kind. All false / no callback omits the field so deploy leaves the dashboard as-is. At least one true kind is required to send the mutation.
+- Official Aspire type stays `AddPostgres` + `PublishAsRailwayPostgres`. This is not a competing `AddRailwayPostgres`. `PublishAsRailwayRedis`, buckets, and app services do not get this field.
+- `aspire publish` writes `volumeBackupScheduleKinds` (`["DAILY","WEEKLY"]`) onto the managed-service plan object. Unset / empty is omitted. Empty or invalid deserialized kind strings fail honestly. Only GraphQL `VolumeInstanceBackupScheduleKind` values (`DAILY` / `WEEKLY` / `MONTHLY`). Hostnames and tokens are never involved.
+- `aspire deploy`, after the official Postgres template service id exists: query confirmed `environment(id)` `volumeInstances` (Relay `edges { node { id serviceId } }`, live schema 2026-08-20), match the Postgres service id, retry like bucket credentials if the volume instance is not visible yet, then `volumeInstanceBackupScheduleList`. The confirmed `volumeInstanceBackupScheduleUpdate(kinds:, volumeInstanceId:)` mutation **replaces** the kinds set — apply unions requested kinds with already-present kinds so a dashboard schedule this plan did not mention is not removed. If requested kinds are already a subset, the mutation is skipped. Report the kinds applied. Deploy does not wait for a backup to complete.
+- Persist flatten-safe volume instance and schedule **ids** only in `IDeploymentStateManager`. Backup payloads stay out of plan and state.
+- These operations were confirmed on the live schema 2026-08-20. Product retention (Daily keep 6 days, Weekly keep 1 month, Monthly keep 3 months) is mapping only. See [volume backups](https://docs.railway.com/volumes/backups), [Postgres backups](https://docs.railway.com/guides/postgres-backups-restores), and [manage volumes](https://docs.railway.com/integrations/api/manage-volumes).
+- PITR enable is **not** in this slice. Live-schema enable mutations are `enablePitrForHaCluster` / `disablePitrForHaCluster` only; non-HA PITR enable is not a confirmed public mutation. Do not invent `WAL_ARCHIVE_*` or `bucketCreate` of `Postgres-PITR`. On-demand `volumeInstanceBackupCreate` / restore / lock / delete, Redis volume backups, and HA are later. [#22](https://github.com/intrepid-developer/aspire-hosting-railway/issues/22) destroy must not invent backup or volume deletes. [#30](https://github.com/intrepid-developer/aspire-hosting-railway/issues/30) stays open for PITR enable.
+
 ## 13.5.0-preview.10
 
 - `PublishAsRailwayService` can declare custom hostnames on `CustomDomains` (hostname strings). There is no Aspire-core annotation. Empty or whitespace hostnames fail honestly. Duplicates in the list fail. Hostnames are not secretly lowercased; adopt matches existing Railway domains case-insensitively.

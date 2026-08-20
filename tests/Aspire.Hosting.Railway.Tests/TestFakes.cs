@@ -164,6 +164,10 @@ internal static class GraphQLFixtures
     public const string PostgresServiceId = "svc_postgres_placeholder";
     public const string UploadsServiceId = "svc_uploads_placeholder";
     public const string BucketId = "bucket_placeholder";
+    public const string VolumeInstanceId = "volinst_placeholder";
+    public const string DailyScheduleId = "volsched_daily_placeholder";
+    public const string WeeklyScheduleId = "volsched_weekly_placeholder";
+    public const string MonthlyScheduleId = "volsched_monthly_placeholder";
 
     public static string ProjectCreate =>
         """{"data":{"projectCreate":{"id":"proj_placeholder","name":"railway","environments":{"edges":[{"node":{"id":"env_production_placeholder","name":"production"}}]}}}}""";
@@ -313,6 +317,90 @@ internal static class GraphQLFixtures
 
     public static string CustomDomainQuery =>
         """{"data":{"customDomain":{"id":"cdom_placeholder","domain":"api.example.com","targetPort":8080,"status":{"verified":false,"verificationToken":"verify-placeholder","verificationDnsHost":"_railway.example.com","certificateStatus":"CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP","dnsRecords":[{"fqdn":"api.example.com","recordType":"DNS_RECORD_TYPE_CNAME","requiredValue":"api-placeholder.up.railway.app","purpose":"DNS_RECORD_PURPOSE_TRAFFIC_ROUTE","status":"DNS_RECORD_STATUS_REQUIRES_UPDATE"}]}}}}""";
+
+    public static string EnvironmentVolumeInstances(params (string Id, string ServiceId)[] instances) =>
+        EnvironmentVolumeInstancesPage(instances, hasNextPage: false);
+
+    public static string EnvironmentVolumeInstancesEmpty => EnvironmentVolumeInstances();
+
+    public static string EnvironmentVolumeInstancesPage(
+        IReadOnlyList<(string Id, string ServiceId)> instances,
+        bool hasNextPage,
+        string? endCursor = null)
+    {
+        var edges = new JsonArray();
+        foreach (var (id, serviceId) in instances)
+        {
+            edges.Add(new JsonObject
+            {
+                ["node"] = new JsonObject
+                {
+                    ["id"] = id,
+                    ["serviceId"] = serviceId,
+                    ["volumeId"] = "vol_placeholder",
+                    ["environmentId"] = ProductionEnvironmentId,
+                    ["mountPath"] = "/var/lib/postgresql/data"
+                }
+            });
+        }
+
+        var payload = new JsonObject
+        {
+            ["data"] = new JsonObject
+            {
+                ["environment"] = new JsonObject
+                {
+                    ["volumeInstances"] = new JsonObject
+                    {
+                        ["edges"] = edges,
+                        ["pageInfo"] = new JsonObject
+                        {
+                            ["hasNextPage"] = hasNextPage,
+                            ["endCursor"] = endCursor
+                        }
+                    }
+                }
+            }
+        };
+
+        return payload.ToJsonString();
+    }
+
+    public static string VolumeInstanceBackupScheduleList(params (string Id, string Kind)[] schedules)
+    {
+        var items = new JsonArray();
+        foreach (var (id, kind) in schedules)
+        {
+            items.Add(new JsonObject
+            {
+                ["id"] = id,
+                ["kind"] = kind,
+                ["name"] = kind,
+                ["cron"] = "0 0 * * *",
+                ["createdAt"] = "2026-08-20T00:00:00.000Z",
+                ["retentionSeconds"] = 518400
+            });
+        }
+
+        return new JsonObject
+        {
+            ["data"] = new JsonObject
+            {
+                ["volumeInstanceBackupScheduleList"] = items
+            }
+        }.ToJsonString();
+    }
+
+    public static string VolumeInstanceBackupScheduleUpdate =>
+        """{"data":{"volumeInstanceBackupScheduleUpdate":true}}""";
+
+    public static JsonElement GetVolumeInstanceBackupScheduleUpdateVariables(IEnumerable<string> bodies)
+    {
+        var body = bodies.Single(item =>
+            item.Contains("\"operationName\":\"volumeInstanceBackupScheduleUpdate\"", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("variables").Clone();
+    }
 
     public static string CustomDomainUpdate =>
         """{"data":{"customDomainUpdate":{"id":"cdom_placeholder","domain":"api.example.com","targetPort":80,"status":{"verified":false,"verificationToken":"verify-placeholder","verificationDnsHost":"_railway.example.com","certificateStatus":"CERTIFICATE_STATUS_TYPE_ISSUING","dnsRecords":[{"fqdn":"api.example.com","recordType":"DNS_RECORD_TYPE_CNAME","requiredValue":"api-placeholder.up.railway.app","purpose":"DNS_RECORD_PURPOSE_TRAFFIC_ROUTE","status":"DNS_RECORD_STATUS_REQUIRES_UPDATE"}]}}}}""";
@@ -472,7 +560,9 @@ internal static class GraphQLFixtures
             WorkflowPollInterval = TimeSpan.Zero,
             WorkflowTimeout = TimeSpan.FromSeconds(5),
             BucketCredentialsPollInterval = TimeSpan.Zero,
-            BucketCredentialsTimeout = TimeSpan.FromSeconds(5)
+            BucketCredentialsTimeout = TimeSpan.FromSeconds(5),
+            VolumeInstancePollInterval = TimeSpan.Zero,
+            VolumeInstanceTimeout = TimeSpan.FromSeconds(5)
         });
     }
 }

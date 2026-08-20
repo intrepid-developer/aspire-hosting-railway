@@ -78,4 +78,13 @@ public static class RailwayConstants
     /// </summary>
     public static readonly IReadOnlyList<string> OfficialRestartPolicyTypes =
         RailwayRestartPolicyMapper.OfficialTypes;
+
+    /// <summary>
+    /// Official GraphQL <c>VolumeInstanceBackupScheduleKind</c> values
+    /// confirmed on the live schema 2026-08-20. AppHosts set booleans on
+    /// <c>PublishAsRailwayPostgres</c>; these strings are the GraphQL /
+    /// plan values. Product retention is mapping only.
+    /// </summary>
+    public static readonly IReadOnlyList<string> OfficialVolumeBackupScheduleKinds =
+        RailwayVolumeBackupSchedule.OfficialKinds;
 }
