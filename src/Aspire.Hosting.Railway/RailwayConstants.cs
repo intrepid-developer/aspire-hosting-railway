@@ -55,4 +55,22 @@ public static class RailwayConstants
     /// Railway private DNS suffix. Host addresses are <c>{service}.railway.internal</c>.
     /// </summary>
     public const string PrivateDnsSuffix = "railway.internal";
+
+    /// <summary>
+    /// Documented maximum total replicas across all regions
+    /// (<see href="https://docs.railway.com/cli/scale"/>).
+    /// </summary>
+    public const int MaxReplicas = 50;
+
+    /// <summary>
+    /// Official Railway compute region identifiers documented at
+    /// <see href="https://docs.railway.com/deployments/regions"/>.
+    /// </summary>
+    public static readonly IReadOnlyList<string> OfficialRegionIds =
+    [
+        "us-west2",
+        "us-east4-eqdc4a",
+        "europe-west4-drams3a",
+        "asia-southeast1-eqsg3a"
+    ];
 }

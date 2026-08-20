@@ -88,3 +88,47 @@ Resolution order (`RailwayEnvironmentResource.ResolveDeployImageAsync`):
 3. The plan image, if it is already resolved.
 
 `resolveContainerRegistry` uses `WithContainerRegistry` when present, otherwise the single `IContainerRegistry` in the model.
+
+## Compute settings (replicas, region, serverless)
+
+Replica count is Aspire-core. Call `WithReplicas` on the project or container. Publish copies `resource.GetReplicaCount()` into `railway-plan.json` when a `ReplicaAnnotation` is present. Implicit compute on `AddRailwayEnvironment` is enough; you do not need `PublishAsRailwayService` just to set replicas.
+
+Railway-specific settings use `PublishAsRailwayService`:
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithReplicas(2)
+    .WithComputeEnvironment(railway)
+    .PublishAsRailwayService(s =>
+    {
+        s.Region = "europe-west4-drams3a";
+        s.Serverless = true;
+    });
+
+// Aspire has no core multi-region API
+builder.AddProject<Projects.Api>("api")
+    .WithComputeEnvironment(railway)
+    .PublishAsRailwayService(s =>
+    {
+        s.ReplicaRegions = new Dictionary<string, int>
+        {
+            ["us-west2"] = 2,
+            ["europe-west4-drams3a"] = 1
+        };
+    });
+```
+
+Official region ids ([Railway regions](https://docs.railway.com/deployments/regions)): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Unknown ids fail at publish and before GraphQL apply. Total replicas must be at least 1 and at most 50 ([scale](https://docs.railway.com/cli/scale), [scaling](https://docs.railway.com/deployments/scaling)).
+
+How apply maps plan fields onto the existing `serviceInstanceUpdate` input:
+
+| Plan fields | GraphQL input |
+| --- | --- |
+| `replicaRegions` set | `multiRegionConfig` (region id → `{ numReplicas }`). `numReplicas` is not sent. This map wins over `WithReplicas` + `region`. |
+| `region` set (no map) | `multiRegionConfig` `{ [region]: { numReplicas: replicas ?? 1 } }` |
+| `replicas` only (`WithReplicas`, no region / no map) | `numReplicas` — documented single-region path; applies to the service's current Railway region |
+| `serverless` set | `sleepApplication` (only when the user set it) |
+| none of the above | today's image-only `source.image` update |
+
+`serviceCreate` does not take these fields. Apply sends them on `serviceInstanceUpdate` after the service id exists (create and later updates). If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. Managed Postgres, Redis, and buckets are not scaled this way.
+

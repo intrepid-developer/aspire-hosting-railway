@@ -40,7 +40,36 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public string RailwayServiceName { get; set; }
 
     /// <summary>
-    /// Gets or sets an optional Railway region for this service.
+    /// Gets or sets an optional Railway region for this service. Must be an official
+    /// region id from <see href="https://docs.railway.com/deployments/regions"/>:
+    /// <c>us-west2</c>, <c>us-east4-eqdc4a</c>, <c>europe-west4-drams3a</c>, or
+    /// <c>asia-southeast1-eqsg3a</c>.
     /// </summary>
+    /// <remarks>
+    /// When set, deploy sends <c>multiRegionConfig</c> for this region using
+    /// <c>WithReplicas</c> (or 1 when <c>WithReplicas</c> is omitted). Replica count
+    /// itself comes from Aspire <c>WithReplicas</c>, not from this type.
+    /// </remarks>
     public string? Region { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether this service should sleep when idle (Railway serverless).
+    /// Maps to <c>ServiceInstanceUpdateInput.sleepApplication</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. There is no Aspire-core equivalent; configure this through
+    /// <c>PublishAsRailwayService</c>.
+    /// </remarks>
+    public bool? Serverless { get; set; }
+
+    /// <summary>
+    /// Gets or sets a multi-region replica map of official Railway region id to replica
+    /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
+    /// </summary>
+    /// <remarks>
+    /// Aspire has no core multi-region API, so this stays Railway-specific. When set,
+    /// it is the source of truth for scale and wins over <c>WithReplicas</c> and
+    /// <see cref="Region"/>. Do not send <c>numReplicas</c> in that case.
+    /// </remarks>
+    public Dictionary<string, int>? ReplicaRegions { get; set; }
 }

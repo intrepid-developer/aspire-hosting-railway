@@ -57,6 +57,41 @@ public sealed class ServiceInstanceUpdateInput
     /// <summary>Gets or sets the image source. Railway has no registry; push to GHCR or Docker Hub first.</summary>
     [JsonPropertyName("source")]
     public ServiceSourceInput? Source { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-region replica counts. GraphQL type is JSON: region id keys
+    /// to <c>{ numReplicas }</c>. Preferred over <see cref="NumReplicas"/>.
+    /// </summary>
+    [JsonPropertyName("multiRegionConfig")]
+    public Dictionary<string, ServiceInstanceRegionConfig>? MultiRegionConfig { get; set; }
+
+    /// <summary>
+    /// Gets or sets Railway serverless. Official field is <c>sleepApplication</c>
+    /// (<c>railway.json</c> <c>deploy.sleepApplication</c>).
+    /// </summary>
+    [JsonPropertyName("sleepApplication")]
+    public bool? SleepApplication { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deprecated single-region replica count. Sent only when the
+    /// plan has <c>WithReplicas</c> and no region / multi-region map.
+    /// </summary>
+    [JsonPropertyName("numReplicas")]
+    public int? NumReplicas { get; set; }
+
+    /// <summary>
+    /// Gets or sets the legacy single-region field. Prefer <see cref="MultiRegionConfig"/>.
+    /// </summary>
+    [JsonPropertyName("region")]
+    public string? Region { get; set; }
+}
+
+/// <summary>Per-region replica count inside <c>multiRegionConfig</c>.</summary>
+public sealed class ServiceInstanceRegionConfig
+{
+    /// <summary>Gets or sets the replica count for one official Railway region.</summary>
+    [JsonPropertyName("numReplicas")]
+    public int NumReplicas { get; set; }
 }
 
 /// <summary>Image or repo source for a service instance.</summary>

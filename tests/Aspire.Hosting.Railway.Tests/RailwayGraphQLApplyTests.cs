@@ -708,6 +708,326 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, snapshot.EnvironmentId);
     }
 
+    [Fact]
+    public async Task Apply_ImageOnlyServiceInstanceUpdate_OmitsScaleFields()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ghcr.io/example/api:placeholder", input.GetProperty("source").GetProperty("image").GetString());
+        Assert.False(input.TryGetProperty("multiRegionConfig", out _));
+        Assert.False(input.TryGetProperty("sleepApplication", out _));
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+        Assert.False(input.TryGetProperty("region", out _));
+    }
+
+    [Fact]
+    public async Task Apply_RegionReplicasAndServerless_SendsMultiRegionConfigAndSleepApplication()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Region = "europe-west4-drams3a";
+        plan.Services[0].Replicas = 2;
+        plan.Services[0].Serverless = true;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ghcr.io/example/api:placeholder", input.GetProperty("source").GetProperty("image").GetString());
+        Assert.Equal(
+            2,
+            input.GetProperty("multiRegionConfig").GetProperty("europe-west4-drams3a").GetProperty("numReplicas").GetInt32());
+        Assert.True(input.GetProperty("sleepApplication").GetBoolean());
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+        Assert.False(input.TryGetProperty("region", out _));
+    }
+
+    [Fact]
+    public async Task Apply_WithReplicasOnly_SendsNumReplicasForCurrentRegion()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Replicas = 2;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ghcr.io/example/api:placeholder", input.GetProperty("source").GetProperty("image").GetString());
+        Assert.Equal(2, input.GetProperty("numReplicas").GetInt32());
+        Assert.False(input.TryGetProperty("multiRegionConfig", out _));
+        Assert.False(input.TryGetProperty("sleepApplication", out _));
+    }
+
+    [Fact]
+    public async Task Apply_ReplicaRegions_WinsOverWithReplicasAndOmitsNumReplicas()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Replicas = 2;
+        plan.Services[0].Region = "us-west2";
+        plan.Services[0].ReplicaRegions = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["us-west2"] = 2,
+            ["europe-west4-drams3a"] = 1
+        };
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        var multiRegion = input.GetProperty("multiRegionConfig");
+        Assert.Equal(2, multiRegion.GetProperty("us-west2").GetProperty("numReplicas").GetInt32());
+        Assert.Equal(1, multiRegion.GetProperty("europe-west4-drams3a").GetProperty("numReplicas").GetInt32());
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+        Assert.False(input.TryGetProperty("region", out _));
+    }
+
+    [Fact]
+    public async Task Apply_ReplicaCountZero_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Replicas = 0;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("at least 1", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+    }
+
+    [Fact]
+    public async Task Apply_TotalReplicasAboveCap_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].ReplicaRegions = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["us-west2"] = 50,
+            ["europe-west4-drams3a"] = 1
+        };
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("50", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("docs.railway.com/cli/scale", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+    }
+
+    [Fact]
+    public async Task Apply_UnknownRegion_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Region = "not-a-railway-region";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("not-a-railway-region", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("us-west2", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("projectCreate"));
+    }
+
+    [Fact]
+    public async Task Apply_TemplatesAndBucket_DoNotSendScaleOnManagedServices()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true, includeRedis: true, includeBucket: true);
+        plan.Services[0].Replicas = 2;
+        plan.Services[0].Region = "us-west2";
+        plan.Services[0].Serverless = true;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Contains("postgres", result.AppliedTemplateCodes);
+        Assert.Contains("redis", result.AppliedTemplateCodes);
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.Equal(2, handler.Count("templateDeployV2"));
+        Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+
+        var updateInput = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal(
+            2,
+            updateInput.GetProperty("multiRegionConfig").GetProperty("us-west2").GetProperty("numReplicas").GetInt32());
+        Assert.True(updateInput.GetProperty("sleepApplication").GetBoolean());
+
+        var templateBodies = handler.Bodies.Where(body =>
+            body.Contains("\"operationName\":\"templateDeployV2\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketCreate\"", StringComparison.Ordinal));
+        Assert.All(templateBodies, body =>
+        {
+            Assert.DoesNotContain("multiRegionConfig", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("sleepApplication", body, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task DeployAsync_WithReplicas_SendsNumReplicasFromGetReplicaCount()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        var api = builder.AddContainer("api", "nginx").WithReplicas(2);
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        Assert.Equal(2, api.Resource.GetReplicaCount());
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal(api.Resource.GetReplicaCount(), input.GetProperty("numReplicas").GetInt32());
+        Assert.False(input.TryGetProperty("multiRegionConfig", out _));
+    }
+
+    [Fact]
+    public async Task DeployAsync_PublishAsRailwayServiceRegion_SendsMultiRegionConfig()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .WithReplicas(2)
+            .PublishAsRailwayService(s =>
+            {
+                s.Region = "europe-west4-drams3a";
+                s.Serverless = true;
+            });
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal(
+            2,
+            input.GetProperty("multiRegionConfig").GetProperty("europe-west4-drams3a").GetProperty("numReplicas").GetInt32());
+        Assert.True(input.GetProperty("sleepApplication").GetBoolean());
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+    }
+
     private static void EnqueueProductionServiceTemplateAndBucket(ScriptedGraphQLHandler handler)
     {
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);

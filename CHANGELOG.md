@@ -2,6 +2,15 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.2
+
+- `aspire publish` writes replica, region, and serverless settings into `railway-plan.json`. `aspire deploy` applies them on the existing `serviceInstanceUpdate` call together with `source.image`.
+- Replica count comes from Aspire `WithReplicas` / `ReplicaAnnotation` (`GetReplicaCount`). Implicit compute on `AddRailwayEnvironment` picks this up; `PublishAsRailwayService` is not required just to set replicas.
+- Region, serverless (`sleepApplication`), and multi-region `replicaRegions` are Railway-specific and use `PublishAsRailwayService`.
+- Prefer `multiRegionConfig` when a region or multi-region map is set. `numReplicas` is the documented single-region fallback when only `WithReplicas` is set (it applies to the service's current Railway region). A multi-region map wins over `WithReplicas` + `Region`.
+- Unknown region ids fail before GraphQL. Replica counts must be at least 1 and at most 50 total.
+- Managed Postgres, Redis, and buckets are unchanged.
+
 ## 13.5.0-preview.1
 
 - Retarget to Aspire.Hosting 13.5.0.

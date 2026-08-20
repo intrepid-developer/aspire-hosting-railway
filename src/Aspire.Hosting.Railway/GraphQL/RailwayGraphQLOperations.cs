@@ -85,7 +85,11 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Updates a service instance (image, start command, and similar settings).</summary>
+    /// <summary>
+    /// Updates a service instance. Confirmed <c>ServiceInstanceUpdateInput</c> fields used
+    /// by this integration: <c>source.image</c>, <c>multiRegionConfig</c>,
+    /// <c>sleepApplication</c>, and single-region fallback <c>numReplicas</c>.
+    /// </summary>
     public const string ServiceInstanceUpdate = """
         mutation serviceInstanceUpdate($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
           serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input)

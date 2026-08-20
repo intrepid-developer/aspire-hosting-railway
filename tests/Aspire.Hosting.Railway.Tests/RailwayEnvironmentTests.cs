@@ -276,6 +276,144 @@ public class RailwayEnvironmentTests
     }
 
     [Fact]
+    public void Plan_WithReplicas_CopiesGetReplicaCountWithoutPublishAsRailwayService()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var api = builder.AddContainer("api", "nginx").WithReplicas(2);
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(2, api.Resource.GetReplicaCount());
+        Assert.Equal(api.Resource.GetReplicaCount(), service.Replicas);
+        Assert.Null(service.Region);
+        Assert.Null(service.Serverless);
+        Assert.Null(service.ReplicaRegions);
+        Assert.Contains("\"replicas\": 2", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("replicaRegions", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("serverless", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"region\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_WithoutReplicaAnnotation_OmitsReplicas()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var api = builder.AddContainer("api", "nginx");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+
+        Assert.Equal(1, api.Resource.GetReplicaCount());
+        Assert.Null(service.Replicas);
+        Assert.DoesNotContain("replicas", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_PublishAsRailwayService_CopiesRegionServerlessAndReplicaRegions()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var api = builder.AddContainer("api", "nginx")
+            .WithReplicas(2)
+            .PublishAsRailwayService(s =>
+            {
+                s.Region = "europe-west4-drams3a";
+                s.Serverless = true;
+                s.ReplicaRegions = new Dictionary<string, int>
+                {
+                    ["us-west2"] = 2,
+                    ["europe-west4-drams3a"] = 1
+                };
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(2, api.Resource.GetReplicaCount());
+        Assert.Equal(api.Resource.GetReplicaCount(), service.Replicas);
+        Assert.Equal("europe-west4-drams3a", service.Region);
+        Assert.True(service.Serverless);
+        Assert.NotNull(service.ReplicaRegions);
+        Assert.Equal(2, service.ReplicaRegions["us-west2"]);
+        Assert.Equal(1, service.ReplicaRegions["europe-west4-drams3a"]);
+        Assert.Contains("europe-west4-drams3a", json, StringComparison.Ordinal);
+        Assert.Contains("\"serverless\": true", json, StringComparison.Ordinal);
+        Assert.Contains("replicaRegions", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("sleepApplication", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("multiRegionConfig", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("numReplicas", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Plan_PublishAsRailwayService_AfterPrepare_UsesDeploymentTarget()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .WithReplicas(3)
+            .PublishAsRailwayService(s =>
+            {
+                s.Region = "us-west2";
+                s.Serverless = false;
+            });
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+
+        Assert.Equal(3, service.Replicas);
+        Assert.Equal("us-west2", service.Region);
+        Assert.False(service.Serverless);
+    }
+
+    [Fact]
+    public void Plan_UnknownRegion_FailsBeforeGraphQL()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.Region = "not-a-railway-region");
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("not-a-railway-region", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("us-west2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("docs.railway.com/deployments/regions", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_ManagedPostgresAndRedis_DoNotGetComputeScaleFields()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        builder.AddRedis("redis").PublishAsRailwayRedis();
+        builder.AddContainer("api", "nginx").WithReplicas(2);
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+
+        Assert.Single(plan.Services);
+        Assert.Equal(2, Assert.Single(plan.Services).Replicas);
+        Assert.All(plan.ManagedServices, managed =>
+        {
+            Assert.Contains(managed.Kind, ["postgres", "redis"], StringComparer.Ordinal);
+        });
+    }
+
+    [Fact]
     public async Task WithComputeEnvironment_SkipsForeignEnvironment()
     {
         var builder = TestAppBuilder.CreatePublish();

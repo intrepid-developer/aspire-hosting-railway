@@ -304,6 +304,13 @@ internal static class GraphQLFixtures
             ?? throw new InvalidOperationException("template fixture is missing data.template.id.");
     }
 
+    public static JsonElement GetServiceInstanceUpdateInput(IEnumerable<string> bodies)
+    {
+        var body = bodies.Single(item => item.Contains("\"operationName\":\"serviceInstanceUpdate\"", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("variables").GetProperty("input").Clone();
+    }
+
     public static string ReadTemplateIdFromDeployBody(string templateDeployV2RequestBody)
     {
         using var document = JsonDocument.Parse(templateDeployV2RequestBody);

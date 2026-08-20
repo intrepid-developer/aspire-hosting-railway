@@ -22,7 +22,7 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 | `projectCreate` | Creates a Railway project. Requires an account or workspace token. |
 | `environmentCreate` | Creates an environment. Pass `sourceEnvironmentId` to duplicate production. `ephemeral` is reserved for later. |
 | `serviceCreate` | Creates a service. Always pass `environmentId`. |
-| `serviceInstanceUpdate` | Updates a service instance (image and similar settings). |
+| `serviceInstanceUpdate` | Updates a service instance. This integration sets confirmed `ServiceInstanceUpdateInput` fields: `source.image`, `multiRegionConfig` (JSON map of region id → `{ numReplicas }`), `sleepApplication` (Railway serverless; official `railway.json` `deploy.sleepApplication`), and single-region fallback `numReplicas` when only `WithReplicas` is set. Legacy `region` is on the input type but unused when `multiRegionConfig` is sent. See [regions](https://docs.railway.com/deployments/regions), [multi-region configuration](https://docs.railway.com/reference/config-as-code#multi-region-configuration), and [scale](https://docs.railway.com/cli/scale). |
 | `serviceInstanceDeployV2` | Deploys a service instance from its current `source.image`. |
 | `variableCollectionUpsert` | Upserts service or shared variables. |
 | `serviceDomainCreate` | Creates a Railway-provided HTTP domain. |
@@ -35,5 +35,7 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 | `regions` | Lists Railway regions. |
 
 Documents are in `RailwayGraphQLOperations`. Confirmed operations do not include project or environment delete; `destroy-{name}` does not invent those mutations.
+
+`serviceInstanceUpdate` is the only mutation that sets compute scale/region/serverless. `serviceCreate` does not take those fields. `multiRegionConfig` is a JSON scalar (`{ "us-west2": { "numReplicas": 2 } }`). `sleepApplication` is the confirmed serverless field. `numReplicas` is present but deprecated for scaling; the official autoscale guide still uses it for single-region only. Do not invent other scale mutations or fields.
 
 `project.buckets` is a field on the documented `project(id)` query (Relay `edges { node { id name } }`, same shape as `services`). It was verified on Railway's GraphQL schema (`Project.buckets: ProjectBucketsConnection` of `Bucket { id name }`). There is no separate confirmed buckets-list query; apply does not invent one. `bucketInstanceDetails` is not a confirmed operation in this repo and is not used. After `bucketCreate`, apply retries the confirmed `bucketS3Credentials` query until a BucketInstance exists.

@@ -101,11 +101,13 @@ public static class RailwayPlanBuilder
                 service.Image = $"{{{resource.Name}.containerImage}}";
             }
 
+            CopyComputeSettings(service, resource, environment);
             AddCapturedEnvironment(plan, service, resource, model);
             AddReferencedConnectionStrings(plan, service, resource);
             plan.Services.Add(service);
         }
 
+        RailwayServiceComputeSettings.ValidatePlanServices(plan);
         return plan;
     }
 
@@ -160,6 +162,61 @@ public static class RailwayPlanBuilder
         return environmentKey.StartsWith(ConnectionStringPrefix, StringComparison.Ordinal)
             ? environmentKey[ConnectionStringPrefix.Length..]
             : null;
+    }
+
+    private static void CopyComputeSettings(
+        RailwayPlanService service,
+        IResource resource,
+        RailwayEnvironmentResource environment)
+    {
+        if (resource.TryGetLastAnnotation<ReplicaAnnotation>(out _))
+        {
+            service.Replicas = resource.GetReplicaCount();
+        }
+
+        var railwayService = GetConfiguredRailwayService(resource, environment);
+        if (railwayService is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(railwayService.Region))
+        {
+            service.Region = railwayService.Region;
+        }
+
+        if (railwayService.Serverless is { } serverless)
+        {
+            service.Serverless = serverless;
+        }
+
+        if (railwayService.ReplicaRegions is { Count: > 0 } replicaRegions)
+        {
+            service.ReplicaRegions = new Dictionary<string, int>(replicaRegions, StringComparer.Ordinal);
+        }
+    }
+
+    private static RailwayServiceResource? GetConfiguredRailwayService(
+        IResource resource,
+        RailwayEnvironmentResource environment)
+    {
+        if (resource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget is RailwayServiceResource prepared)
+        {
+            return prepared;
+        }
+
+        var customization = resource.Annotations.OfType<RailwayServiceCustomizationAnnotation>().LastOrDefault();
+        if (customization?.Configure is null)
+        {
+            return null;
+        }
+
+        var service = new RailwayServiceResource(resource.Name, resource, environment)
+        {
+            RailwayServiceName = environment.GetRailwayServiceName(resource)
+        };
+        customization.Configure(service);
+        return service;
     }
 
     private static void AddCapturedEnvironment(

@@ -48,6 +48,8 @@ public sealed class RailwayGraphQLApplyService
         ArgumentNullException.ThrowIfNull(reportingStep);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Token);
 
+        RailwayServiceComputeSettings.ValidatePlanServices(plan);
+
         var snapshot = stateManager is not null
             ? await RailwayDeploymentStateStore.LoadAsync(
                 stateManager,
@@ -620,10 +622,7 @@ public sealed class RailwayGraphQLApplyService
                 var update = await _client.ServiceInstanceUpdateAsync(
                     serviceId,
                     result.EnvironmentId,
-                    new ServiceInstanceUpdateInput
-                    {
-                        Source = new ServiceSourceInput { Image = image }
-                    },
+                    RailwayServiceComputeSettings.CreateUpdateInput(service, image),
                     request.Token,
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(update, "serviceInstanceUpdate");
