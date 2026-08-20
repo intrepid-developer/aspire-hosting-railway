@@ -280,7 +280,9 @@ public class RailwayEnvironmentTests
     {
         var builder = TestAppBuilder.CreatePublish();
         var railway = builder.AddRailwayEnvironment("railway");
-        var api = builder.AddContainer("api", "nginx").WithReplicas(2);
+        // Aspire WithReplicas is ProjectResource-only; it stamps ReplicaAnnotation.
+        // GetReplicaCount reads that annotation on any IResource.
+        var api = builder.AddContainer("api", "nginx").WithAnnotation(new ReplicaAnnotation(2));
 
         using var app = builder.Build();
         var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
@@ -320,7 +322,7 @@ public class RailwayEnvironmentTests
         var builder = TestAppBuilder.CreatePublish();
         var railway = builder.AddRailwayEnvironment("railway");
         var api = builder.AddContainer("api", "nginx")
-            .WithReplicas(2)
+            .WithAnnotation(new ReplicaAnnotation(2))
             .PublishAsRailwayService(s =>
             {
                 s.Region = "europe-west4-drams3a";
@@ -358,7 +360,7 @@ public class RailwayEnvironmentTests
         var builder = TestAppBuilder.CreatePublish();
         var railway = builder.AddRailwayEnvironment("railway");
         builder.AddContainer("api", "nginx")
-            .WithReplicas(3)
+            .WithAnnotation(new ReplicaAnnotation(3))
             .PublishAsRailwayService(s =>
             {
                 s.Region = "us-west2";
@@ -400,7 +402,7 @@ public class RailwayEnvironmentTests
         var railway = builder.AddRailwayEnvironment("railway");
         builder.AddPostgres("postgres").PublishAsRailwayPostgres();
         builder.AddRedis("redis").PublishAsRailwayRedis();
-        builder.AddContainer("api", "nginx").WithReplicas(2);
+        builder.AddContainer("api", "nginx").WithAnnotation(new ReplicaAnnotation(2));
 
         using var app = builder.Build();
         var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");

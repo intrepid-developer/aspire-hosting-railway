@@ -963,7 +963,7 @@ public class RailwayGraphQLApplyTests
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
         var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
-        var api = builder.AddContainer("api", "nginx").WithReplicas(2);
+        var api = builder.AddContainer("api", "nginx").WithAnnotation(new ReplicaAnnotation(2));
 
         using var app = builder.Build();
         await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
@@ -1000,7 +1000,7 @@ public class RailwayGraphQLApplyTests
         var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
-            .WithReplicas(2)
+            .WithAnnotation(new ReplicaAnnotation(2))
             .PublishAsRailwayService(s =>
             {
                 s.Region = "europe-west4-drams3a";
