@@ -303,6 +303,8 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("memoryGb", json, StringComparison.Ordinal);
         Assert.DoesNotContain("healthcheckPath", json, StringComparison.Ordinal);
         Assert.DoesNotContain("healthcheckTimeout", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyType", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyMaxRetries", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -325,6 +327,8 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("memoryGb", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
         Assert.DoesNotContain("healthcheckPath", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
         Assert.DoesNotContain("healthcheckTimeout", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyType", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyMaxRetries", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -535,6 +539,8 @@ public class RailwayEnvironmentTests
         Assert.Null(api.MemoryGb);
         Assert.Null(api.HealthcheckPath);
         Assert.Null(api.HealthcheckTimeout);
+        Assert.Null(api.RestartPolicyType);
+        Assert.Null(api.RestartPolicyMaxRetries);
         Assert.All(plan.ManagedServices, managed =>
         {
             Assert.Contains(managed.Kind, ["postgres", "redis"], StringComparer.Ordinal);
@@ -544,6 +550,8 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("memoryGb", json, StringComparison.Ordinal);
         Assert.DoesNotContain("healthcheckPath", json, StringComparison.Ordinal);
         Assert.DoesNotContain("healthcheckTimeout", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyType", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyMaxRetries", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -690,6 +698,194 @@ public class RailwayEnvironmentTests
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "healthcheckTimeout",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "restartPolicyType",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "restartPolicyMaxRetries",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Plan_UnsetRestartPolicy_OmitsBothFields()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.RestartPolicyType);
+        Assert.Null(service.RestartPolicyMaxRetries);
+        Assert.DoesNotContain("restartPolicyType", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyMaxRetries", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_PublishAsRailwayService_CopiesRestartPolicyAndMaxRetries()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.RestartPolicy = RailwayRestartPolicy.OnFailure;
+                s.RestartPolicyMaxRetries = 10;
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal("ON_FAILURE", service.RestartPolicyType);
+        Assert.Equal(10, service.RestartPolicyMaxRetries);
+        Assert.Contains("\"restartPolicyType\": \"ON_FAILURE\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"restartPolicyMaxRetries\": 10", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnFailure", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("RestartPolicyMaxRetries", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(RailwayRestartPolicy.OnFailure, "ON_FAILURE")]
+    [InlineData(RailwayRestartPolicy.Always, "ALWAYS")]
+    [InlineData(RailwayRestartPolicy.Never, "NEVER")]
+    public void Plan_RestartPolicy_MapsEnumToGraphQLString(RailwayRestartPolicy policy, string expected)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.RestartPolicy = policy);
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(expected, service.RestartPolicyType);
+        Assert.Null(service.RestartPolicyMaxRetries);
+        Assert.Contains($"\"restartPolicyType\": \"{expected}\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("restartPolicyMaxRetries", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_RestartPolicyMaxRetriesOnly_OmitsType()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.RestartPolicyMaxRetries = 3);
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.RestartPolicyType);
+        Assert.Equal(3, service.RestartPolicyMaxRetries);
+        Assert.DoesNotContain("restartPolicyType", json, StringComparison.Ordinal);
+        Assert.Contains("\"restartPolicyMaxRetries\": 3", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Plan_InvalidRestartPolicyMaxRetries_FailsBeforeGraphQL(int retries)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.RestartPolicyMaxRetries = retries);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("restartPolicyMaxRetries", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("greater than 0", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("10", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_UndefinedRailwayRestartPolicy_FailsBeforeGraphQL()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.RestartPolicy = (RailwayRestartPolicy)999);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("999", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("RailwayRestartPolicy", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("ON_FAILURE", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("docs.railway.com/deployments/restart-policy", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("on_failure")]
+    [InlineData("OnFailure")]
+    [InlineData("not-a-restart-policy")]
+    public void Plan_DeserializedUnknownRestartPolicyType_Fails(string type)
+    {
+        var plan = new RailwayPlan
+        {
+            Services =
+            {
+                new RailwayPlanService { Name = "api", RestartPolicyType = type }
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayServiceComputeSettings.ValidatePlanServices(plan));
+
+        Assert.Contains(type, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("ON_FAILURE", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_ManagedPostgresRedisAndBucket_DoNotGetRestartPolicyFields()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        builder.AddRedis("redis").PublishAsRailwayRedis();
+        builder.AddRailwayBucket("uploads");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.RestartPolicy = RailwayRestartPolicy.Always;
+                s.RestartPolicyMaxRetries = 5;
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+
+        Assert.Single(plan.Services);
+        var api = Assert.Single(plan.Services);
+        Assert.Equal("ALWAYS", api.RestartPolicyType);
+        Assert.Equal(5, api.RestartPolicyMaxRetries);
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "postgres");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "redis");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "bucket");
+        Assert.All(plan.ManagedServices, managed =>
+        {
+            Assert.DoesNotContain(
+                "restartPolicyType",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "restartPolicyMaxRetries",
                 System.Text.Json.JsonSerializer.Serialize(managed),
                 StringComparison.Ordinal);
         });

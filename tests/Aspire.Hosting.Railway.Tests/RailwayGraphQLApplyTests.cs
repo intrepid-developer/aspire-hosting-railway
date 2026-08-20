@@ -737,6 +737,8 @@ public class RailwayGraphQLApplyTests
         Assert.False(input.TryGetProperty("memoryGB", out _));
         Assert.False(input.TryGetProperty("healthcheckPath", out _));
         Assert.False(input.TryGetProperty("healthcheckTimeout", out _));
+        Assert.False(input.TryGetProperty("restartPolicyType", out _));
+        Assert.False(input.TryGetProperty("restartPolicyMaxRetries", out _));
         Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
     }
 
@@ -1556,6 +1558,235 @@ public class RailwayGraphQLApplyTests
         Assert.DoesNotContain(
             handler.Operations,
             name => name.Contains("healthcheck", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Apply_RestartPolicyTypeOnly_SendsTypeAndOmitsRetries()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].RestartPolicyType = "ALWAYS";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ALWAYS", input.GetProperty("restartPolicyType").GetString());
+        Assert.False(input.TryGetProperty("restartPolicyMaxRetries", out _));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+    }
+
+    [Fact]
+    public async Task Apply_RestartPolicyMaxRetries_SendsIntOnServiceInstanceUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].RestartPolicyType = "ON_FAILURE";
+        plan.Services[0].RestartPolicyMaxRetries = 10;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ON_FAILURE", input.GetProperty("restartPolicyType").GetString());
+        Assert.Equal(10, input.GetProperty("restartPolicyMaxRetries").GetInt32());
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("restartPolicyMaxRetries").ValueKind);
+        Assert.False(input.TryGetProperty("healthcheckPath", out _));
+    }
+
+    [Fact]
+    public async Task Apply_RestartPolicyWithHealthcheck_DoesNotDropLaterFields()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].HealthcheckPath = "/health";
+        plan.Services[0].HealthcheckTimeout = 90;
+        plan.Services[0].RestartPolicyType = "NEVER";
+        plan.Services[0].RestartPolicyMaxRetries = 1;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/health", input.GetProperty("healthcheckPath").GetString());
+        Assert.Equal(90, input.GetProperty("healthcheckTimeout").GetInt32());
+        Assert.Equal("NEVER", input.GetProperty("restartPolicyType").GetString());
+        Assert.Equal(1, input.GetProperty("restartPolicyMaxRetries").GetInt32());
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task Apply_InvalidRestartPolicyMaxRetries_FailsBeforeGraphQL(int retries)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].RestartPolicyMaxRetries = retries;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("restartPolicyMaxRetries", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("greater than 0", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_ManagedServiceRestartPolicy_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true);
+        plan.Services[0].Name = "postgres";
+        plan.Services[0].RestartPolicyType = "ALWAYS";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("managed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("restartPolicyType", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_TemplatesAndBucket_DoNotSendRestartPolicyOnManagedServices()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true, includeRedis: true, includeBucket: true);
+        plan.Services[0].RestartPolicyType = "ON_FAILURE";
+        plan.Services[0].RestartPolicyMaxRetries = 4;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        var updateInput = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ON_FAILURE", updateInput.GetProperty("restartPolicyType").GetString());
+        Assert.Equal(4, updateInput.GetProperty("restartPolicyMaxRetries").GetInt32());
+
+        var managedBodies = handler.Bodies.Where(body =>
+            body.Contains("\"operationName\":\"templateDeployV2\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketCreate\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketS3Credentials\"", StringComparison.Ordinal));
+        Assert.All(managedBodies, body =>
+        {
+            Assert.DoesNotContain("restartPolicyType", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("restartPolicyMaxRetries", body, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task DeployAsync_RestartPolicy_SendsFieldsOnExistingMutation()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.RestartPolicy = RailwayRestartPolicy.OnFailure;
+                s.RestartPolicyMaxRetries = 10;
+            });
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ON_FAILURE", input.GetProperty("restartPolicyType").GetString());
+        Assert.Equal(10, input.GetProperty("restartPolicyMaxRetries").GetInt32());
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            handler.Operations,
+            name => name.Contains("restart", StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
     }
 

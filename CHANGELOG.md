@@ -2,6 +2,15 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.6
+
+- `PublishAsRailwayService` can set `RestartPolicy` (`RailwayRestartPolicy`) and `RestartPolicyMaxRetries`. There is no Aspire-core restart-policy annotation. Unset omits the fields so Railway's dashboard default (On Failure / 10 retries) applies. Either field can be set alone. Retries must be greater than 0 when set.
+- AppHost enum members map to GraphQL `RestartPolicyType`: `OnFailure` → `ON_FAILURE`, `Always` → `ALWAYS`, `Never` → `NEVER`. See [restart policy](https://docs.railway.com/deployments/restart-policy).
+- `aspire publish` writes `restartPolicyType` / `restartPolicyMaxRetries` into `railway-plan.json`. Unset fields are omitted. Do not send `null`.
+- `aspire deploy` applies them on the existing `serviceInstanceUpdate` call (`ServiceInstanceUpdateInput.restartPolicyType` enum, `restartPolicyMaxRetries` Int). Always pass `environmentId`. These fields were confirmed on the live schema 2026-08-20. No new mutation. Limits stay on `serviceInstanceLimitsUpdate`.
+- Free/trial plan caps (Always unavailable, On Failure capped at 10) are plan-specific and are not hardcoded; Railway GraphQL errors are surfaced. With multiple replicas, only the crashed replica restarts.
+- `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets do not get these fields.
+
 ## 13.5.0-preview.5
 
 - Deploy healthcheck path comes from Aspire `WithHttpHealthCheck` / `HealthCheckAnnotation` (the same idea as `WithReplicas` → replica count). Implicit compute on `AddRailwayEnvironment` picks it up; `PublishAsRailwayService` is not required just to set the path.

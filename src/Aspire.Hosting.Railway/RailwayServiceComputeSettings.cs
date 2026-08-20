@@ -39,6 +39,13 @@ internal static class RailwayServiceComputeSettings
                     $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set healthcheckPath / healthcheckTimeout. " +
                     "Those fields are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
             }
+
+            if (HasRestartPolicy(service) && IsManagedService(plan, service.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set restartPolicyType / restartPolicyMaxRetries. " +
+                    "Those fields are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
+            }
         }
     }
 
@@ -80,6 +87,16 @@ internal static class RailwayServiceComputeSettings
                 $"Railway service '{service.Name}' healthcheckPath must be a non-empty HTTP path (for example /health).");
         }
 
+        if (!string.IsNullOrWhiteSpace(service.RestartPolicyType))
+        {
+            RailwayRestartPolicyMapper.RequireOfficialType(service.Name, service.RestartPolicyType);
+        }
+
+        if (service.RestartPolicyMaxRetries is { } restartRetries)
+        {
+            EnsurePositiveRetries(service.Name, restartRetries);
+        }
+
         if (service.ReplicaRegions is not { Count: > 0 } replicaRegions)
         {
             return;
@@ -102,7 +119,8 @@ internal static class RailwayServiceComputeSettings
 
     /// <summary>
     /// Builds <c>serviceInstanceUpdate</c> input: always <c>source.image</c>, plus
-    /// confirmed scale/serverless/region/healthcheck fields when the plan requested them.
+    /// confirmed scale/serverless/region/healthcheck/restart-policy fields when
+    /// the plan requested them.
     /// </summary>
     public static ServiceInstanceUpdateInput CreateUpdateInput(RailwayPlanService service, string image)
     {
@@ -131,6 +149,7 @@ internal static class RailwayServiceComputeSettings
         }
 
         ApplyHealthcheck(service, input);
+        ApplyRestartPolicy(service, input);
         return input;
     }
 
@@ -173,6 +192,9 @@ internal static class RailwayServiceComputeSettings
 
     internal static bool HasHealthcheck(RailwayPlanService service) =>
         !string.IsNullOrWhiteSpace(service.HealthcheckPath) || service.HealthcheckTimeout is not null;
+
+    internal static bool HasRestartPolicy(RailwayPlanService service) =>
+        !string.IsNullOrWhiteSpace(service.RestartPolicyType) || service.RestartPolicyMaxRetries is not null;
 
     internal static bool IsVolumeBackedManagedService(RailwayPlan plan, string serviceName) =>
         plan.ManagedServices.Any(managed =>
@@ -222,6 +244,19 @@ internal static class RailwayServiceComputeSettings
         }
     }
 
+    private static void ApplyRestartPolicy(RailwayPlanService service, ServiceInstanceUpdateInput input)
+    {
+        if (!string.IsNullOrWhiteSpace(service.RestartPolicyType))
+        {
+            input.RestartPolicyType = service.RestartPolicyType;
+        }
+
+        if (service.RestartPolicyMaxRetries is { } retries)
+        {
+            input.RestartPolicyMaxRetries = retries;
+        }
+    }
+
     private static void EnsurePositiveTimeout(string serviceName, int timeout)
     {
         if (timeout > 0)
@@ -231,6 +266,17 @@ internal static class RailwayServiceComputeSettings
 
         throw new InvalidOperationException(
             $"Railway service '{serviceName}' healthcheckTimeout must be greater than 0.");
+    }
+
+    private static void EnsurePositiveRetries(string serviceName, int retries)
+    {
+        if (retries > 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Railway service '{serviceName}' restartPolicyMaxRetries must be greater than 0.");
     }
 
     private static void EnsurePositiveLimit(string serviceName, double value, string what)

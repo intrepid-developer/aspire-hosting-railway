@@ -89,13 +89,13 @@ Resolution order (`RailwayEnvironmentResource.ResolveDeployImageAsync`):
 
 `resolveContainerRegistry` uses `WithContainerRegistry` when present, otherwise the single `IContainerRegistry` in the model.
 
-## Compute settings (replicas, region, sleepApplication, CPU/RAM, healthcheck)
+## Compute settings (replicas, region, sleepApplication, CPU/RAM, healthcheck, restart policy)
 
 Replica count is Aspire-core. Call `WithReplicas` on a project (`ProjectResource`). Publish copies `resource.GetReplicaCount()` into `railway-plan.json` when a `ReplicaAnnotation` is present. Implicit compute on `AddRailwayEnvironment` is enough; you do not need `PublishAsRailwayService` just to set replicas.
 
 Deploy healthcheck path is also Aspire-core. Call `WithHttpHealthCheck("/health")`. Publish copies that HTTP path into `railway-plan.json`. Aspire stores the path in `HealthCheckAnnotation.Key` (`{resource}_{endpoint}_{path}_{statusCode}_check`); there is no separate path annotation in Aspire.Hosting 13.5.0. Railway always probes until HTTP 200 ([healthchecks](https://docs.railway.com/deployments/healthchecks)), so a non-200 Aspire `statusCode` is ignored. Custom `WithHealthCheck` keys that are not HTTP probes are not mapped. Implicit compute is enough; you do not need `PublishAsRailwayService` just to set the path.
 
-Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout annotation.
+Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy annotation.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -109,6 +109,8 @@ builder.AddProject<Projects.Api>("api")
         s.MemoryGb = 2;
         s.Serverless = true;
         s.HealthcheckTimeoutSeconds = 120; // optional; omit = do not send (Railway default 300)
+        s.RestartPolicy = RailwayRestartPolicy.OnFailure; // optional; omit = Railway default On Failure
+        s.RestartPolicyMaxRetries = 10; // optional; omit = Railway default 10
     });
 
 // Aspire has no core multi-region API
@@ -137,15 +139,19 @@ How apply maps plan fields onto GraphQL (`environmentId` is always passed):
 | `cpu` and/or `memoryGb` set | `serviceInstanceLimitsUpdate` with `vCPUs` / `memoryGB` (floats). Always `serviceId` + `environmentId`. Unset fields are omitted. Not sent when both are absent. After `serviceInstanceUpdate`. |
 | `healthcheckPath` set | `serviceInstanceUpdate.healthcheckPath` (String). From `WithHttpHealthCheck`. Omitted when unset. Do not send `null`. |
 | `healthcheckTimeout` set | `serviceInstanceUpdate.healthcheckTimeout` (Int seconds). From `HealthcheckTimeoutSeconds`. Must be greater than 0. Omitted when unset (Railway default 300). Do not send `null`. |
+| `restartPolicyType` set | `serviceInstanceUpdate.restartPolicyType` (`RestartPolicyType`: `ON_FAILURE` / `ALWAYS` / `NEVER`). From `RailwayRestartPolicy`. Omitted when unset (Railway default On Failure). Do not send `null`. |
+| `restartPolicyMaxRetries` set | `serviceInstanceUpdate.restartPolicyMaxRetries` (Int). From `RestartPolicyMaxRetries`. Must be greater than 0. Either field can be set alone. Omitted when unset (Railway default 10). Do not send `null`. |
 | none of the above | today's image-only `source.image` update |
 
 Config-as-code equivalent for CPU/RAM (mapping only, not the apply path): [`deploy.limitOverride.containers`](https://railway.com/railway.schema.json) with `cpu` and `memoryBytes`. GraphQL uses vCPU and GB floats, not bytes.
 
-Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends scale/region/sleep/healthcheck on `serviceInstanceUpdate` after the service id exists (create and later updates), then `serviceInstanceLimitsUpdate` when CPU and/or RAM were requested. Do not add `vCPUs` / `memoryGB` onto `ServiceInstanceUpdateInput`. Do not add healthcheck fields onto any other input. If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query. Related read queries (`serviceInstanceLimits`, `serviceInstanceLimitOverride`) exist but are not used.
+Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends scale/region/sleep/healthcheck/restart-policy on `serviceInstanceUpdate` after the service id exists (create and later updates), then `serviceInstanceLimitsUpdate` when CPU and/or RAM were requested. Do not add `vCPUs` / `memoryGB` onto `ServiceInstanceUpdateInput`. Do not add healthcheck or restart-policy fields onto any other input. If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query. Related read queries (`serviceInstanceLimits`, `serviceInstanceLimitOverride`) exist but are not used.
 
 `Cpu` / `MemoryGb` must be greater than 0 when set. Dashboard plan caps (for example 24 vCPU) are plan-specific and are not hardcoded; if Railway rejects an over-plan value, deploy surfaces the GraphQL error.
 
 Railway healthchecks are a deploy cutover probe, not continuous monitoring ([healthchecks](https://docs.railway.com/deployments/healthchecks)). The probe uses the service `PORT`. Origin host is `healthcheck.railway.app` — allow-list it if the app filters Host. Config-as-code mapping only: [`deploy.healthcheckPath` / `deploy.healthcheckTimeout`](https://docs.railway.com/reference/config-as-code) in [railway.schema.json](https://railway.com/railway.schema.json). GraphQL uses the same field names on `ServiceInstanceUpdateInput`. Do not use `environmentPatchCommit` / staged patches for this.
 
-Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` / `healthcheckPath` / `healthcheckTimeout` for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM or healthcheck fields. Volume-backed services still have a cutover gap even when a healthcheck is configured.
+Restart policy is Railway-specific ([restart policy](https://docs.railway.com/deployments/restart-policy)). Unset omits `restartPolicyType` / `restartPolicyMaxRetries` so Railway's dashboard default (On Failure / 10 retries) applies. `RailwayRestartPolicy` members map to GraphQL `RestartPolicyType`: `OnFailure` → `ON_FAILURE`, `Always` → `ALWAYS`, `Never` → `NEVER`. Confirmed on the live schema 2026-08-20. Free/trial plan caps (Always unavailable, On Failure capped at 10) are not hardcoded. With multiple replicas, only the crashed replica restarts. Config-as-code mapping only: `deploy.restartPolicyType` / `deploy.restartPolicyMaxRetries` in [railway.schema.json](https://railway.com/railway.schema.json). GraphQL uses the same field names on `ServiceInstanceUpdateInput`. Do not use `environmentPatchCommit` / staged patches for this.
+
+Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` / `healthcheckPath` / `healthcheckTimeout` / `restartPolicyType` / `restartPolicyMaxRetries` for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM, healthcheck, or restart-policy fields. Volume-backed services still have a cutover gap even when a healthcheck is configured.
 
