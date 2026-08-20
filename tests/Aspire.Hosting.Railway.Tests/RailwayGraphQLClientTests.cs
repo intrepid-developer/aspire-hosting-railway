@@ -324,6 +324,35 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task ServiceInstanceUpdate_SerializesStartCommandAndPreDeployCommand()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceUpdateAsync(
+            "svc_placeholder",
+            "env_placeholder",
+            new ServiceInstanceUpdateInput
+            {
+                Source = new ServiceSourceInput { Image = "nginx" },
+                StartCommand = "/bin/sh -c \"exec ./api\"",
+                PreDeployCommand = ["dotnet MyApp.dll --migrate"]
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("/bin/sh -c \"exec ./api\"", input.GetProperty("startCommand").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, input.GetProperty("preDeployCommand").ValueKind);
+        Assert.Equal(1, input.GetProperty("preDeployCommand").GetArrayLength());
+        Assert.Equal("dotnet MyApp.dll --migrate", input.GetProperty("preDeployCommand")[0].GetString());
+        Assert.False(input.TryGetProperty("healthcheckPath", out _));
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ServiceInstanceLimitsUpdate_SerializesConfirmedFieldNames()
     {
         var handler = new RecordingHandler("""{"data":true}""");

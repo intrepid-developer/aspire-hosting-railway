@@ -96,5 +96,7 @@ public sealed class RailwayRestartPolicyTests
         Assert.Equal(90, input.HealthcheckTimeout);
         Assert.Equal("NEVER", input.RestartPolicyType);
         Assert.Equal(1, input.RestartPolicyMaxRetries);
+        Assert.Null(input.StartCommand);
+        Assert.Null(input.PreDeployCommand);
     }
 }

@@ -46,6 +46,13 @@ internal static class RailwayServiceComputeSettings
                     $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set restartPolicyType / restartPolicyMaxRetries. " +
                     "Those fields are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
             }
+
+            if (HasStartOrPreDeployCommand(service) && IsManagedService(plan, service.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set startCommand / preDeployCommand. " +
+                    "Those fields are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
+            }
         }
     }
 
@@ -97,6 +104,19 @@ internal static class RailwayServiceComputeSettings
             EnsurePositiveRetries(service.Name, restartRetries);
         }
 
+        if (service.StartCommand is not null && string.IsNullOrWhiteSpace(service.StartCommand))
+        {
+            throw new InvalidOperationException(
+                $"Railway service '{service.Name}' startCommand must be a non-empty command.");
+        }
+
+        if (service.PreDeployCommand is { Count: > 0 } preDeployCommand &&
+            preDeployCommand.Exists(static step => string.IsNullOrWhiteSpace(step)))
+        {
+            throw new InvalidOperationException(
+                $"Railway service '{service.Name}' preDeployCommand steps must be non-empty commands.");
+        }
+
         if (service.ReplicaRegions is not { Count: > 0 } replicaRegions)
         {
             return;
@@ -119,8 +139,8 @@ internal static class RailwayServiceComputeSettings
 
     /// <summary>
     /// Builds <c>serviceInstanceUpdate</c> input: always <c>source.image</c>, plus
-    /// confirmed scale/serverless/region/healthcheck/restart-policy fields when
-    /// the plan requested them.
+    /// confirmed scale/serverless/region/healthcheck/restart-policy/start-command
+    /// fields when the plan requested them.
     /// </summary>
     public static ServiceInstanceUpdateInput CreateUpdateInput(RailwayPlanService service, string image)
     {
@@ -150,6 +170,7 @@ internal static class RailwayServiceComputeSettings
 
         ApplyHealthcheck(service, input);
         ApplyRestartPolicy(service, input);
+        ApplyStartAndPreDeployCommand(service, input);
         return input;
     }
 
@@ -195,6 +216,9 @@ internal static class RailwayServiceComputeSettings
 
     internal static bool HasRestartPolicy(RailwayPlanService service) =>
         !string.IsNullOrWhiteSpace(service.RestartPolicyType) || service.RestartPolicyMaxRetries is not null;
+
+    internal static bool HasStartOrPreDeployCommand(RailwayPlanService service) =>
+        service.StartCommand is not null || service.PreDeployCommand is { Count: > 0 };
 
     internal static bool IsVolumeBackedManagedService(RailwayPlan plan, string serviceName) =>
         plan.ManagedServices.Any(managed =>
@@ -254,6 +278,19 @@ internal static class RailwayServiceComputeSettings
         if (service.RestartPolicyMaxRetries is { } retries)
         {
             input.RestartPolicyMaxRetries = retries;
+        }
+    }
+
+    private static void ApplyStartAndPreDeployCommand(RailwayPlanService service, ServiceInstanceUpdateInput input)
+    {
+        if (!string.IsNullOrWhiteSpace(service.StartCommand))
+        {
+            input.StartCommand = service.StartCommand;
+        }
+
+        if (service.PreDeployCommand is { Count: > 0 } steps)
+        {
+            input.PreDeployCommand = steps;
         }
     }
 

@@ -89,13 +89,13 @@ Resolution order (`RailwayEnvironmentResource.ResolveDeployImageAsync`):
 
 `resolveContainerRegistry` uses `WithContainerRegistry` when present, otherwise the single `IContainerRegistry` in the model.
 
-## Compute settings (replicas, region, sleepApplication, CPU/RAM, healthcheck, restart policy)
+## Compute settings (replicas, region, sleepApplication, CPU/RAM, healthcheck, restart policy, start / pre-deploy)
 
 Replica count is Aspire-core. Call `WithReplicas` on a project (`ProjectResource`). Publish copies `resource.GetReplicaCount()` into `railway-plan.json` when a `ReplicaAnnotation` is present. Implicit compute on `AddRailwayEnvironment` is enough; you do not need `PublishAsRailwayService` just to set replicas.
 
 Deploy healthcheck path is also Aspire-core. Call `WithHttpHealthCheck("/health")`. Publish copies that HTTP path into `railway-plan.json`. Aspire stores the path in `HealthCheckAnnotation.Key` (`{resource}_{endpoint}_{path}_{statusCode}_check`); there is no separate path annotation in Aspire.Hosting 13.5.0. Railway always probes until HTTP 200 ([healthchecks](https://docs.railway.com/deployments/healthchecks)), so a non-200 Aspire `statusCode` is ignored. Custom `WithHealthCheck` keys that are not HTTP probes are not mapped. Implicit compute is enough; you do not need `PublishAsRailwayService` just to set the path.
 
-Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy annotation.
+Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command annotation. Aspire `WithArgs` is not mapped to Railway start.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -111,6 +111,8 @@ builder.AddProject<Projects.Api>("api")
         s.HealthcheckTimeoutSeconds = 120; // optional; omit = do not send (Railway default 300)
         s.RestartPolicy = RailwayRestartPolicy.OnFailure; // optional; omit = Railway default On Failure
         s.RestartPolicyMaxRetries = 10; // optional; omit = Railway default 10
+        s.StartCommand = "/bin/sh -c \"exec dotnet MyApp.dll --urls http://*:$PORT\""; // optional; omit = image ENTRYPOINT/CMD
+        s.PreDeployCommand = "dotnet MyApp.dll --migrate"; // optional; omit = no pre-deploy step
     });
 
 // Aspire has no core multi-region API
@@ -141,11 +143,13 @@ How apply maps plan fields onto GraphQL (`environmentId` is always passed):
 | `healthcheckTimeout` set | `serviceInstanceUpdate.healthcheckTimeout` (Int seconds). From `HealthcheckTimeoutSeconds`. Must be greater than 0. Omitted when unset (Railway default 300). Do not send `null`. |
 | `restartPolicyType` set | `serviceInstanceUpdate.restartPolicyType` (`RestartPolicyType`: `ON_FAILURE` / `ALWAYS` / `NEVER`). From `RailwayRestartPolicy`. Omitted when unset (Railway default On Failure). Do not send `null`. |
 | `restartPolicyMaxRetries` set | `serviceInstanceUpdate.restartPolicyMaxRetries` (Int). From `RestartPolicyMaxRetries`. Must be greater than 0. Either field can be set alone. Omitted when unset (Railway default 10). Do not send `null`. |
+| `startCommand` set | `serviceInstanceUpdate.startCommand` (String). From `StartCommand`. Empty or whitespace fails. Omitted when unset so the image ENTRYPOINT/CMD applies. Do not send `null`. |
+| `preDeployCommand` set | `serviceInstanceUpdate.preDeployCommand` (`[String!]`). From `PreDeployCommand` as a one-element array. Empty or whitespace fails. Empty array is omitted (unset). Do not send `null`. |
 | none of the above | today's image-only `source.image` update |
 
 Config-as-code equivalent for CPU/RAM (mapping only, not the apply path): [`deploy.limitOverride.containers`](https://railway.com/railway.schema.json) with `cpu` and `memoryBytes`. GraphQL uses vCPU and GB floats, not bytes.
 
-Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends scale/region/sleep/healthcheck/restart-policy on `serviceInstanceUpdate` after the service id exists (create and later updates), then `serviceInstanceLimitsUpdate` when CPU and/or RAM were requested. Do not add `vCPUs` / `memoryGB` onto `ServiceInstanceUpdateInput`. Do not add healthcheck or restart-policy fields onto any other input. If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query. Related read queries (`serviceInstanceLimits`, `serviceInstanceLimitOverride`) exist but are not used.
+Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends scale/region/sleep/healthcheck/restart-policy/start-command/pre-deploy on `serviceInstanceUpdate` after the service id exists (create and later updates), then `serviceInstanceLimitsUpdate` when CPU and/or RAM were requested. Do not add `vCPUs` / `memoryGB` onto `ServiceInstanceUpdateInput`. Do not add healthcheck, restart-policy, start-command, or pre-deploy fields onto any other input. If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query. Related read queries (`serviceInstanceLimits`, `serviceInstanceLimitOverride`) exist but are not used.
 
 `Cpu` / `MemoryGb` must be greater than 0 when set. Dashboard plan caps (for example 24 vCPU) are plan-specific and are not hardcoded; if Railway rejects an over-plan value, deploy surfaces the GraphQL error.
 
@@ -153,5 +157,7 @@ Railway healthchecks are a deploy cutover probe, not continuous monitoring ([hea
 
 Restart policy is Railway-specific ([restart policy](https://docs.railway.com/deployments/restart-policy)). Unset omits `restartPolicyType` / `restartPolicyMaxRetries` so Railway's dashboard default (On Failure / 10 retries) applies. `RailwayRestartPolicy` members map to GraphQL `RestartPolicyType`: `OnFailure` → `ON_FAILURE`, `Always` → `ALWAYS`, `Never` → `NEVER`. Confirmed on the live schema 2026-08-20. Free/trial plan caps (Always unavailable, On Failure capped at 10) are not hardcoded. With multiple replicas, only the crashed replica restarts. Config-as-code mapping only: `deploy.restartPolicyType` / `deploy.restartPolicyMaxRetries` in [railway.schema.json](https://railway.com/railway.schema.json). GraphQL uses the same field names on `ServiceInstanceUpdateInput`. Do not use `environmentPatchCommit` / staged patches for this.
 
-Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` / `healthcheckPath` / `healthcheckTimeout` / `restartPolicyType` / `restartPolicyMaxRetries` for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM, healthcheck, or restart-policy fields. Volume-backed services still have a cutover gap even when a healthcheck is configured.
+Start command and pre-deploy command are Railway-specific. Unset omits `startCommand` / `preDeployCommand` so the image ENTRYPOINT/CMD applies for start. On the image/Dockerfile v1 path, `startCommand` overrides ENTRYPOINT in **exec form**. There is no shell expansion unless the command is wrapped, for example `/bin/sh -c "exec … $PORT"`. See [start command](https://docs.railway.com/guides/start-command) and [deployments start command](https://docs.railway.com/deployments/start-command). Pre-deploy runs between build and deploy (migrations) on the private network with the app environment. A non-zero exit is not retried and the deploy stops. It runs in a separate container with **no volume**, so the filesystem does not persist. See [pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command). AppHosts set a single `PreDeployCommand` string; publish writes GraphQL `preDeployCommand` as a one-element array. Empty or whitespace fails. An empty array is omitted. Aspire `WithArgs` is not mapped. These input fields were confirmed on the live schema 2026-08-20. Config-as-code mapping only: `deploy.startCommand` / `deploy.preDeployCommand` in [railway.schema.json](https://railway.com/railway.schema.json). GraphQL uses the same field names on `ServiceInstanceUpdateInput`. Do not use `environmentPatchCommit` / staged patches for this.
+
+Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` / `healthcheckPath` / `healthcheckTimeout` / `restartPolicyType` / `restartPolicyMaxRetries` / `startCommand` / `preDeployCommand` for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM, healthcheck, restart-policy, start-command, or pre-deploy fields. Volume-backed services still have a cutover gap even when a healthcheck is configured.
 

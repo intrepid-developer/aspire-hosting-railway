@@ -2,6 +2,16 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.7
+
+- `PublishAsRailwayService` can set `StartCommand` and `PreDeployCommand`. There is no Aspire-core annotation, and Aspire `WithArgs` is not mapped. Unset omits the fields so the image ENTRYPOINT/CMD applies for start. Either field can be set alone. Empty or whitespace fails honestly.
+- `aspire publish` writes `startCommand` (string) and `preDeployCommand` (array of strings) into `railway-plan.json`. A single `PreDeployCommand` becomes a one-element array. Unset fields and an empty array are omitted. Do not send `null`.
+- `aspire deploy` applies them on the existing `serviceInstanceUpdate` call (`ServiceInstanceUpdateInput.startCommand` String, `preDeployCommand` `[String!]`). Always pass `environmentId`. These fields were confirmed on the live schema 2026-08-20. No new mutation. Limits stay on `serviceInstanceLimitsUpdate`.
+- Image/Dockerfile v1 start command overrides ENTRYPOINT in exec form. There is no shell expansion unless wrapped, for example `/bin/sh -c "exec … $PORT"`. See [start command](https://docs.railway.com/guides/start-command) and [deployments start command](https://docs.railway.com/deployments/start-command).
+- Pre-deploy runs between build and deploy (migrations) on the private network with the app environment. A non-zero exit is not retried and the deploy stops. It runs in a separate container with no volume, so the filesystem does not persist. See [pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command).
+- Config-as-code `deploy.startCommand` / `deploy.preDeployCommand` are mapping only. The apply path is `serviceInstanceUpdate`.
+- `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets do not get these fields.
+
 ## 13.5.0-preview.6
 
 - `PublishAsRailwayService` can set `RestartPolicy` (`RailwayRestartPolicy`) and `RestartPolicyMaxRetries`. There is no Aspire-core restart-policy annotation. Unset omits the fields so Railway's dashboard default (On Failure / 10 retries) applies. Either field can be set alone. Retries must be greater than 0 when set.

@@ -141,6 +141,46 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public int? RestartPolicyMaxRetries { get; set; }
 
     /// <summary>
+    /// Gets or sets the Railway start command. Maps to
+    /// <c>ServiceInstanceUpdateInput.startCommand</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Empty or whitespace fails. Unset omits the field so
+    /// the image ENTRYPOINT/CMD applies. On the image/Dockerfile v1 path this
+    /// overrides ENTRYPOINT in exec form — there is no shell expansion unless
+    /// the command is wrapped, for example
+    /// <c>/bin/sh -c "exec … $PORT"</c>. See
+    /// <see href="https://docs.railway.com/guides/start-command"/> and
+    /// <see href="https://docs.railway.com/deployments/start-command"/>.
+    /// Aspire <c>WithArgs</c> is not mapped. There is no Aspire-core
+    /// annotation; configure this through <c>PublishAsRailwayService</c>. Not
+    /// sent for <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c>
+    /// / buckets.
+    /// </remarks>
+    public string? StartCommand { get; set; }
+
+    /// <summary>
+    /// Gets or sets a single pre-deploy command. Maps to GraphQL
+    /// <c>ServiceInstanceUpdateInput.preDeployCommand</c> as a one-element
+    /// array.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Empty or whitespace fails. Unset omits the field.
+    /// Railway runs this between build and deploy (for example migrations)
+    /// on the private network with the app environment. A non-zero exit is
+    /// not retried and the deploy stops. It runs in a separate container
+    /// with no volume, so the filesystem does not persist. See
+    /// <see href="https://docs.railway.com/deployments/pre-deploy-command"/>.
+    /// Either this or <see cref="StartCommand"/> can be set alone. There is
+    /// no Aspire-core annotation; configure this through
+    /// <c>PublishAsRailwayService</c>. Not sent for
+    /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> /
+    /// buckets. Config-as-code <c>deploy.preDeployCommand</c> is mapping
+    /// only; the apply path is <c>serviceInstanceUpdate</c>.
+    /// </remarks>
+    public string? PreDeployCommand { get; set; }
+
+    /// <summary>
     /// Gets or sets a multi-region replica map of <see cref="RailwayRegion"/> to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>

@@ -173,6 +173,23 @@ public sealed class RailwayPlanService
     /// </summary>
     [JsonPropertyName("restartPolicyMaxRetries")]
     public int? RestartPolicyMaxRetries { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Railway start command from
+    /// <c>PublishAsRailwayService</c>. Omitted when unset so the image
+    /// ENTRYPOINT/CMD applies. GraphQL writes <c>startCommand</c>.
+    /// </summary>
+    [JsonPropertyName("startCommand")]
+    public string? StartCommand { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Railway pre-deploy command steps from
+    /// <c>PublishAsRailwayService</c> <c>PreDeployCommand</c> (one-element
+    /// array). Omitted when unset or empty. GraphQL writes
+    /// <c>preDeployCommand</c> (<c>[String!]</c>).
+    /// </summary>
+    [JsonPropertyName("preDeployCommand")]
+    public List<string>? PreDeployCommand { get; set; }
 }
 
 /// <summary>

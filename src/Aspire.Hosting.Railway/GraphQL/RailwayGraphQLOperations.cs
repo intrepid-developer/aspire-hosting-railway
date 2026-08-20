@@ -92,11 +92,13 @@ public static class RailwayGraphQLOperations
     /// <c>numReplicas</c> when only <c>WithReplicas</c> is set, plus optional
     /// <c>healthcheckPath</c> (String), <c>healthcheckTimeout</c> (Int seconds),
     /// <c>restartPolicyType</c> (<c>RestartPolicyType</c>: <c>ALWAYS</c> |
-    /// <c>NEVER</c> | <c>ON_FAILURE</c>), and <c>restartPolicyMaxRetries</c>
-    /// (Int) verified on the live schema 2026-08-20. Never send
+    /// <c>NEVER</c> | <c>ON_FAILURE</c>), <c>restartPolicyMaxRetries</c>
+    /// (Int), <c>startCommand</c> (String), and <c>preDeployCommand</c>
+    /// (<c>[String!]</c>) verified on the live schema 2026-08-20. Never send
     /// <c>numReplicas</c> and <c>multiRegionConfig</c> together. Omit unset
-    /// healthcheck and restart-policy fields; do not send <c>null</c>.
-    /// ServiceInstance has no <c>multiRegionConfig</c> read field.
+    /// healthcheck, restart-policy, start-command, and pre-deploy fields; do
+    /// not send <c>null</c>. ServiceInstance has no <c>multiRegionConfig</c>
+    /// read field.
     /// </summary>
     public const string ServiceInstanceUpdate = """
         mutation serviceInstanceUpdate($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
