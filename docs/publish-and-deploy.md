@@ -101,7 +101,7 @@ builder.AddProject<Projects.Api>("api")
     .WithComputeEnvironment(railway)
     .PublishAsRailwayService(s =>
     {
-        s.Region = "europe-west4-drams3a";
+        s.Region = RailwayRegion.EuropeWest4;
         s.Cpu = 1;
         s.MemoryGb = 2;
         s.Serverless = true;
@@ -112,15 +112,15 @@ builder.AddProject<Projects.Api>("api")
     .WithComputeEnvironment(railway)
     .PublishAsRailwayService(s =>
     {
-        s.ReplicaRegions = new Dictionary<string, int>
+        s.ReplicaRegions = new()
         {
-            ["us-west2"] = 2,
-            ["europe-west4-drams3a"] = 1
+            [RailwayRegion.UsWest2] = 2,
+            [RailwayRegion.EuropeWest4] = 1
         };
     });
 ```
 
-Official deploy region ids ([Railway regions](https://docs.railway.com/deployments/regions), `Region.region`): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Airport codes from `Query.regions.id` (`sjc`, `iad`, `ams`, `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are rejected. Total replicas must be at least 1 and at most 50 ([scale](https://docs.railway.com/cli/scale), [scaling](https://docs.railway.com/deployments/scaling)) — not the 200 in `railway.schema.json`.
+`RailwayRegion` is the closed AppHost type ([Railway regions](https://docs.railway.com/deployments/regions), `Region.region`): `UsWest2` → `us-west2`, `UsEast4` → `us-east4-eqdc4a`, `EuropeWest4` → `europe-west4-drams3a`, `AsiaSoutheast1` → `asia-southeast1-eqsg3a`. Airport codes from `Query.regions.id` (`sjc`, `iad`, `ams`, `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are not members. Plan JSON still stores those official strings; unknown deserialized ids fail before GraphQL. Total replicas must be at least 1 and at most 50 ([scale](https://docs.railway.com/cli/scale), [scaling](https://docs.railway.com/deployments/scaling)) — not the 200 in `railway.schema.json`.
 
 How apply maps plan fields onto GraphQL (`environmentId` is always passed):
 

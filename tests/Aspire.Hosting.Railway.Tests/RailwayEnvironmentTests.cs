@@ -1,4 +1,5 @@
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Railway;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -331,12 +332,12 @@ public class RailwayEnvironmentTests
             .WithAnnotation(new ReplicaAnnotation(2))
             .PublishAsRailwayService(s =>
             {
-                s.Region = "europe-west4-drams3a";
+                s.Region = RailwayRegion.EuropeWest4;
                 s.Serverless = true;
-                s.ReplicaRegions = new Dictionary<string, int>
+                s.ReplicaRegions = new Dictionary<RailwayRegion, int>
                 {
-                    ["us-west2"] = 2,
-                    ["europe-west4-drams3a"] = 1
+                    [RailwayRegion.UsWest2] = 2,
+                    [RailwayRegion.EuropeWest4] = 1
                 };
             });
 
@@ -369,7 +370,7 @@ public class RailwayEnvironmentTests
             .WithAnnotation(new ReplicaAnnotation(2))
             .PublishAsRailwayService(s =>
             {
-                s.Region = "europe-west4-drams3a";
+                s.Region = RailwayRegion.EuropeWest4;
                 s.Cpu = 1;
                 s.MemoryGb = 2;
             });
@@ -426,7 +427,7 @@ public class RailwayEnvironmentTests
             .WithAnnotation(new ReplicaAnnotation(3))
             .PublishAsRailwayService(s =>
             {
-                s.Region = "us-west2";
+                s.Region = RailwayRegion.UsWest2;
                 s.Serverless = false;
                 s.Cpu = 0.5;
                 s.MemoryGb = 1;
@@ -446,42 +447,49 @@ public class RailwayEnvironmentTests
     }
 
     [Fact]
-    public void Plan_UnknownRegion_FailsBeforeGraphQL()
+    public void Plan_UndefinedRailwayRegion_FailsBeforeGraphQL()
     {
         var builder = TestAppBuilder.CreatePublish();
         var railway = builder.AddRailwayEnvironment("railway");
         builder.AddContainer("api", "nginx")
-            .PublishAsRailwayService(s => s.Region = "not-a-railway-region");
+            .PublishAsRailwayService(s => s.Region = (RailwayRegion)999);
 
         using var app = builder.Build();
         var exception = Assert.Throws<InvalidOperationException>(
             () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
 
-        Assert.Contains("not-a-railway-region", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("999", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("RailwayRegion", exception.Message, StringComparison.Ordinal);
         Assert.Contains("us-west2", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Region.region", exception.Message, StringComparison.Ordinal);
         Assert.Contains("docs.railway.com/deployments/regions", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
+    [InlineData("not-a-railway-region")]
     [InlineData("sjc")]
     [InlineData("iad")]
+    [InlineData("ams")]
+    [InlineData("sin")]
     [InlineData("us-west1")]
     [InlineData("us-east4")]
     [InlineData("europe-west4")]
-    public void Plan_AirportCodeOrOldRegionId_Fails(string regionId)
+    public void Plan_DeserializedAirportCodeOrOldRegionId_Fails(string regionId)
     {
-        var builder = TestAppBuilder.CreatePublish();
-        var railway = builder.AddRailwayEnvironment("railway");
-        builder.AddContainer("api", "nginx")
-            .PublishAsRailwayService(s => s.Region = regionId);
+        var plan = new RailwayPlan
+        {
+            Services =
+            {
+                new RailwayPlanService { Name = "api", Region = regionId }
+            }
+        };
 
-        using var app = builder.Build();
         var exception = Assert.Throws<InvalidOperationException>(
-            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+            () => RailwayServiceComputeSettings.ValidatePlanServices(plan));
 
         Assert.Contains(regionId, exception.Message, StringComparison.Ordinal);
         Assert.Contains("Airport codes", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("us-west2", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("deprecat", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 

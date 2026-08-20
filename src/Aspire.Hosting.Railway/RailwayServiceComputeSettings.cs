@@ -44,7 +44,7 @@ internal static class RailwayServiceComputeSettings
 
         if (!string.IsNullOrWhiteSpace(service.Region))
         {
-            EnsureOfficialRegion(service.Name, service.Region);
+            RailwayRegionMapper.RequireOfficialRegionId(service.Name, service.Region);
         }
 
         if (service.Replicas is { } replicas)
@@ -70,7 +70,7 @@ internal static class RailwayServiceComputeSettings
         var total = 0;
         foreach (var pair in replicaRegions)
         {
-            EnsureOfficialRegion(service.Name, pair.Key);
+            RailwayRegionMapper.RequireOfficialRegionId(service.Name, pair.Key);
             EnsureReplicaCount(service.Name, pair.Value, $"replica count for region '{pair.Key}'");
             total = checked(total + pair.Value);
         }
@@ -187,20 +187,6 @@ internal static class RailwayServiceComputeSettings
         {
             [service.Region] = new ServiceInstanceRegionConfig { NumReplicas = service.Replicas ?? 1 }
         };
-    }
-
-    private static void EnsureOfficialRegion(string serviceName, string regionId)
-    {
-        if (RailwayConstants.OfficialRegionIds.Contains(regionId, StringComparer.Ordinal))
-        {
-            return;
-        }
-
-        throw new InvalidOperationException(
-            $"Unknown Railway region '{regionId}' for service '{serviceName}'. " +
-            $"Use official deploy region ids (Region.region): {string.Join(", ", RailwayConstants.OfficialRegionIds)}. " +
-            "Airport codes (sjc, iad, ams, sin) and older ids (us-west1, us-east4, europe-west4) are not deploy keys. " +
-            "See https://docs.railway.com/deployments/regions.");
     }
 
     private static void EnsurePositiveLimit(string serviceName, double value, string what)

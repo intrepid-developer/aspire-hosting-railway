@@ -202,9 +202,9 @@ public static class RailwayPlanBuilder
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(railwayService.Region))
+        if (railwayService.Region is { } region)
         {
-            service.Region = railwayService.Region;
+            service.Region = RailwayRegionMapper.ToRegionId(region);
         }
 
         if (railwayService.Serverless is { } serverless)
@@ -214,7 +214,7 @@ public static class RailwayPlanBuilder
 
         if (railwayService.ReplicaRegions is { Count: > 0 } replicaRegions)
         {
-            service.ReplicaRegions = new Dictionary<string, int>(replicaRegions, StringComparer.Ordinal);
+            service.ReplicaRegions = RailwayRegionMapper.ToOfficialReplicaRegions(replicaRegions);
         }
 
         if (railwayService.Cpu is { } cpu)

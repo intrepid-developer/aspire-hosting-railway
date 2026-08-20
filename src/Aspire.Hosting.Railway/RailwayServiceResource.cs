@@ -40,19 +40,18 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public string RailwayServiceName { get; set; }
 
     /// <summary>
-    /// Gets or sets an optional Railway region for this service. Must be an official
-    /// region id from <see href="https://docs.railway.com/deployments/regions"/>:
-    /// <c>us-west2</c>, <c>us-east4-eqdc4a</c>, <c>europe-west4-drams3a</c>, or
-    /// <c>asia-southeast1-eqsg3a</c>.
+    /// Gets or sets an optional Railway region for this service.
     /// </summary>
     /// <remarks>
-    /// Must be a <c>Region.region</c> deploy key, not a <c>Query.regions.id</c> airport
-    /// code (<c>sjc</c>, <c>iad</c>, <c>ams</c>, <c>sin</c>) and not an older id
-    /// (<c>us-west1</c>, <c>us-east4</c>, <c>europe-west4</c>). When set, deploy sends
-    /// <c>multiRegionConfig</c> for this region using <c>WithReplicas</c> (or 1 when
-    /// omitted). Replica count itself comes from Aspire <c>WithReplicas</c>.
+    /// Members are the official <c>Region.region</c> deploy keys from
+    /// <see href="https://docs.railway.com/deployments/regions"/>. Airport codes
+    /// (<c>sjc</c>, <c>iad</c>, <c>ams</c>, <c>sin</c>) and older ids
+    /// (<c>us-west1</c>, <c>us-east4</c>, <c>europe-west4</c>) are not members.
+    /// When set, deploy sends <c>multiRegionConfig</c> for this region using
+    /// <c>WithReplicas</c> (or 1 when omitted). Replica count itself comes from
+    /// Aspire <c>WithReplicas</c>.
     /// </remarks>
-    public string? Region { get; set; }
+    public RailwayRegion? Region { get; set; }
 
     /// <summary>
     /// Gets or sets whether this service should sleep when idle. Deploy writes
@@ -92,7 +91,7 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public double? MemoryGb { get; set; }
 
     /// <summary>
-    /// Gets or sets a multi-region replica map of official Railway region id to replica
+    /// Gets or sets a multi-region replica map of <see cref="RailwayRegion"/> to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>
     /// <remarks>
@@ -100,5 +99,5 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     /// it is the source of truth for scale and wins over <c>WithReplicas</c> and
     /// <see cref="Region"/>. Do not send <c>numReplicas</c> in that case.
     /// </remarks>
-    public Dictionary<string, int>? ReplicaRegions { get; set; }
+    public Dictionary<RailwayRegion, int>? ReplicaRegions { get; set; }
 }

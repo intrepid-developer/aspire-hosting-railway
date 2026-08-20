@@ -1,5 +1,6 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Railway;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -1202,7 +1203,7 @@ public class RailwayGraphQLApplyTests
             .WithAnnotation(new ReplicaAnnotation(2))
             .PublishAsRailwayService(s =>
             {
-                s.Region = "europe-west4-drams3a";
+                s.Region = RailwayRegion.EuropeWest4;
                 s.Serverless = true;
             });
 
@@ -1228,6 +1229,57 @@ public class RailwayGraphQLApplyTests
     }
 
     [Fact]
+    public async Task DeployAsync_PublishAsRailwayServiceReplicaRegions_SendsOfficialRegionIds()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.ReplicaRegions = new()
+                {
+                    [RailwayRegion.UsWest2] = 2,
+                    [RailwayRegion.EuropeWest4] = 1
+                };
+            });
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        var multiRegion = input.GetProperty("multiRegionConfig");
+        Assert.Equal(2, multiRegion.GetProperty("us-west2").GetProperty("numReplicas").GetInt32());
+        Assert.Equal(1, multiRegion.GetProperty("europe-west4-drams3a").GetProperty("numReplicas").GetInt32());
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+        Assert.DoesNotContain("sjc", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain("us-west1", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain("europe-west4\"", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task DeployAsync_PublishAsRailwayServiceLimits_SendsServiceInstanceLimitsUpdate()
     {
         var handler = new ScriptedGraphQLHandler();
@@ -1247,7 +1299,7 @@ public class RailwayGraphQLApplyTests
             .WithAnnotation(new ReplicaAnnotation(2))
             .PublishAsRailwayService(s =>
             {
-                s.Region = "europe-west4-drams3a";
+                s.Region = RailwayRegion.EuropeWest4;
                 s.Cpu = 1;
                 s.MemoryGb = 2;
             });

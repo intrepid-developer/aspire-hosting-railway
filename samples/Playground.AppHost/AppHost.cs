@@ -1,3 +1,5 @@
+using Aspire.Hosting.Railway;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
@@ -17,7 +19,7 @@ builder.AddProject<Projects.Api>("api")
     .WithExternalHttpEndpoints()
     .PublishAsRailwayService(s =>
     {
-        s.Region = "us-west2";
+        s.Region = RailwayRegion.UsWest2;
         s.Cpu = 1;
         s.MemoryGb = 2;
     });
