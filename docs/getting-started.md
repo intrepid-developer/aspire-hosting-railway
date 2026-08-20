@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.3** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
+Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.4** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
 
 ## Restore from nuget.org
 
@@ -46,18 +46,20 @@ dotnet nuget add source https://nuget.pkg.github.com/intrepid-developer/index.js
 
 ## AppHost
 
-Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
+Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using` for `AddRailwayEnvironment` / `PublishAsRailway*`. Resource types (`RailwayRegion`, `RailwayServiceResource`) live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
 
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Railway replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference), so those templates are not scaled. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.3" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.3" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.3" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.4" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.4" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.4" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.4" />
 ```
 
 ```csharp
+using Aspire.Hosting.Railway;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
@@ -77,7 +79,7 @@ builder.AddProject<Projects.Api>("api")
     .WithExternalHttpEndpoints()
     .PublishAsRailwayService(s =>
     {
-        s.Region = "us-west2";
+        s.Region = RailwayRegion.UsWest2;
         s.Cpu = 1;
         s.MemoryGb = 2;
     });
@@ -90,7 +92,7 @@ builder.Build().Run();
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.4" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.0" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.0" />
 ```
@@ -111,7 +113,7 @@ builder.AddProject<Projects.Api>("api")
     .WithComputeEnvironment(railway)
     .PublishAsRailwayService(s =>
     {
-        s.Region = "europe-west4-drams3a";
+        s.Region = RailwayRegion.EuropeWest4;
         s.Cpu = 1;
         s.MemoryGb = 2;
         s.Serverless = true;

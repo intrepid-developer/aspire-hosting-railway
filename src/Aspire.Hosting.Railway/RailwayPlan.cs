@@ -93,7 +93,11 @@ public sealed class RailwayPlanService
     public Dictionary<string, string> Environment { get; set; } = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Gets or sets the official Railway region id when a single region was requested.
+    /// Gets or sets the official Railway <c>Region.region</c> id when a single
+    /// region was requested. Plan JSON stores the GraphQL string
+    /// (<c>us-west2</c>, <c>us-east4-eqdc4a</c>, <c>europe-west4-drams3a</c>,
+    /// <c>asia-southeast1-eqsg3a</c>). AppHosts set <see cref="RailwayRegion"/>
+    /// on <see cref="RailwayServiceResource"/>; unknown strings fail at apply.
     /// </summary>
     [JsonPropertyName("region")]
     public string? Region { get; set; }
@@ -127,7 +131,9 @@ public sealed class RailwayPlanService
     public double? MemoryGb { get; set; }
 
     /// <summary>
-    /// Gets or sets official region id to replica count when multi-region scale was requested.
+    /// Gets or sets official <c>Region.region</c> id to replica count when
+    /// multi-region scale was requested. Keys are GraphQL strings; AppHosts
+    /// set <see cref="RailwayRegion"/> on <see cref="RailwayServiceResource"/>.
     /// </summary>
     [JsonPropertyName("replicaRegions")]
     public Dictionary<string, int>? ReplicaRegions { get; set; }

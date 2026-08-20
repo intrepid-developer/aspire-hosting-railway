@@ -64,15 +64,10 @@ public static class RailwayConstants
 
     /// <summary>
     /// Official Railway compute deploy keys (<c>Region.region</c>) documented at
-    /// <see href="https://docs.railway.com/deployments/regions"/>. Not airport codes
-    /// (<c>Query.regions.id</c>: sjc/iad/ams/sin) and not older ids
-    /// (us-west1, us-east4, europe-west4).
+    /// <see href="https://docs.railway.com/deployments/regions"/>. AppHosts set
+    /// <see cref="RailwayRegion"/>; these strings are the GraphQL / plan values.
+    /// Not airport codes (<c>Query.regions.id</c>: sjc/iad/ams/sin) and not older
+    /// ids (us-west1, us-east4, europe-west4).
     /// </summary>
-    public static readonly IReadOnlyList<string> OfficialRegionIds =
-    [
-        "us-west2",
-        "us-east4-eqdc4a",
-        "europe-west4-drams3a",
-        "asia-southeast1-eqsg3a"
-    ];
+    public static readonly IReadOnlyList<string> OfficialRegionIds = RailwayRegionMapper.OfficialRegionIds;
 }

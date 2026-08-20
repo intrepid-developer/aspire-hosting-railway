@@ -2,6 +2,13 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.4
+
+- Breaking preview API: `PublishAsRailwayService` region is compile-time typed. `RailwayServiceResource.Region` is `RailwayRegion?` and `ReplicaRegions` is `Dictionary<RailwayRegion, int>?`. There is no string setter.
+- `RailwayRegion` members are the four official Railway deploy keys (verified 2026-08-20): `UsWest2` → `us-west2`, `UsEast4` → `us-east4-eqdc4a`, `EuropeWest4` → `europe-west4-drams3a`, `AsiaSoutheast1` → `asia-southeast1-eqsg3a`.
+- Airport codes (`sjc` / `iad` / `ams` / `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) cannot be assigned on the AppHost surface. `railway-plan.json` still stores official `Region.region` strings; unknown deserialized ids fail honestly before GraphQL.
+- GraphQL apply is unchanged: official region id strings only in `multiRegionConfig`. `numReplicas` remains the single-region `WithReplicas` path. Never both.
+
 ## 13.5.0-preview.3
 
 - `PublishAsRailwayService` can set per-replica `Cpu` and `MemoryGb` on `RailwayServiceResource`. There is no Aspire-core `WithCpu` / `WithMemory` in Aspire.Hosting 13.5.0.
