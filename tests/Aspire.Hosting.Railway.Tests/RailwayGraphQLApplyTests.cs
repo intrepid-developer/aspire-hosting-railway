@@ -1894,6 +1894,8 @@ public class RailwayGraphQLApplyTests
         plan.Services[0].RestartPolicyMaxRetries = 1;
         plan.Services[0].StartCommand = "./api";
         plan.Services[0].PreDeployCommand = ["dotnet MyApp.dll --migrate"];
+        plan.Services[0].OverlapSeconds = 60;
+        plan.Services[0].DrainingSeconds = 10;
 
         var apply = GraphQLFixtures.CreateApplyService(handler);
         await apply.ApplyAsync(
@@ -1909,6 +1911,8 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(1, input.GetProperty("restartPolicyMaxRetries").GetInt32());
         Assert.Equal("./api", input.GetProperty("startCommand").GetString());
         Assert.Equal("dotnet MyApp.dll --migrate", input.GetProperty("preDeployCommand")[0].GetString());
+        Assert.Equal(60, input.GetProperty("overlapSeconds").GetInt32());
+        Assert.Equal(10, input.GetProperty("drainingSeconds").GetInt32());
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
     }
 
@@ -2070,6 +2074,266 @@ public class RailwayGraphQLApplyTests
             handler.Operations,
             name => (name.Contains("start", StringComparison.OrdinalIgnoreCase) ||
                      name.Contains("preDeploy", StringComparison.OrdinalIgnoreCase)) &&
+                    !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Apply_OverlapSecondsOnly_SendsIntAndOmitsDraining()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].OverlapSeconds = 60;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("overlapSeconds").ValueKind);
+        Assert.Equal(60, input.GetProperty("overlapSeconds").GetInt32());
+        Assert.False(input.TryGetProperty("drainingSeconds", out _));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_OVERLAP_SECONDS", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+    }
+
+    [Fact]
+    public async Task Apply_DrainingSeconds_SendsIntOnServiceInstanceUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].DrainingSeconds = 10;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.False(input.TryGetProperty("overlapSeconds", out _));
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("drainingSeconds").ValueKind);
+        Assert.Equal(10, input.GetProperty("drainingSeconds").GetInt32());
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_DRAINING_SECONDS", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Apply_ZeroOverlapAndDraining_SendsZeroInts()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].OverlapSeconds = 0;
+        plan.Services[0].DrainingSeconds = 0;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("overlapSeconds").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("drainingSeconds").ValueKind);
+        Assert.Equal(0, input.GetProperty("overlapSeconds").GetInt32());
+        Assert.Equal(0, input.GetProperty("drainingSeconds").GetInt32());
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-60)]
+    public async Task Apply_InvalidOverlapSeconds_FailsBeforeGraphQL(int seconds)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].OverlapSeconds = seconds;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("overlapSeconds", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("greater than or equal to 0", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-10)]
+    public async Task Apply_InvalidDrainingSeconds_FailsBeforeGraphQL(int seconds)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].DrainingSeconds = seconds;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("drainingSeconds", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("greater than or equal to 0", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_ManagedServiceOverlap_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true);
+        plan.Services[0].Name = "postgres";
+        plan.Services[0].OverlapSeconds = 60;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("managed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("overlapSeconds", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_TemplatesAndBucket_DoNotSendOverlapOrDrainingOnManagedServices()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true, includeRedis: true, includeBucket: true);
+        plan.Services[0].OverlapSeconds = 60;
+        plan.Services[0].DrainingSeconds = 10;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        var updateInput = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal(60, updateInput.GetProperty("overlapSeconds").GetInt32());
+        Assert.Equal(10, updateInput.GetProperty("drainingSeconds").GetInt32());
+
+        var managedBodies = handler.Bodies.Where(body =>
+            body.Contains("\"operationName\":\"templateDeployV2\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketCreate\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketS3Credentials\"", StringComparison.Ordinal));
+        Assert.All(managedBodies, body =>
+        {
+            Assert.DoesNotContain("overlapSeconds", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("drainingSeconds", body, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task DeployAsync_OverlapAndDraining_SendsFieldsOnExistingMutation()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.OverlapSeconds = 60;
+                s.DrainingSeconds = 10;
+            });
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("overlapSeconds").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("drainingSeconds").ValueKind);
+        Assert.Equal(60, input.GetProperty("overlapSeconds").GetInt32());
+        Assert.Equal(10, input.GetProperty("drainingSeconds").GetInt32());
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_OVERLAP_SECONDS", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_DRAINING_SECONDS", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            handler.Operations,
+            name => (name.Contains("overlap", StringComparison.OrdinalIgnoreCase) ||
+                     name.Contains("drain", StringComparison.OrdinalIgnoreCase)) &&
                     !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
     }
 

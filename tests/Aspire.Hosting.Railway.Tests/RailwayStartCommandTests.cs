@@ -74,7 +74,9 @@ public sealed class RailwayStartCommandTests
                 RestartPolicyType = "NEVER",
                 RestartPolicyMaxRetries = 1,
                 StartCommand = "/bin/sh -c \"exec ./api\"",
-                PreDeployCommand = ["dotnet MyApp.dll --migrate"]
+                PreDeployCommand = ["dotnet MyApp.dll --migrate"],
+                OverlapSeconds = 60,
+                DrainingSeconds = 10
             },
             "nginx");
 
@@ -84,6 +86,8 @@ public sealed class RailwayStartCommandTests
         Assert.Equal(1, input.RestartPolicyMaxRetries);
         Assert.Equal("/bin/sh -c \"exec ./api\"", input.StartCommand);
         Assert.Equal(["dotnet MyApp.dll --migrate"], input.PreDeployCommand);
+        Assert.Equal(60, input.OverlapSeconds);
+        Assert.Equal(10, input.DrainingSeconds);
     }
 
     [Theory]

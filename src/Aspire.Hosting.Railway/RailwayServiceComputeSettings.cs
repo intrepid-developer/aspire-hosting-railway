@@ -53,6 +53,13 @@ internal static class RailwayServiceComputeSettings
                     $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set startCommand / preDeployCommand. " +
                     "Those fields are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
             }
+
+            if (HasDeploymentTeardown(service) && IsManagedService(plan, service.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set overlapSeconds / drainingSeconds. " +
+                    "Those fields are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
+            }
         }
     }
 
@@ -117,6 +124,16 @@ internal static class RailwayServiceComputeSettings
                 $"Railway service '{service.Name}' preDeployCommand steps must be non-empty commands.");
         }
 
+        if (service.OverlapSeconds is { } overlapSeconds)
+        {
+            EnsureNonNegativeSeconds(service.Name, overlapSeconds, "overlapSeconds");
+        }
+
+        if (service.DrainingSeconds is { } drainingSeconds)
+        {
+            EnsureNonNegativeSeconds(service.Name, drainingSeconds, "drainingSeconds");
+        }
+
         if (service.ReplicaRegions is not { Count: > 0 } replicaRegions)
         {
             return;
@@ -140,7 +157,7 @@ internal static class RailwayServiceComputeSettings
     /// <summary>
     /// Builds <c>serviceInstanceUpdate</c> input: always <c>source.image</c>, plus
     /// confirmed scale/serverless/region/healthcheck/restart-policy/start-command
-    /// fields when the plan requested them.
+    /// /overlap/drain fields when the plan requested them.
     /// </summary>
     public static ServiceInstanceUpdateInput CreateUpdateInput(RailwayPlanService service, string image)
     {
@@ -171,6 +188,7 @@ internal static class RailwayServiceComputeSettings
         ApplyHealthcheck(service, input);
         ApplyRestartPolicy(service, input);
         ApplyStartAndPreDeployCommand(service, input);
+        ApplyDeploymentTeardown(service, input);
         return input;
     }
 
@@ -219,6 +237,9 @@ internal static class RailwayServiceComputeSettings
 
     internal static bool HasStartOrPreDeployCommand(RailwayPlanService service) =>
         service.StartCommand is not null || service.PreDeployCommand is { Count: > 0 };
+
+    internal static bool HasDeploymentTeardown(RailwayPlanService service) =>
+        service.OverlapSeconds is not null || service.DrainingSeconds is not null;
 
     internal static bool IsVolumeBackedManagedService(RailwayPlan plan, string serviceName) =>
         plan.ManagedServices.Any(managed =>
@@ -292,6 +313,30 @@ internal static class RailwayServiceComputeSettings
         {
             input.PreDeployCommand = steps;
         }
+    }
+
+    private static void ApplyDeploymentTeardown(RailwayPlanService service, ServiceInstanceUpdateInput input)
+    {
+        if (service.OverlapSeconds is { } overlapSeconds)
+        {
+            input.OverlapSeconds = overlapSeconds;
+        }
+
+        if (service.DrainingSeconds is { } drainingSeconds)
+        {
+            input.DrainingSeconds = drainingSeconds;
+        }
+    }
+
+    private static void EnsureNonNegativeSeconds(string serviceName, int seconds, string what)
+    {
+        if (seconds >= 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Railway service '{serviceName}' {what} must be greater than or equal to 0.");
     }
 
     private static void EnsurePositiveTimeout(string serviceName, int timeout)

@@ -143,6 +143,24 @@ public sealed class ServiceInstanceUpdateInput
     /// </summary>
     [JsonPropertyName("preDeployCommand")]
     public List<string>? PreDeployCommand { get; set; }
+
+    /// <summary>
+    /// Gets or sets overlap seconds after the new deploy is active.
+    /// Confirmed <c>ServiceInstanceUpdateInput.overlapSeconds</c> (Int, live
+    /// schema 2026-08-20). Omitted when unset. Do not send <c>null</c>.
+    /// In-deploy lifecycle, not <c>aspire destroy</c>.
+    /// </summary>
+    [JsonPropertyName("overlapSeconds")]
+    public int? OverlapSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets draining seconds after SIGTERM before SIGKILL.
+    /// Confirmed <c>ServiceInstanceUpdateInput.drainingSeconds</c> (Int,
+    /// live schema 2026-08-20). Omitted when unset. Do not send <c>null</c>.
+    /// In-deploy lifecycle, not <c>aspire destroy</c>.
+    /// </summary>
+    [JsonPropertyName("drainingSeconds")]
+    public int? DrainingSeconds { get; set; }
 }
 
 /// <summary>

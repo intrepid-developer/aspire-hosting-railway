@@ -181,6 +181,49 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public string? PreDeployCommand { get; set; }
 
     /// <summary>
+    /// Gets or sets how long the previous replica stays up after the new
+    /// deploy is active. Maps to
+    /// <c>ServiceInstanceUpdateInput.overlapSeconds</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Must be greater than or equal to 0 (0 is no wait).
+    /// Unset omits the field. Either this or <see cref="DrainingSeconds"/>
+    /// can be set alone. This is in-deploy lifecycle (zero-downtime
+    /// cutover), not <c>aspire destroy</c>. Volume-backed services cannot do
+    /// zero-downtime; overlap does not invent a second volume mount. See
+    /// <see href="https://docs.railway.com/guides/deployment-teardown"/> and
+    /// <see href="https://docs.railway.com/deployments/deployment-teardown"/>.
+    /// There is no Aspire-core annotation; configure this through
+    /// <c>PublishAsRailwayService</c>. Not sent for
+    /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> /
+    /// buckets. Config-as-code <c>deploy.overlapSeconds</c> and the
+    /// <c>RAILWAY_DEPLOYMENT_OVERLAP_SECONDS</c> variable are mapping only;
+    /// the apply path is <c>serviceInstanceUpdate</c>.
+    /// </remarks>
+    public int? OverlapSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets how long Railway waits after SIGTERM before SIGKILL on
+    /// the previous replica. Maps to
+    /// <c>ServiceInstanceUpdateInput.drainingSeconds</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Must be greater than or equal to 0 (0 is
+    /// immediate kill). Unset omits the field. Either this or
+    /// <see cref="OverlapSeconds"/> can be set alone. This is in-deploy
+    /// lifecycle (zero-downtime cutover), not <c>aspire destroy</c>. See
+    /// <see href="https://docs.railway.com/guides/deployment-teardown"/> and
+    /// <see href="https://docs.railway.com/deployments/deployment-teardown"/>.
+    /// There is no Aspire-core annotation; configure this through
+    /// <c>PublishAsRailwayService</c>. Not sent for
+    /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> /
+    /// buckets. Config-as-code <c>deploy.drainingSeconds</c> and the
+    /// <c>RAILWAY_DEPLOYMENT_DRAINING_SECONDS</c> variable are mapping only;
+    /// the apply path is <c>serviceInstanceUpdate</c>.
+    /// </remarks>
+    public int? DrainingSeconds { get; set; }
+
+    /// <summary>
     /// Gets or sets a multi-region replica map of <see cref="RailwayRegion"/> to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>

@@ -543,6 +543,8 @@ public class RailwayEnvironmentTests
         Assert.Null(api.RestartPolicyMaxRetries);
         Assert.Null(api.StartCommand);
         Assert.Null(api.PreDeployCommand);
+        Assert.Null(api.OverlapSeconds);
+        Assert.Null(api.DrainingSeconds);
         Assert.All(plan.ManagedServices, managed =>
         {
             Assert.Contains(managed.Kind, ["postgres", "redis"], StringComparer.Ordinal);
@@ -556,6 +558,8 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("restartPolicyMaxRetries", json, StringComparison.Ordinal);
         Assert.DoesNotContain("startCommand", json, StringComparison.Ordinal);
         Assert.DoesNotContain("preDeployCommand", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("overlapSeconds", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("drainingSeconds", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -718,6 +722,14 @@ public class RailwayEnvironmentTests
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "preDeployCommand",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "overlapSeconds",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "drainingSeconds",
                 System.Text.Json.JsonSerializer.Serialize(managed),
                 StringComparison.Ordinal);
         });
@@ -1068,6 +1080,8 @@ public class RailwayEnvironmentTests
                 s.RestartPolicyMaxRetries = 1;
                 s.StartCommand = "./api";
                 s.PreDeployCommand = "dotnet MyApp.dll --migrate";
+                s.OverlapSeconds = 60;
+                s.DrainingSeconds = 10;
             });
 
         using var app = builder.Build();
@@ -1080,6 +1094,8 @@ public class RailwayEnvironmentTests
         Assert.Equal(1, service.RestartPolicyMaxRetries);
         Assert.Equal("./api", service.StartCommand);
         Assert.Equal(["dotnet MyApp.dll --migrate"], service.PreDeployCommand);
+        Assert.Equal(60, service.OverlapSeconds);
+        Assert.Equal(10, service.DrainingSeconds);
     }
 
     [Fact]
@@ -1115,6 +1131,213 @@ public class RailwayEnvironmentTests
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "preDeployCommand",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "overlapSeconds",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "drainingSeconds",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Plan_UnsetOverlapAndDraining_OmitsBothFields()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.OverlapSeconds);
+        Assert.Null(service.DrainingSeconds);
+        Assert.DoesNotContain("overlapSeconds", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("drainingSeconds", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_OVERLAP_SECONDS", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_DRAINING_SECONDS", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_PublishAsRailwayService_CopiesOverlapAndDrainingAsInts()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.OverlapSeconds = 60;
+                s.DrainingSeconds = 10;
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(60, service.OverlapSeconds);
+        Assert.Equal(10, service.DrainingSeconds);
+        using (var document = System.Text.Json.JsonDocument.Parse(json))
+        {
+            var planned = document.RootElement.GetProperty("services")[0];
+            Assert.Equal(System.Text.Json.JsonValueKind.Number, planned.GetProperty("overlapSeconds").ValueKind);
+            Assert.Equal(System.Text.Json.JsonValueKind.Number, planned.GetProperty("drainingSeconds").ValueKind);
+            Assert.Equal(60, planned.GetProperty("overlapSeconds").GetInt32());
+            Assert.Equal(10, planned.GetProperty("drainingSeconds").GetInt32());
+        }
+
+        Assert.Contains("\"overlapSeconds\": 60", json, StringComparison.Ordinal);
+        Assert.Contains("\"drainingSeconds\": 10", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("OverlapSeconds", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("DrainingSeconds", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_OVERLAP_SECONDS", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAILWAY_DEPLOYMENT_DRAINING_SECONDS", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"60\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"10\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_OverlapSecondsOnly_OmitsDraining()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.OverlapSeconds = 60);
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(60, service.OverlapSeconds);
+        Assert.Null(service.DrainingSeconds);
+        Assert.Contains("\"overlapSeconds\": 60", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("drainingSeconds", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_DrainingSecondsOnly_OmitsOverlap()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.DrainingSeconds = 10);
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.OverlapSeconds);
+        Assert.Equal(10, service.DrainingSeconds);
+        Assert.DoesNotContain("overlapSeconds", json, StringComparison.Ordinal);
+        Assert.Contains("\"drainingSeconds\": 10", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_ZeroOverlapAndDraining_SerializesAsNumbers()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.OverlapSeconds = 0;
+                s.DrainingSeconds = 0;
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(0, service.OverlapSeconds);
+        Assert.Equal(0, service.DrainingSeconds);
+        using (var document = System.Text.Json.JsonDocument.Parse(json))
+        {
+            var planned = document.RootElement.GetProperty("services")[0];
+            Assert.Equal(System.Text.Json.JsonValueKind.Number, planned.GetProperty("overlapSeconds").ValueKind);
+            Assert.Equal(System.Text.Json.JsonValueKind.Number, planned.GetProperty("drainingSeconds").ValueKind);
+            Assert.Equal(0, planned.GetProperty("overlapSeconds").GetInt32());
+            Assert.Equal(0, planned.GetProperty("drainingSeconds").GetInt32());
+        }
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-60)]
+    public void Plan_NegativeOverlapSeconds_FailsBeforeGraphQL(int seconds)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.OverlapSeconds = seconds);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("overlapSeconds", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("greater than or equal to 0", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-10)]
+    public void Plan_NegativeDrainingSeconds_FailsBeforeGraphQL(int seconds)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.DrainingSeconds = seconds);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("drainingSeconds", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("greater than or equal to 0", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_ManagedPostgresRedisAndBucket_DoNotGetOverlapOrDrainingFields()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        builder.AddRedis("redis").PublishAsRailwayRedis();
+        builder.AddRailwayBucket("uploads");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.OverlapSeconds = 60;
+                s.DrainingSeconds = 10;
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+
+        Assert.Single(plan.Services);
+        var api = Assert.Single(plan.Services);
+        Assert.Equal(60, api.OverlapSeconds);
+        Assert.Equal(10, api.DrainingSeconds);
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "postgres");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "redis");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "bucket");
+        Assert.All(plan.ManagedServices, managed =>
+        {
+            Assert.DoesNotContain(
+                "overlapSeconds",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "drainingSeconds",
                 System.Text.Json.JsonSerializer.Serialize(managed),
                 StringComparison.Ordinal);
         });
