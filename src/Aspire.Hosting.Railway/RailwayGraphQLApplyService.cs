@@ -536,8 +536,8 @@ public sealed class RailwayGraphQLApplyService
                             ["ENDPOINT"] = string.IsNullOrWhiteSpace(credentials.Endpoint)
                                 ? RailwayConstants.BucketS3Endpoint
                                 : credentials.Endpoint,
-                            ["ACCESS_KEY_ID"] = credentials.AccessKeyId,
-                            ["SECRET_ACCESS_KEY"] = credentials.SecretAccessKey,
+                            ["ACCESS_KEY_ID"] = credentials.AccessKeyId!,
+                            ["SECRET_ACCESS_KEY"] = credentials.SecretAccessKey!,
                             ["BUCKET"] = string.IsNullOrWhiteSpace(credentials.BucketName)
                                 ? managed.Name
                                 : credentials.BucketName,
