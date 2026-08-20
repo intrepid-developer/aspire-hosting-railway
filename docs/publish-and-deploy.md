@@ -11,7 +11,7 @@ Per Railway environment resource named `{name}`:
 | `prepare-deployment-targets-{name}` | Materializes `RailwayServiceResource` children and `DeploymentTargetAnnotation`. Depends on `ValidateComputeEnvironments`; required by `BeforeStart`. |
 | `publish-{name}` | Writes `railway-plan.json` plus a `.env.example` of captured parameter names. Required by the well-known `Publish` step. Parameter names and Railway expressions stay secret-safe; `WithEnvironment` string literals are written as-is. |
 | `deploy-{name}` | Resolves the account/workspace token, applies the plan over GraphQL, persists ids, reports real progress or failures. Depends on `DeployPrereq` and `publish-{name}`. Image push steps run before this when the model has build-and-push resources. |
-| `destroy-{name}` | Stub. Warns that project/environment teardown is not implemented. Confirmed operations do not include project or environment delete. This is **not** deployment overlap/drain (`OverlapSeconds` / `DrainingSeconds` on `PublishAsRailwayService`). |
+| `destroy-{name}` | Tears down Railway resources this integration created for the mapped environment. Prints an inventory, skips adopted resources and buckets, never calls `projectDelete` in v1. This is **not** deployment overlap/drain (`OverlapSeconds` / `DrainingSeconds` on `PublishAsRailwayService`). |
 
 A `validate-railway` step (registered once) fails publish-mode apps that call `PublishAsRailway*` / `AddRailwayBucket` without `AddRailwayEnvironment`.
 
@@ -60,6 +60,29 @@ builder.AddRailwayEnvironment("railway")
 `railway-environment-id` is the **target** environment, not a production source for duplication. Passing the production id on a staging deploy applies that deploy onto production. Adopt with `railway-environment-id` only when that environment already exists.
 
 PR / ephemeral Railway environment APIs are not part of this release.
+
+## Destroy
+
+`aspire destroy` (and `aspire destroy --environment Staging`) runs `destroy-{name}`. Aspire prompts first; `--yes` / `--non-interactive --yes` skip the prompt. Before GraphQL, destroy prints the project, environment, service names, bucket names, and custom-domain hostnames from deployment state plus a live `project(id)` read.
+
+What is deleted (confirmed mutations only, in this order):
+
+1. Railway-provided and custom domains **this integration created**
+2. App services we created (`serviceDelete`, always with `environmentId` when known)
+3. Official Postgres / Redis template services we created
+4. The Railway environment **only if we created it** (`environmentCreate` — typically `staging`)
+
+What is skipped, with a printed reason:
+
+- **Adopted** project / environment / service / domain / bucket (`AsExisting()`, `railway-project-id` / `railway-environment-id`, or a live name match on a project we did not create). Adopted is someone else's production.
+- **`serviceDelete` when another Railway environment remains.** The live schema deletes a non-fork service in every non-fork environment. Staging-only destroy therefore does not call `serviceDelete` (that would wipe production). It deletes the staging environment when we created it.
+- **Buckets.** Public GraphQL has no `bucketDelete` (only `bucketCreate` / `bucketUpdate` / `bucketCredentialsReset`). Destroy does not call `bucketCredentialsReset` as a fake delete and does not treat the bucket as gone.
+- **The Railway project.** v1 never calls `projectDelete`. Blast radius is the mapped environment, not Azure-style "delete the resource group."
+- **Volumes / backups.** This slice does not call `volumeDelete` or `volumeInstanceBackupDelete`. Cascade from `serviceDelete` is not proven.
+
+Empty deployment state with no `railway-project-id` fails closed. After a successful destroy, flatten-safe ids for that Railway environment are cleared. `ProjectId` stays so a later deploy adopts the leftover project instead of creating a second one.
+
+`OverlapSeconds` / `DrainingSeconds` stay in-deploy cutover. They are not `aspire destroy`.
 
 ## Flatten-safe deployment state
 

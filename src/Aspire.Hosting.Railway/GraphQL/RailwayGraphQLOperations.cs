@@ -440,4 +440,54 @@ public static class RailwayGraphQLOperations
           volumeInstanceBackupScheduleUpdate(kinds: $kinds, volumeInstanceId: $volumeInstanceId)
         }
         """;
+
+    /// <summary>
+    /// Deletes a service. Confirmed
+    /// <c>serviceDelete(environmentId: String, id: String!) → Boolean!</c>
+    /// (live schema 2026-08-20). Always pass <c>environmentId</c> when
+    /// known. For non-fork environments the live schema deletes the
+    /// service in every non-fork environment — destroy skips this
+    /// mutation when another persistent environment remains. Do not
+    /// invent <c>serviceInstanceDelete</c>.
+    /// </summary>
+    public const string ServiceDelete = """
+        mutation serviceDelete($id: String!, $environmentId: String) {
+          serviceDelete(id: $id, environmentId: $environmentId)
+        }
+        """;
+
+    /// <summary>
+    /// Deletes a Railway-provided HTTP domain. Confirmed
+    /// <c>serviceDomainDelete(id: String!) → Boolean!</c> (live schema
+    /// 2026-08-20). Destroy only; deploy does not call this.
+    /// </summary>
+    public const string ServiceDomainDelete = """
+        mutation serviceDomainDelete($id: String!) {
+          serviceDomainDelete(id: $id)
+        }
+        """;
+
+    /// <summary>
+    /// Deletes a custom hostname. Confirmed
+    /// <c>customDomainDelete(id: String!) → Boolean!</c> (live schema
+    /// 2026-08-20). Destroy only; deploy does not call this.
+    /// </summary>
+    public const string CustomDomainDelete = """
+        mutation customDomainDelete($id: String!) {
+          customDomainDelete(id: $id)
+        }
+        """;
+
+    /// <summary>
+    /// Deletes a Railway environment. Confirmed
+    /// <c>environmentDelete(id: String!) → Boolean!</c> (live schema
+    /// 2026-08-20). Destroy calls this only when this integration
+    /// created the environment (<c>environmentCreate</c>), not when it
+    /// was adopted or bundled with <c>projectCreate</c>.
+    /// </summary>
+    public const string EnvironmentDelete = """
+        mutation environmentDelete($id: String!) {
+          environmentDelete(id: $id)
+        }
+        """;
 }

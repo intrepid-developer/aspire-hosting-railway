@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Railway;
 
 /// <summary>
-/// Railway project compute environment used by <c>aspire publish</c> and <c>aspire deploy</c>.
+/// Railway project compute environment used by <c>aspire publish</c>, <c>aspire deploy</c>, and <c>aspire destroy</c>.
 /// </summary>
 public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentResource
 {
@@ -173,7 +173,7 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         var destroy = new PipelineStep
         {
             Name = $"destroy-{Name}",
-            Description = $"Destroys the Railway environment {Name}.",
+            Description = $"Destroys Railway resources this integration created for {Name}.",
             Action = DestroyAsync,
             DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq],
             Resource = this
@@ -336,37 +336,74 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
 
     internal async Task DestroyAsync(PipelineStepContext context)
     {
+        var aspireEnvironment = context.Services.GetService<IHostEnvironment>()?.EnvironmentName;
+        var plan = RailwayPlanBuilder.Create(context.Model, this, aspireEnvironment);
+        var adoptedProjectId = await TryGetParameterValueAsync(ProjectIdParameter, context.CancellationToken)
+            .ConfigureAwait(false);
+        var adoptedEnvironmentId = await TryGetParameterValueAsync(EnvironmentIdParameter, context.CancellationToken)
+            .ConfigureAwait(false);
         var stateManager = context.Services.GetService<IDeploymentStateManager>();
-        if (stateManager is not null)
-        {
-            var section = await stateManager.AcquireSectionAsync($"Railway:{Name}", context.CancellationToken)
-                .ConfigureAwait(false);
-            if (section.Data.Count == 0)
-            {
-                var emptyTask = await context.ReportingStep.CreateTaskAsync(
-                    new MarkdownString($"No Railway deployment state for **{Name}**"),
-                    context.CancellationToken).ConfigureAwait(false);
-                await using (emptyTask.ConfigureAwait(false))
-                {
-                    await emptyTask.CompleteAsync(
-                        "Nothing to destroy.",
-                        CompletionState.Completed,
-                        context.CancellationToken).ConfigureAwait(false);
-                }
 
-                return;
-            }
+        var snapshot = stateManager is not null
+            ? await RailwayDeploymentStateStore.LoadAsync(
+                stateManager,
+                Name,
+                plan.RailwayEnvironmentName,
+                context.CancellationToken).ConfigureAwait(false)
+            : new RailwayDeploymentSnapshot();
+
+        if (string.IsNullOrWhiteSpace(adoptedProjectId) && string.IsNullOrWhiteSpace(snapshot.ProjectId))
+        {
+            throw new InvalidOperationException(
+                "Cannot destroy Railway resources: deployment state is empty and no " +
+                "railway-project-id is available. Failing closed. Run aspire deploy first, " +
+                "or adopt with railway-project-id / AsExisting().");
         }
 
-        var task = await context.ReportingStep.CreateTaskAsync(
-            new MarkdownString($"Destroy Railway environment **{Name}**"),
-            context.CancellationToken).ConfigureAwait(false);
-        await using (task.ConfigureAwait(false))
+        var token = await ResolveTokenAsync(context).ConfigureAwait(false);
+        var request = new RailwayDestroyRequest
         {
-            await task.CompleteAsync(
-                "Railway GraphQL destroy is not implemented. Confirmed operations do not include project or environment delete; this step does not invent those mutations.",
-                CompletionState.CompletedWithWarning,
+            Token = token,
+            AdoptedProjectId = adoptedProjectId,
+            AdoptedEnvironmentId = adoptedEnvironmentId
+        };
+
+        var client = CreateGraphQLClient(context.Services);
+        var destroy = new RailwayGraphQLDestroyService(client);
+
+        try
+        {
+            var result = await destroy.DestroyAsync(
+                plan,
+                request,
+                context.ReportingStep,
+                stateManager,
                 context.CancellationToken).ConfigureAwait(false);
+
+            var summary = result.Deleted.Count > 0
+                ? $"Deleted {result.Deleted.Count} Railway resource(s) this integration created."
+                : "No Railway resources created by this integration were deleted.";
+            if (result.Skipped.Count > 0)
+            {
+                summary += $" Skipped {result.Skipped.Count}.";
+            }
+
+            context.Summary.Add("🚂 Railway destroy", summary);
+            var completion = result.Warnings.Count > 0
+                ? CompletionState.CompletedWithWarning
+                : CompletionState.Completed;
+            await context.ReportingStep.CompleteAsync(
+                new MarkdownString(summary),
+                completion,
+                context.CancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await context.ReportingStep.CompleteAsync(
+                exception.Message,
+                CompletionState.CompletedWithError,
+                context.CancellationToken).ConfigureAwait(false);
+            throw;
         }
     }
 
@@ -430,7 +467,7 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         }
 
         throw new InvalidOperationException(
-            "An account or workspace Railway token is required for aspire deploy. " +
+            "An account or workspace Railway token is required for aspire deploy / aspire destroy. " +
             "Set RAILWAY_TOKEN (or RAILWAY_API_TOKEN in CI). Project tokens cannot call projectCreate.");
     }
 

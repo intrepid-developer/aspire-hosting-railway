@@ -121,6 +121,21 @@ public sealed class RailwayGraphQLApplyService
             result.VolumeBackupScheduleIds[pair.Key] = pair.Value;
         }
 
+        foreach (var pair in snapshot.CreatedServiceIds)
+        {
+            result.CreatedServiceIds[pair.Key] = pair.Value;
+        }
+
+        foreach (var pair in snapshot.CreatedCustomDomainIds)
+        {
+            result.CreatedCustomDomainIds[pair.Key] = pair.Value;
+        }
+
+        foreach (var pair in snapshot.CreatedServiceDomainIds)
+        {
+            result.CreatedServiceDomainIds[pair.Key] = pair.Value;
+        }
+
         result.AppliedTemplateCodes.AddRange(snapshot.TemplateCodes);
 
         if (duplicatedProduction)
@@ -369,6 +384,7 @@ public sealed class RailwayGraphQLApplyService
                 await WaitForWorkflowAsync(workflowId, request.Token, cancellationToken).ConfigureAwait(false);
 
                 result.AppliedTemplateCodes.Add(managed.TemplateCode);
+                result.CreatedServiceIds.TryAdd(managed.Name, managed.Name);
                 await persistAsync().ConfigureAwait(false);
                 await task.CompleteAsync(
                     new MarkdownString($"Deployed template `{managed.TemplateCode}` via templateDeployV2."),
@@ -586,6 +602,11 @@ public sealed class RailwayGraphQLApplyService
         if (HasServiceId(result, managed.Name))
         {
             serviceId = result.ServiceIds[managed.Name];
+            if (result.CreatedServiceIds.ContainsKey(managed.Name))
+            {
+                result.CreatedServiceIds[managed.Name] = serviceId;
+            }
+
             return true;
         }
 
@@ -593,6 +614,11 @@ public sealed class RailwayGraphQLApplyService
         {
             serviceId = result.ServiceIds[managed.TemplateCode!];
             result.ServiceIds[managed.Name] = serviceId;
+            if (result.CreatedServiceIds.ContainsKey(managed.Name))
+            {
+                result.CreatedServiceIds[managed.Name] = serviceId;
+            }
+
             return true;
         }
 
@@ -862,6 +888,7 @@ public sealed class RailwayGraphQLApplyService
                     }
 
                     result.ServiceIds[service.Name] = serviceId;
+                    result.CreatedServiceIds[service.Name] = serviceId;
                     result.AdoptedRailwayServiceNames.Add(service.Name);
                     await persistAsync().ConfigureAwait(false);
                 }
@@ -917,6 +944,11 @@ public sealed class RailwayGraphQLApplyService
                             request.Token,
                             cancellationToken).ConfigureAwait(false);
                         RailwayGraphQLClient.ThrowIfFailed(domain, "serviceDomainCreate");
+                        var createdDomainId = domain.Data?.ServiceDomainCreate?.Id;
+                        if (!string.IsNullOrWhiteSpace(createdDomainId))
+                        {
+                            result.CreatedServiceDomainIds[service.Name] = createdDomainId;
+                        }
                     }
                     catch (InvalidOperationException exception)
                     {
@@ -981,7 +1013,7 @@ public sealed class RailwayGraphQLApplyService
                 cancellationToken).ConfigureAwait(false);
             await using (task.ConfigureAwait(false))
             {
-                var domain = await EnsureCustomDomainAsync(
+                var (domain, created) = await EnsureCustomDomainAsync(
                     hostname,
                     service.TargetPort,
                     existing,
@@ -997,6 +1029,11 @@ public sealed class RailwayGraphQLApplyService
                 }
 
                 result.CustomDomainIds[hostname] = domain.Id;
+                if (created)
+                {
+                    result.CreatedCustomDomainIds[hostname] = domain.Id;
+                }
+
                 await persistAsync().ConfigureAwait(false);
                 await task.CompleteAsync(
                     new MarkdownString(FormatCustomDomainReport(hostname, domain)),
@@ -1006,7 +1043,7 @@ public sealed class RailwayGraphQLApplyService
         }
     }
 
-    private async Task<RailwayCustomDomain> EnsureCustomDomainAsync(
+    private async Task<(RailwayCustomDomain Domain, bool Created)> EnsureCustomDomainAsync(
         string hostname,
         int? targetPort,
         IReadOnlyList<RailwayCustomDomain> existing,
@@ -1028,9 +1065,9 @@ public sealed class RailwayGraphQLApplyService
                     request.Token,
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(updated, "customDomainUpdate");
-                return updated.Data?.CustomDomainUpdate
+                return (updated.Data?.CustomDomainUpdate
                     ?? throw new InvalidOperationException(
-                        $"customDomainUpdate returned no custom domain for '{hostname}'.");
+                        $"customDomainUpdate returned no custom domain for '{hostname}'."), false);
             }
 
             var queried = await _client.CustomDomainAsync(
@@ -1039,9 +1076,9 @@ public sealed class RailwayGraphQLApplyService
                 request.Token,
                 cancellationToken).ConfigureAwait(false);
             RailwayGraphQLClient.ThrowIfFailed(queried, "customDomain");
-            return queried.Data?.CustomDomain
+            return (queried.Data?.CustomDomain
                 ?? throw new InvalidOperationException(
-                    $"customDomain returned no custom domain for '{hostname}'.");
+                    $"customDomain returned no custom domain for '{hostname}'."), false);
         }
 
         var available = await _client.CustomDomainAvailableAsync(
@@ -1070,9 +1107,9 @@ public sealed class RailwayGraphQLApplyService
             request.Token,
             cancellationToken).ConfigureAwait(false);
         RailwayGraphQLClient.ThrowIfFailed(created, "customDomainCreate");
-        return created.Data?.CustomDomainCreate
+        return (created.Data?.CustomDomainCreate
             ?? throw new InvalidOperationException(
-                $"customDomainCreate returned no custom domain for '{hostname}'.");
+                $"customDomainCreate returned no custom domain for '{hostname}'."), true);
     }
 
     private static string FormatCustomDomainReport(string hostname, RailwayCustomDomain domain)
