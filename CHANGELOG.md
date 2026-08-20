@@ -6,6 +6,7 @@ Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHu
 
 - Retarget to Aspire.Hosting 13.5.0.
 - Package version now tracks Aspire (`13.5.x-preview.n`) instead of the `0.1.0-preview.n` line. This release is `13.5.0-preview.1`.
+- Align `Microsoft.Extensions.*` package versions with Aspire.Hosting 13.5.0 (`10.0.11`) so restore does not downgrade.
 
 ## 0.1.0-preview.12
 
