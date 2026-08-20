@@ -728,3 +728,142 @@ internal sealed class BucketS3CredentialsJsonConverter : JsonConverter<BucketS3C
     public override void Write(Utf8JsonWriter writer, BucketS3Credentials value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value, InnerOptions);
 }
+
+/// <summary>Data wrapper for the confirmed <c>environment</c> query.</summary>
+public sealed class EnvironmentData
+{
+    /// <summary>Gets or sets the environment, including volume instances.</summary>
+    [JsonPropertyName("environment")]
+    public RailwayEnvironmentPayload? Environment { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>Environment</c> fields used to resolve a
+/// <c>VolumeInstance</c> after official Postgres template deploy (live
+/// schema 2026-08-20).
+/// </summary>
+public sealed class RailwayEnvironmentPayload
+{
+    /// <summary>
+    /// Gets or sets volume instances. Relay connection
+    /// <c>EnvironmentVolumeInstancesConnection</c>.
+    /// </summary>
+    [JsonPropertyName("volumeInstances")]
+    public RailwayVolumeInstanceConnection? VolumeInstances { get; set; }
+}
+
+/// <summary>Confirmed <c>EnvironmentVolumeInstancesConnection</c>.</summary>
+public sealed class RailwayVolumeInstanceConnection
+{
+    /// <summary>
+    /// Gets or sets edges. Edge type is
+    /// <c>EnvironmentVolumeInstancesConnectionEdge</c>.
+    /// </summary>
+    [JsonPropertyName("edges")]
+    public List<RailwayVolumeInstanceEdge>? Edges { get; set; }
+
+    /// <summary>Gets or sets pagination info.</summary>
+    [JsonPropertyName("pageInfo")]
+    public RailwayPageInfo? PageInfo { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>EnvironmentVolumeInstancesConnectionEdge</c>
+/// (<c>cursor</c>, <c>node</c>).
+/// </summary>
+public sealed class RailwayVolumeInstanceEdge
+{
+    /// <summary>Gets or sets the pagination cursor.</summary>
+    [JsonPropertyName("cursor")]
+    public string? Cursor { get; set; }
+
+    /// <summary>Gets or sets the volume instance.</summary>
+    [JsonPropertyName("node")]
+    public RailwayVolumeInstance? Node { get; set; }
+}
+
+/// <summary>Confirmed <c>PageInfo</c> fields used for volume-instance paging.</summary>
+public sealed class RailwayPageInfo
+{
+    /// <summary>Gets or sets whether another page exists.</summary>
+    [JsonPropertyName("hasNextPage")]
+    public bool HasNextPage { get; set; }
+
+    /// <summary>Gets or sets the cursor to pass as <c>after</c>.</summary>
+    [JsonPropertyName("endCursor")]
+    public string? EndCursor { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>VolumeInstance</c> fields used by apply (live schema
+/// 2026-08-20). Match <see cref="ServiceId"/> to the official Postgres
+/// template service id.
+/// </summary>
+public sealed class RailwayVolumeInstance
+{
+    /// <summary>Gets or sets the volume instance id.</summary>
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    /// <summary>Gets or sets the owning service id.</summary>
+    [JsonPropertyName("serviceId")]
+    public string? ServiceId { get; set; }
+
+    /// <summary>Gets or sets the project-level volume id.</summary>
+    [JsonPropertyName("volumeId")]
+    public string? VolumeId { get; set; }
+
+    /// <summary>Gets or sets the environment id.</summary>
+    [JsonPropertyName("environmentId")]
+    public string? EnvironmentId { get; set; }
+
+    /// <summary>Gets or sets the mount path.</summary>
+    [JsonPropertyName("mountPath")]
+    public string? MountPath { get; set; }
+}
+
+/// <summary>Data wrapper for <c>volumeInstanceBackupScheduleList</c>.</summary>
+public sealed class VolumeInstanceBackupScheduleListData
+{
+    /// <summary>
+    /// Gets or sets existing schedules. Confirmed return is a list of
+    /// <c>VolumeInstanceBackupSchedule</c>, not a connection.
+    /// </summary>
+    [JsonPropertyName("volumeInstanceBackupScheduleList")]
+    public List<RailwayVolumeInstanceBackupSchedule>? VolumeInstanceBackupScheduleList { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>VolumeInstanceBackupSchedule</c> fields (live schema
+/// 2026-08-20). Persist flatten-safe <see cref="Id"/> only — not backup
+/// payloads.
+/// </summary>
+public sealed class RailwayVolumeInstanceBackupSchedule
+{
+    /// <summary>Gets or sets the schedule id.</summary>
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    /// <summary>
+    /// Gets or sets the kind (<c>DAILY</c>, <c>WEEKLY</c>,
+    /// <c>MONTHLY</c>).
+    /// </summary>
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
+
+    /// <summary>Gets or sets the schedule name.</summary>
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    /// <summary>Gets or sets the cron expression Railway assigned.</summary>
+    [JsonPropertyName("cron")]
+    public string? Cron { get; set; }
+
+    /// <summary>Gets or sets when the schedule was created.</summary>
+    [JsonPropertyName("createdAt")]
+    public string? CreatedAt { get; set; }
+
+    /// <summary>Gets or sets retention in seconds. Product mapping only.</summary>
+    [JsonPropertyName("retentionSeconds")]
+    public int? RetentionSeconds { get; set; }
+}

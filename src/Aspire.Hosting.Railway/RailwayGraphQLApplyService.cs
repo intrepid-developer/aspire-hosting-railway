@@ -49,6 +49,7 @@ public sealed class RailwayGraphQLApplyService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Token);
 
         RailwayServiceComputeSettings.ValidatePlanServices(plan);
+        RailwayVolumeBackupSchedule.ValidatePlan(plan);
 
         var snapshot = stateManager is not null
             ? await RailwayDeploymentStateStore.LoadAsync(
@@ -110,6 +111,16 @@ public sealed class RailwayGraphQLApplyService
             result.CustomDomainIds[pair.Key] = pair.Value;
         }
 
+        foreach (var pair in snapshot.VolumeInstanceIds)
+        {
+            result.VolumeInstanceIds[pair.Key] = pair.Value;
+        }
+
+        foreach (var pair in snapshot.VolumeBackupScheduleIds)
+        {
+            result.VolumeBackupScheduleIds[pair.Key] = pair.Value;
+        }
+
         result.AppliedTemplateCodes.AddRange(snapshot.TemplateCodes);
 
         if (duplicatedProduction)
@@ -145,6 +156,8 @@ public sealed class RailwayGraphQLApplyService
         await PersistAsync().ConfigureAwait(false);
 
         await ApplyManagedTemplatesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
+            .ConfigureAwait(false);
+        await ApplyVolumeBackupSchedulesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
             .ConfigureAwait(false);
         await ApplyBucketsAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
             .ConfigureAwait(false);
@@ -448,6 +461,235 @@ public sealed class RailwayGraphQLApplyService
         response.Errors.All(static error =>
             !string.IsNullOrWhiteSpace(error.Message) &&
             error.Message.Contains("BucketInstance not found", StringComparison.OrdinalIgnoreCase));
+
+    private async Task ApplyVolumeBackupSchedulesAsync(
+        RailwayPlan plan,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        IReportingStep reportingStep,
+        Func<Task> persistAsync,
+        CancellationToken cancellationToken)
+    {
+        foreach (var managed in plan.ManagedServices)
+        {
+            if (managed.VolumeBackupScheduleKinds is not { Count: > 0 } requestedRaw)
+            {
+                continue;
+            }
+
+            var requested = RailwayVolumeBackupSchedule.Normalize(requestedRaw, managed.Name);
+            var task = await reportingStep.CreateTaskAsync(
+                new MarkdownString($"Volume backup schedule for **{managed.Name}**"),
+                cancellationToken).ConfigureAwait(false);
+            await using (task.ConfigureAwait(false))
+            {
+                await EnsureManagedServiceIdAsync(plan, request, result, managed, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!TryGetManagedServiceId(result, managed, out var serviceId))
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot apply volume backup schedules for '{managed.Name}': " +
+                        "the official Postgres service id is unknown after template deploy. " +
+                        "project(id) did not list a matching service.");
+                }
+
+                var volumeInstanceId = await WaitForVolumeInstanceIdAsync(
+                    serviceId,
+                    managed.Name,
+                    request,
+                    result,
+                    cancellationToken).ConfigureAwait(false);
+                result.VolumeInstanceIds[managed.Name] = volumeInstanceId;
+                await persistAsync().ConfigureAwait(false);
+
+                var listResponse = await _client.VolumeInstanceBackupScheduleListAsync(
+                    volumeInstanceId,
+                    request.Token,
+                    cancellationToken).ConfigureAwait(false);
+                RailwayGraphQLClient.ThrowIfFailed(listResponse, "volumeInstanceBackupScheduleList");
+
+                var existingSchedules = listResponse.Data?.VolumeInstanceBackupScheduleList ?? [];
+                var existingKinds = existingSchedules
+                    .Select(static schedule => schedule.Kind)
+                    .Where(static kind => !string.IsNullOrWhiteSpace(kind))
+                    .Cast<string>()
+                    .ToList();
+                var existingOfficial = existingKinds.Count == 0
+                    ? []
+                    : RailwayVolumeBackupSchedule.Normalize(existingKinds, managed.Name);
+                var union = RailwayVolumeBackupSchedule.Union(requested, existingOfficial, managed.Name);
+
+                if (RailwayVolumeBackupSchedule.IsSubset(requested, existingOfficial))
+                {
+                    PersistScheduleIds(result, managed.Name, existingSchedules);
+                    await persistAsync().ConfigureAwait(false);
+                    await task.CompleteAsync(
+                        new MarkdownString(
+                            $"Volume backup schedule kinds already present for `{managed.Name}`: " +
+                            $"`{string.Join("`, `", union)}`. Mutation skipped."),
+                        CompletionState.Completed,
+                        cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                var update = await _client.VolumeInstanceBackupScheduleUpdateAsync(
+                    union,
+                    volumeInstanceId,
+                    request.Token,
+                    cancellationToken).ConfigureAwait(false);
+                RailwayGraphQLClient.ThrowIfFailed(update, "volumeInstanceBackupScheduleUpdate");
+
+                var refreshed = await _client.VolumeInstanceBackupScheduleListAsync(
+                    volumeInstanceId,
+                    request.Token,
+                    cancellationToken).ConfigureAwait(false);
+                RailwayGraphQLClient.ThrowIfFailed(refreshed, "volumeInstanceBackupScheduleList");
+                PersistScheduleIds(
+                    result,
+                    managed.Name,
+                    refreshed.Data?.VolumeInstanceBackupScheduleList ?? existingSchedules);
+                await persistAsync().ConfigureAwait(false);
+
+                await task.CompleteAsync(
+                    new MarkdownString(
+                        $"Applied volume backup schedule kinds for `{managed.Name}`: " +
+                        $"`{string.Join("`, `", union)}`. Deploy does not wait for a backup to complete."),
+                    CompletionState.Completed,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task EnsureManagedServiceIdAsync(
+        RailwayPlan plan,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        RailwayPlanManagedService managed,
+        CancellationToken cancellationToken)
+    {
+        if (TryGetManagedServiceId(result, managed, out _))
+        {
+            return;
+        }
+
+        var response = await _client.ProjectAsync(result.ProjectId, request.Token, cancellationToken)
+            .ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(response, "project");
+        AdoptServicesFromProject(plan, result, response.Data?.Project);
+    }
+
+    private static bool TryGetManagedServiceId(
+        RailwayApplyResult result,
+        RailwayPlanManagedService managed,
+        out string serviceId)
+    {
+        if (HasServiceId(result, managed.Name))
+        {
+            serviceId = result.ServiceIds[managed.Name];
+            return true;
+        }
+
+        if (HasServiceId(result, managed.TemplateCode))
+        {
+            serviceId = result.ServiceIds[managed.TemplateCode!];
+            result.ServiceIds[managed.Name] = serviceId;
+            return true;
+        }
+
+        serviceId = "";
+        return false;
+    }
+
+    private async Task<string> WaitForVolumeInstanceIdAsync(
+        string serviceId,
+        string serviceName,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        CancellationToken cancellationToken)
+    {
+        var deadline = _options.TimeProvider.GetUtcNow() + _options.VolumeInstanceTimeout;
+        while (true)
+        {
+            var volumeInstanceId = await TryFindVolumeInstanceIdAsync(
+                serviceId,
+                request,
+                result,
+                cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(volumeInstanceId))
+            {
+                return volumeInstanceId;
+            }
+
+            if (_options.TimeProvider.GetUtcNow() >= deadline)
+            {
+                throw new InvalidOperationException(
+                    $"No Railway volume instance matched Postgres service '{serviceName}' (`{serviceId}`) " +
+                    "in environment.volumeInstances. The official template may still be provisioning, " +
+                    "or the service has no volume. This integration does not invent a volume id.");
+            }
+
+            await Task.Delay(_options.VolumeInstancePollInterval, _options.TimeProvider, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private async Task<string?> TryFindVolumeInstanceIdAsync(
+        string serviceId,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        CancellationToken cancellationToken)
+    {
+        string? after = null;
+        while (true)
+        {
+            var response = await _client.EnvironmentAsync(
+                result.EnvironmentId,
+                result.ProjectId,
+                request.Token,
+                after,
+                first: 50,
+                cancellationToken).ConfigureAwait(false);
+            RailwayGraphQLClient.ThrowIfFailed(response, "environment");
+
+            var connection = response.Data?.Environment?.VolumeInstances;
+            if (connection?.Edges is { } edges)
+            {
+                foreach (var edge in edges)
+                {
+                    if (edge.Node is { } node &&
+                        !string.IsNullOrWhiteSpace(node.Id) &&
+                        string.Equals(node.ServiceId, serviceId, StringComparison.Ordinal))
+                    {
+                        return node.Id;
+                    }
+                }
+            }
+
+            if (connection?.PageInfo is not { HasNextPage: true } pageInfo ||
+                string.IsNullOrWhiteSpace(pageInfo.EndCursor))
+            {
+                return null;
+            }
+
+            after = pageInfo.EndCursor;
+        }
+    }
+
+    private static void PersistScheduleIds(
+        RailwayApplyResult result,
+        string serviceName,
+        IEnumerable<RailwayVolumeInstanceBackupSchedule> schedules)
+    {
+        foreach (var schedule in schedules)
+        {
+            if (string.IsNullOrWhiteSpace(schedule.Id) || string.IsNullOrWhiteSpace(schedule.Kind))
+            {
+                continue;
+            }
+
+            result.VolumeBackupScheduleIds[$"{serviceName}-{schedule.Kind}"] = schedule.Id;
+        }
+    }
 
     private async Task ApplyBucketsAsync(
         RailwayPlan plan,

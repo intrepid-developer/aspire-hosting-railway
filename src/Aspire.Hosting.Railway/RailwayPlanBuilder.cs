@@ -69,7 +69,8 @@ public static class RailwayPlanBuilder
                     Name = managed.ServiceName,
                     Kind = managed.Kind,
                     TemplateCode = managed.TemplateCode,
-                    PrivateReferenceVariable = managed.PrivateReferenceVariable
+                    PrivateReferenceVariable = managed.PrivateReferenceVariable,
+                    VolumeBackupScheduleKinds = CopyVolumeBackupScheduleKinds(managed)
                 });
             }
         }
@@ -109,6 +110,7 @@ public static class RailwayPlanBuilder
         }
 
         RailwayServiceComputeSettings.ValidatePlanServices(plan);
+        RailwayVolumeBackupSchedule.ValidatePlan(plan);
         return plan;
     }
 
@@ -163,6 +165,17 @@ public static class RailwayPlanBuilder
         return environmentKey.StartsWith(ConnectionStringPrefix, StringComparison.Ordinal)
             ? environmentKey[ConnectionStringPrefix.Length..]
             : null;
+    }
+
+    private static List<string>? CopyVolumeBackupScheduleKinds(IRailwayManagedServiceAnnotation managed)
+    {
+        if (managed.VolumeBackupScheduleKinds is not { Count: > 0 } kinds)
+        {
+            return null;
+        }
+
+        var normalized = RailwayVolumeBackupSchedule.Normalize(kinds, managed.ServiceName);
+        return normalized.Count == 0 ? null : normalized;
     }
 
     private static void RejectScaleOnVolumeBackedResource(

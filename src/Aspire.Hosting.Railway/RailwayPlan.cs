@@ -264,4 +264,14 @@ public sealed class RailwayPlanManagedService
     /// </summary>
     [JsonPropertyName("privateReferenceVariable")]
     public string? PrivateReferenceVariable { get; set; }
+
+    /// <summary>
+    /// Gets or sets requested volume backup schedule kinds
+    /// (<c>DAILY</c>, <c>WEEKLY</c>, <c>MONTHLY</c>) for official
+    /// Postgres. Omitted when empty. GraphQL writes
+    /// <c>volumeInstanceBackupScheduleUpdate(kinds:)</c>. Unset leaves
+    /// the dashboard as-is. Hostnames and tokens are never involved.
+    /// </summary>
+    [JsonPropertyName("volumeBackupScheduleKinds")]
+    public List<string>? VolumeBackupScheduleKinds { get; set; }
 }

@@ -530,6 +530,82 @@ public sealed class RailwayGraphQLClient
             token,
             cancellationToken);
 
+    /// <summary>
+    /// Sends <c>environment</c> and selects <c>volumeInstances</c>.
+    /// <paramref name="id"/> is required. <paramref name="projectId"/>,
+    /// <paramref name="after"/>, and <paramref name="first"/> are
+    /// omitted when unset.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<EnvironmentData>> EnvironmentAsync(
+        string id,
+        string? projectId,
+        string token,
+        string? after = null,
+        int? first = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        return SendAsync<EnvironmentData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.Environment,
+                OperationName = "environment",
+                Variables = new { id, projectId, after, first }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>Sends <c>volumeInstanceBackupScheduleList</c>.</summary>
+    public Task<RailwayGraphQLResponse<VolumeInstanceBackupScheduleListData>> VolumeInstanceBackupScheduleListAsync(
+        string volumeInstanceId,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(volumeInstanceId);
+        return SendAsync<VolumeInstanceBackupScheduleListData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.VolumeInstanceBackupScheduleList,
+                OperationName = "volumeInstanceBackupScheduleList",
+                Variables = new { volumeInstanceId }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends <c>volumeInstanceBackupScheduleUpdate</c>.
+    /// <paramref name="kinds"/> is <c>[VolumeInstanceBackupScheduleKind!]!</c>
+    /// (<c>DAILY</c> / <c>WEEKLY</c> / <c>MONTHLY</c>). Return is
+    /// <c>Boolean!</c>. Do not send <c>null</c>.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<JsonElement>> VolumeInstanceBackupScheduleUpdateAsync(
+        IReadOnlyList<string> kinds,
+        string volumeInstanceId,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        ArgumentException.ThrowIfNullOrWhiteSpace(volumeInstanceId);
+        if (kinds.Count == 0)
+        {
+            throw new ArgumentException(
+                "volumeInstanceBackupScheduleUpdate requires at least one VolumeInstanceBackupScheduleKind.",
+                nameof(kinds));
+        }
+
+        return SendAsync<JsonElement>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.VolumeInstanceBackupScheduleUpdate,
+                OperationName = "volumeInstanceBackupScheduleUpdate",
+                Variables = new { kinds, volumeInstanceId }
+            },
+            token,
+            cancellationToken);
+    }
+
     /// <summary>Sends <c>regions</c>.</summary>
     public Task<RailwayGraphQLResponse<JsonElement>> RegionsAsync(
         string token,

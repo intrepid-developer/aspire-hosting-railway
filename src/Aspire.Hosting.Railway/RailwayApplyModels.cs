@@ -78,6 +78,21 @@ public sealed class RailwayApplyResult
     /// </summary>
     public Dictionary<string, string> CustomDomainIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Gets volume instance ids keyed by managed service name.
+    /// Flatten-safe objects only — never backup payloads.
+    /// </summary>
+    public Dictionary<string, string> VolumeInstanceIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets volume backup schedule ids keyed by
+    /// <c>{serviceName}-{kind}</c> (for example <c>postgres-DAILY</c>).
+    /// Flatten-safe objects only — never backup payloads. Keys must not
+    /// contain colons (Aspire's file state manager flattens on <c>:</c>).
+    /// </summary>
+    public Dictionary<string, string> VolumeBackupScheduleIds { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Gets template codes that were applied (or already present) in this environment.</summary>
     public List<string> AppliedTemplateCodes { get; init; } = [];
 
@@ -115,7 +130,20 @@ public sealed class RailwayApplyOptions
     /// </summary>
     public TimeSpan BucketCredentialsTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
-    /// <summary>Gets or sets the time provider used for workflow and bucket-credential deadlines. Tests may substitute a fake.</summary>
+    /// <summary>
+    /// Gets or sets how long to wait between <c>environment.volumeInstances</c>
+    /// retries after official Postgres template deploy while Railway
+    /// provisions a <c>VolumeInstance</c>.
+    /// </summary>
+    public TimeSpan VolumeInstancePollInterval { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Gets or sets the maximum time to wait for a matching
+    /// <c>VolumeInstance</c> after template deploy.
+    /// </summary>
+    public TimeSpan VolumeInstanceTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>Gets or sets the time provider used for workflow, bucket-credential, and volume-instance deadlines. Tests may substitute a fake.</summary>
     public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 }
 
@@ -131,6 +159,8 @@ internal sealed class RailwayDeploymentSnapshot
     public Dictionary<string, string> ServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> BucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> CustomDomainIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> VolumeInstanceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> VolumeBackupScheduleIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> TemplateCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ProductionServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ProductionBucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -149,6 +179,8 @@ internal static class RailwayDeploymentStateStore
     internal const string ServicesKey = "Services";
     internal const string BucketsKey = "Buckets";
     internal const string CustomDomainsKey = "CustomDomains";
+    internal const string VolumeInstancesKey = "VolumeInstances";
+    internal const string VolumeBackupSchedulesKey = "VolumeBackupSchedules";
     internal const string TemplatesKey = "Templates";
 
     /// <summary>
@@ -195,6 +227,12 @@ internal static class RailwayDeploymentStateStore
         var customDomainsRoot = section.Data[CustomDomainsKey] as JsonObject;
         CopyStringMap(customDomainsRoot?[railwayEnvironmentName] as JsonObject, snapshot.CustomDomainIds);
 
+        var volumeInstancesRoot = section.Data[VolumeInstancesKey] as JsonObject;
+        CopyStringMap(volumeInstancesRoot?[railwayEnvironmentName] as JsonObject, snapshot.VolumeInstanceIds);
+
+        var volumeBackupSchedulesRoot = section.Data[VolumeBackupSchedulesKey] as JsonObject;
+        CopyStringMap(volumeBackupSchedulesRoot?[railwayEnvironmentName] as JsonObject, snapshot.VolumeBackupScheduleIds);
+
         var templatesRoot = section.Data[TemplatesKey] as JsonObject;
         CopyTemplateCodes(templatesRoot?[railwayEnvironmentName], snapshot.TemplateCodes);
         CopyTemplateCodes(templatesRoot?["production"], snapshot.ProductionTemplateCodes);
@@ -227,6 +265,8 @@ internal static class RailwayDeploymentStateStore
         WriteScopedMap(section.Data, ServicesKey, railwayEnvironmentName, result.ServiceIds);
         WriteScopedMap(section.Data, BucketsKey, railwayEnvironmentName, result.BucketIds);
         WriteScopedMap(section.Data, CustomDomainsKey, railwayEnvironmentName, result.CustomDomainIds);
+        WriteScopedMap(section.Data, VolumeInstancesKey, railwayEnvironmentName, result.VolumeInstanceIds);
+        WriteScopedMap(section.Data, VolumeBackupSchedulesKey, railwayEnvironmentName, result.VolumeBackupScheduleIds);
 
         var templatesRoot = section.Data[TemplatesKey] as JsonObject ?? [];
         // Persist as an object (not a JSON array). Aspire FileDeploymentStateManager

@@ -27,4 +27,12 @@ public interface IRailwayManagedServiceAnnotation : IResourceAnnotation
     /// Gets the Railway variable referenced from consuming services, for example <c>DATABASE_URL</c>.
     /// </summary>
     public string? PrivateReferenceVariable { get; }
+
+    /// <summary>
+    /// Gets requested volume backup schedule kinds (<c>DAILY</c>,
+    /// <c>WEEKLY</c>, <c>MONTHLY</c>) for official Postgres. Null or empty
+    /// omits the field so deploy leaves the dashboard as-is. Core apply
+    /// reads this without referencing the PostgreSQL hosting package.
+    /// </summary>
+    public IReadOnlyList<string>? VolumeBackupScheduleKinds { get; }
 }

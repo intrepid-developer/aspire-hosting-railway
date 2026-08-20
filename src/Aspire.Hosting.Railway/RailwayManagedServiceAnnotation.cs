@@ -12,11 +12,16 @@ public sealed class RailwayManagedServiceAnnotation : IRailwayManagedServiceAnno
     /// <param name="serviceName">Railway service name used in <c>${{service.VAR}}</c> references.</param>
     /// <param name="templateCode">Railway template code, or <see langword="null"/> for buckets.</param>
     /// <param name="privateReferenceVariable">Variable name referenced by consumers, if any.</param>
+    /// <param name="volumeBackupScheduleKinds">
+    /// Optional GraphQL <c>VolumeInstanceBackupScheduleKind</c> strings
+    /// (<c>DAILY</c>, <c>WEEKLY</c>, <c>MONTHLY</c>). Omit when empty.
+    /// </param>
     public RailwayManagedServiceAnnotation(
         string kind,
         string serviceName,
         string? templateCode = null,
-        string? privateReferenceVariable = null)
+        string? privateReferenceVariable = null,
+        IReadOnlyList<string>? volumeBackupScheduleKinds = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(kind);
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
@@ -25,6 +30,9 @@ public sealed class RailwayManagedServiceAnnotation : IRailwayManagedServiceAnno
         ServiceName = serviceName;
         TemplateCode = templateCode;
         PrivateReferenceVariable = privateReferenceVariable;
+        VolumeBackupScheduleKinds = volumeBackupScheduleKinds is { Count: > 0 }
+            ? volumeBackupScheduleKinds
+            : null;
     }
 
     /// <inheritdoc />
@@ -38,4 +46,7 @@ public sealed class RailwayManagedServiceAnnotation : IRailwayManagedServiceAnno
 
     /// <inheritdoc />
     public string? PrivateReferenceVariable { get; }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string>? VolumeBackupScheduleKinds { get; }
 }
