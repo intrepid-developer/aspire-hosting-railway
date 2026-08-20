@@ -236,6 +236,16 @@ public static class RailwayPlanBuilder
         {
             service.HealthcheckTimeout = healthcheckTimeout;
         }
+
+        if (railwayService.RestartPolicy is { } restartPolicy)
+        {
+            service.RestartPolicyType = RailwayRestartPolicyMapper.ToGraphQL(restartPolicy);
+        }
+
+        if (railwayService.RestartPolicyMaxRetries is { } restartRetries)
+        {
+            service.RestartPolicyMaxRetries = restartRetries;
+        }
     }
 
     private static RailwayServiceResource? GetConfiguredRailwayService(

@@ -24,6 +24,8 @@ builder.AddProject<Projects.Api>("api")
         s.Cpu = 1;
         s.MemoryGb = 2;
         s.HealthcheckTimeoutSeconds = 120;
+        s.RestartPolicy = RailwayRestartPolicy.OnFailure;
+        s.RestartPolicyMaxRetries = 10;
     });
 
 builder.Build().Run();

@@ -107,6 +107,40 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public int? HealthcheckTimeoutSeconds { get; set; }
 
     /// <summary>
+    /// Gets or sets the Railway restart policy. Maps to
+    /// <c>ServiceInstanceUpdateInput.restartPolicyType</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Members are the official GraphQL
+    /// <c>RestartPolicyType</c> values from
+    /// <see href="https://docs.railway.com/deployments/restart-policy"/>.
+    /// Unset omits the field so Railway's dashboard default (On Failure)
+    /// applies. Either this or <see cref="RestartPolicyMaxRetries"/> can be
+    /// set alone. There is no Aspire-core annotation; configure this through
+    /// <c>PublishAsRailwayService</c>. Not sent for
+    /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> /
+    /// buckets. Free/trial plan caps (Always unavailable, On Failure capped
+    /// at 10) are plan-specific and are not hardcoded — over-plan values fail
+    /// with the GraphQL error. With multiple replicas, only the crashed
+    /// replica restarts.
+    /// </remarks>
+    public RailwayRestartPolicy? RestartPolicy { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum restart retries. Maps to
+    /// <c>ServiceInstanceUpdateInput.restartPolicyMaxRetries</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Must be greater than 0. Unset omits the field so
+    /// Railway's dashboard default (10 retries) applies. Either this or
+    /// <see cref="RestartPolicy"/> can be set alone. There is no Aspire-core
+    /// annotation; configure this through <c>PublishAsRailwayService</c>. Not
+    /// sent for <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c>
+    /// / buckets. Free/trial On Failure caps are not hardcoded.
+    /// </remarks>
+    public int? RestartPolicyMaxRetries { get; set; }
+
+    /// <summary>
     /// Gets or sets a multi-region replica map of <see cref="RailwayRegion"/> to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>

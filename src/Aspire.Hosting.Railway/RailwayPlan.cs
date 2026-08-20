@@ -154,6 +154,25 @@ public sealed class RailwayPlanService
     /// </summary>
     [JsonPropertyName("healthcheckTimeout")]
     public int? HealthcheckTimeout { get; set; }
+
+    /// <summary>
+    /// Gets or sets the GraphQL <c>RestartPolicyType</c> string when a restart
+    /// policy was requested. Plan JSON stores <c>ON_FAILURE</c>,
+    /// <c>ALWAYS</c>, or <c>NEVER</c>. AppHosts set
+    /// <see cref="RailwayRestartPolicy"/> on <see cref="RailwayServiceResource"/>;
+    /// unknown strings fail at apply. Omitted when unset (Railway default On
+    /// Failure). GraphQL writes <c>restartPolicyType</c>.
+    /// </summary>
+    [JsonPropertyName("restartPolicyType")]
+    public string? RestartPolicyType { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum restart retries from
+    /// <c>PublishAsRailwayService</c>. Omitted when unset (Railway default 10).
+    /// GraphQL writes <c>restartPolicyMaxRetries</c>.
+    /// </summary>
+    [JsonPropertyName("restartPolicyMaxRetries")]
+    public int? RestartPolicyMaxRetries { get; set; }
 }
 
 /// <summary>

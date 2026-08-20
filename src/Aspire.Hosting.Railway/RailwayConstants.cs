@@ -70,4 +70,12 @@ public static class RailwayConstants
     /// ids (us-west1, us-east4, europe-west4).
     /// </summary>
     public static readonly IReadOnlyList<string> OfficialRegionIds = RailwayRegionMapper.OfficialRegionIds;
+
+    /// <summary>
+    /// Official GraphQL <c>RestartPolicyType</c> values confirmed on the live
+    /// schema 2026-08-20. AppHosts set <see cref="RailwayRestartPolicy"/>;
+    /// these strings are the GraphQL / plan values.
+    /// </summary>
+    public static readonly IReadOnlyList<string> OfficialRestartPolicyTypes =
+        RailwayRestartPolicyMapper.OfficialTypes;
 }

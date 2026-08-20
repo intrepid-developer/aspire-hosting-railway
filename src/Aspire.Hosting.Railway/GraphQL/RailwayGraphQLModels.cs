@@ -106,6 +106,25 @@ public sealed class ServiceInstanceUpdateInput
     /// </summary>
     [JsonPropertyName("healthcheckTimeout")]
     public int? HealthcheckTimeout { get; set; }
+
+    /// <summary>
+    /// Gets or sets the restart policy. Confirmed
+    /// <c>ServiceInstanceUpdateInput.restartPolicyType</c>
+    /// (<c>RestartPolicyType</c>: <c>ALWAYS</c> | <c>NEVER</c> |
+    /// <c>ON_FAILURE</c>, live schema 2026-08-20). Omitted when unset
+    /// (Railway default On Failure). Do not send <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("restartPolicyType")]
+    public string? RestartPolicyType { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum restart retries. Confirmed
+    /// <c>ServiceInstanceUpdateInput.restartPolicyMaxRetries</c> (Int, live
+    /// schema 2026-08-20). Omitted when unset (Railway default 10). Do not
+    /// send <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("restartPolicyMaxRetries")]
+    public int? RestartPolicyMaxRetries { get; set; }
 }
 
 /// <summary>
