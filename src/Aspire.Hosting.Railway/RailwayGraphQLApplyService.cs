@@ -105,6 +105,11 @@ public sealed class RailwayGraphQLApplyService
             result.BucketIds[pair.Key] = pair.Value;
         }
 
+        foreach (var pair in snapshot.CustomDomainIds)
+        {
+            result.CustomDomainIds[pair.Key] = pair.Value;
+        }
+
         result.AppliedTemplateCodes.AddRange(snapshot.TemplateCodes);
 
         if (duplicatedProduction)
@@ -664,7 +669,8 @@ public sealed class RailwayGraphQLApplyService
                             new ServiceDomainCreateInput
                             {
                                 ServiceId = serviceId,
-                                EnvironmentId = result.EnvironmentId
+                                EnvironmentId = result.EnvironmentId,
+                                TargetPort = service.TargetPort
                             },
                             request.Token,
                             cancellationToken).ConfigureAwait(false);
@@ -675,6 +681,15 @@ public sealed class RailwayGraphQLApplyService
                         result.Warnings.Add(exception.Message);
                         reportingStep.Log(Microsoft.Extensions.Logging.LogLevel.Warning, exception.Message);
                     }
+
+                    await ApplyCustomDomainsAsync(
+                        service,
+                        request,
+                        result,
+                        serviceId,
+                        reportingStep,
+                        persistAsync,
+                        cancellationToken).ConfigureAwait(false);
                 }
 
                 var deploy = await _client.ServiceInstanceDeployV2Async(
@@ -691,6 +706,171 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    private async Task ApplyCustomDomainsAsync(
+        RailwayPlanService service,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        string serviceId,
+        IReportingStep reportingStep,
+        Func<Task> persistAsync,
+        CancellationToken cancellationToken)
+    {
+        if (service.CustomDomains is not { Count: > 0 } hostnames)
+        {
+            return;
+        }
+
+        var listResponse = await _client.DomainsAsync(
+            result.EnvironmentId,
+            result.ProjectId,
+            serviceId,
+            request.Token,
+            cancellationToken).ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(listResponse, "domains");
+
+        var existing = listResponse.Data?.Domains?.CustomDomains ?? [];
+
+        foreach (var hostname in hostnames)
+        {
+            var task = await reportingStep.CreateTaskAsync(
+                new MarkdownString($"Custom domain `{hostname}` for **{service.Name}**"),
+                cancellationToken).ConfigureAwait(false);
+            await using (task.ConfigureAwait(false))
+            {
+                var domain = await EnsureCustomDomainAsync(
+                    hostname,
+                    service.TargetPort,
+                    existing,
+                    request,
+                    result,
+                    serviceId,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (string.IsNullOrWhiteSpace(domain.Id))
+                {
+                    throw new InvalidOperationException(
+                        $"Railway did not return a custom domain id for '{hostname}'.");
+                }
+
+                result.CustomDomainIds[hostname] = domain.Id;
+                await persistAsync().ConfigureAwait(false);
+                await task.CompleteAsync(
+                    new MarkdownString(FormatCustomDomainReport(hostname, domain)),
+                    CompletionState.Completed,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task<RailwayCustomDomain> EnsureCustomDomainAsync(
+        string hostname,
+        int? targetPort,
+        IReadOnlyList<RailwayCustomDomain> existing,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        string serviceId,
+        CancellationToken cancellationToken)
+    {
+        var match = existing.FirstOrDefault(candidate =>
+            string.Equals(candidate.Domain, hostname, StringComparison.OrdinalIgnoreCase));
+        if (match is not null && !string.IsNullOrWhiteSpace(match.Id))
+        {
+            if (targetPort is { } port && match.TargetPort != port)
+            {
+                var updated = await _client.CustomDomainUpdateAsync(
+                    result.EnvironmentId,
+                    match.Id,
+                    port,
+                    request.Token,
+                    cancellationToken).ConfigureAwait(false);
+                RailwayGraphQLClient.ThrowIfFailed(updated, "customDomainUpdate");
+                return updated.Data?.CustomDomainUpdate
+                    ?? throw new InvalidOperationException(
+                        $"customDomainUpdate returned no custom domain for '{hostname}'.");
+            }
+
+            var queried = await _client.CustomDomainAsync(
+                match.Id,
+                result.ProjectId,
+                request.Token,
+                cancellationToken).ConfigureAwait(false);
+            RailwayGraphQLClient.ThrowIfFailed(queried, "customDomain");
+            return queried.Data?.CustomDomain
+                ?? throw new InvalidOperationException(
+                    $"customDomain returned no custom domain for '{hostname}'.");
+        }
+
+        var available = await _client.CustomDomainAvailableAsync(
+            hostname,
+            request.Token,
+            cancellationToken).ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(available, "customDomainAvailable");
+
+        if (available.Data?.CustomDomainAvailable is { Available: false } unavailable)
+        {
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(unavailable.Message)
+                    ? $"Custom domain '{hostname}' is not available."
+                    : $"Custom domain '{hostname}' is not available: {unavailable.Message}");
+        }
+
+        var created = await _client.CustomDomainCreateAsync(
+            new CustomDomainCreateInput
+            {
+                Domain = hostname,
+                EnvironmentId = result.EnvironmentId,
+                ProjectId = result.ProjectId,
+                ServiceId = serviceId,
+                TargetPort = targetPort
+            },
+            request.Token,
+            cancellationToken).ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(created, "customDomainCreate");
+        return created.Data?.CustomDomainCreate
+            ?? throw new InvalidOperationException(
+                $"customDomainCreate returned no custom domain for '{hostname}'.");
+    }
+
+    private static string FormatCustomDomainReport(string hostname, RailwayCustomDomain domain)
+    {
+        var lines = new List<string>
+        {
+            $"Custom domain `{hostname}`."
+        };
+
+        if (domain.Status?.DnsRecords is { Count: > 0 } records)
+        {
+            lines.Add("DNS records (as Railway returned them; this integration does not rewrite record types):");
+            foreach (var record in records)
+            {
+                lines.Add(
+                    $"- `{record.RecordType}` `{record.Fqdn}` → `{record.RequiredValue}`");
+            }
+        }
+
+        if (domain.Status is { } status)
+        {
+            if (!string.IsNullOrWhiteSpace(status.VerificationDnsHost) ||
+                !string.IsNullOrWhiteSpace(status.VerificationToken))
+            {
+                lines.Add($"Verification TXT host: `{status.VerificationDnsHost}`");
+                lines.Add($"Verification token: `{status.VerificationToken}`");
+            }
+
+            lines.Add($"Verified: {status.Verified.ToString().ToLowerInvariant()}");
+            if (!string.IsNullOrWhiteSpace(status.CertificateStatus))
+            {
+                lines.Add($"Certificate: `{status.CertificateStatus}`");
+            }
+        }
+
+        lines.Add(
+            "Add both the routing record and the verification TXT. Missing TXT returns 404 even if the routing record resolves. " +
+            "Railway issues Let's Encrypt after verify. This integration does not talk to your DNS provider. " +
+            "Pending DNS or certificate does not fail the deploy.");
+        return string.Join("\n", lines);
     }
 
     private async Task CommitStagedAsync(

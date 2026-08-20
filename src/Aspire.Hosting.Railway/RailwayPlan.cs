@@ -217,6 +217,23 @@ public sealed class RailwayPlanService
     /// </summary>
     [JsonPropertyName("cronSchedule")]
     public string? CronSchedule { get; set; }
+
+    /// <summary>
+    /// Gets or sets custom hostnames from
+    /// <c>PublishAsRailwayService</c> <c>CustomDomains</c>. Omitted when
+    /// empty. Hostnames only — never verification tokens. Deploy creates or
+    /// adopts via confirmed <c>customDomainCreate</c> / <c>domains</c>.
+    /// </summary>
+    [JsonPropertyName("customDomains")]
+    public List<string>? CustomDomains { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Aspire HTTP endpoint target port when present.
+    /// Omitted when unset. Sent as optional GraphQL <c>targetPort</c> on
+    /// <c>serviceDomainCreate</c> and <c>customDomainCreate</c>.
+    /// </summary>
+    [JsonPropertyName("targetPort")]
+    public int? TargetPort { get; set; }
 }
 
 /// <summary>

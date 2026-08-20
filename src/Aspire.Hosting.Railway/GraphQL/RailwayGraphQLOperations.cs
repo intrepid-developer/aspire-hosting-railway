@@ -139,12 +139,154 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Creates a Railway-provided HTTP domain.</summary>
+    /// <summary>
+    /// Creates a Railway-provided HTTP domain. Confirmed
+    /// <c>ServiceDomainCreateInput.targetPort</c> (Int, live schema
+    /// 2026-08-20) is optional; omit when unset.
+    /// </summary>
     public const string ServiceDomainCreate = """
         mutation serviceDomainCreate($input: ServiceDomainCreateInput!) {
           serviceDomainCreate(input: $input) {
             id
             domain
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Lists Railway-provided and custom domains for a service. Confirmed
+    /// <c>domains(environmentId, projectId, serviceId)</c> (live schema
+    /// 2026-08-20) returns <c>AllDomains</c>. Always pass all three ids.
+    /// </summary>
+    public const string Domains = """
+        query domains($environmentId: String!, $projectId: String!, $serviceId: String!) {
+          domains(environmentId: $environmentId, projectId: $projectId, serviceId: $serviceId) {
+            customDomains {
+              id
+              domain
+              targetPort
+              status {
+                verified
+                verificationToken
+                verificationDnsHost
+                certificateStatus
+                dnsRecords {
+                  fqdn
+                  recordType
+                  requiredValue
+                  purpose
+                  status
+                }
+              }
+            }
+            serviceDomains {
+              id
+              domain
+            }
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Reads one custom domain by id. Confirmed
+    /// <c>customDomain(id, projectId)</c> (live schema 2026-08-20). Used to
+    /// re-query status after adopt. <c>verificationToken</c> lives on
+    /// <c>CustomDomainStatus</c>, not on <c>DNSRecords</c>.
+    /// </summary>
+    public const string CustomDomain = """
+        query customDomain($id: String!, $projectId: String!) {
+          customDomain(id: $id, projectId: $projectId) {
+            id
+            domain
+            targetPort
+            status {
+              verified
+              verificationToken
+              verificationDnsHost
+              certificateStatus
+              dnsRecords {
+                fqdn
+                recordType
+                requiredValue
+                purpose
+                status
+              }
+            }
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Checks whether a custom hostname can be added. Confirmed
+    /// <c>customDomainAvailable(domain)</c> (live schema 2026-08-20) returns
+    /// <c>DomainAvailable { available, message }</c>.
+    /// </summary>
+    public const string CustomDomainAvailable = """
+        query customDomainAvailable($domain: String!) {
+          customDomainAvailable(domain: $domain) {
+            available
+            message
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Creates a custom hostname. Confirmed
+    /// <c>customDomainCreate(input: CustomDomainCreateInput!)</c> (live
+    /// schema 2026-08-20). Required input: <c>domain</c>,
+    /// <c>environmentId</c>, <c>projectId</c>, <c>serviceId</c>. Optional
+    /// <c>targetPort</c> Int; omit when unset. Do not send <c>null</c>. Do
+    /// not call <c>customDomainDelete</c> or
+    /// <c>customDomainIssueCertificate</c> on this path.
+    /// </summary>
+    public const string CustomDomainCreate = """
+        mutation customDomainCreate($input: CustomDomainCreateInput!) {
+          customDomainCreate(input: $input) {
+            id
+            domain
+            targetPort
+            status {
+              verified
+              verificationToken
+              verificationDnsHost
+              certificateStatus
+              dnsRecords {
+                fqdn
+                recordType
+                requiredValue
+                purpose
+                status
+              }
+            }
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Updates an adopted custom domain target port. Confirmed
+    /// <c>customDomainUpdate(environmentId, id, targetPort)</c> (live schema
+    /// 2026-08-20). Call only when the Aspire HTTP target port is known and
+    /// differs from the adopted domain. Always pass <c>environmentId</c>.
+    /// </summary>
+    public const string CustomDomainUpdate = """
+        mutation customDomainUpdate($environmentId: String!, $id: String!, $targetPort: Int) {
+          customDomainUpdate(environmentId: $environmentId, id: $id, targetPort: $targetPort) {
+            id
+            domain
+            targetPort
+            status {
+              verified
+              verificationToken
+              verificationDnsHost
+              certificateStatus
+              dnsRecords {
+                fqdn
+                recordType
+                requiredValue
+                purpose
+                status
+              }
+            }
           }
         }
         """;

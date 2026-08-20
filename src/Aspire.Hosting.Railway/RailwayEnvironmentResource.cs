@@ -475,7 +475,7 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
                 request.ServiceImages[service.Name] = image;
             }
 
-            if (resource is not null && HasExternalHttpEndpoint(resource))
+            if (resource is not null && RailwayHttpEndpointMapper.HasExternalHttpEndpoint(resource))
             {
                 request.ExternalHttpServices.Add(service.Name);
             }
@@ -686,19 +686,6 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         {
             return null;
         }
-    }
-
-    private static bool HasExternalHttpEndpoint(IResource resource)
-    {
-        if (!resource.TryGetEndpoints(out var endpoints))
-        {
-            return false;
-        }
-
-        return endpoints.Any(endpoint =>
-            endpoint.IsExternal &&
-            (string.Equals(endpoint.UriScheme, "http", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(endpoint.UriScheme, "https", StringComparison.OrdinalIgnoreCase)));
     }
 
     private string GetOutputDirectory(PipelineStepContext context)

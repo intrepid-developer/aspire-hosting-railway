@@ -250,6 +250,32 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public string? CronSchedule { get; set; }
 
     /// <summary>
+    /// Gets the custom hostnames to bind on this service (for example
+    /// <c>api.example.com</c>, apex <c>example.com</c>, or
+    /// <c>*.example.com</c>). v1 is hostname strings only.
+    /// </summary>
+    /// <remarks>
+    /// There is no Aspire-core custom-domain annotation; configure this
+    /// through <c>PublishAsRailwayService</c>. Requires
+    /// <c>WithExternalHttpEndpoints()</c> — private services get neither a
+    /// Railway <c>*.up.railway.app</c> service domain nor a custom hostname.
+    /// Empty or whitespace hostnames fail. Duplicates in this list fail.
+    /// Hostnames are not secretly lowercased; adopt matches existing Railway
+    /// domains case-insensitively. Apex, subdomain, and wildcard all use
+    /// confirmed <c>customDomainCreate</c>. This integration does not talk to
+    /// the user's DNS provider. Railway plan caps are not hardcoded; GraphQL
+    /// errors are surfaced. Optional GraphQL <c>targetPort</c> comes from the
+    /// Aspire HTTP endpoint when present — there is no separate AppHost
+    /// setter. Not sent for <c>PublishAsRailwayPostgres</c> /
+    /// <c>PublishAsRailwayRedis</c> / buckets. Destroy of domains is a later
+    /// slice. See
+    /// <see href="https://docs.railway.com/networking/domains/working-with-domains"/>
+    /// and
+    /// <see href="https://docs.railway.com/integrations/api/manage-domains"/>.
+    /// </remarks>
+    public List<string> CustomDomains { get; } = [];
+
+    /// <summary>
     /// Gets or sets a multi-region replica map of <see cref="RailwayRegion"/> to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>

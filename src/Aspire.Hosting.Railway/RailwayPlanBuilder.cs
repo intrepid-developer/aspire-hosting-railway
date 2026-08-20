@@ -201,6 +201,11 @@ public static class RailwayPlanBuilder
             service.HealthcheckPath = healthcheckPath;
         }
 
+        if (RailwayHttpEndpointMapper.TryGetExternalHttpTargetPort(resource) is { } targetPort)
+        {
+            service.TargetPort = targetPort;
+        }
+
         var railwayService = GetConfiguredRailwayService(resource, environment);
         if (railwayService is null)
         {
@@ -270,6 +275,11 @@ public static class RailwayPlanBuilder
         if (railwayService.CronSchedule is not null)
         {
             service.CronSchedule = railwayService.CronSchedule;
+        }
+
+        if (railwayService.CustomDomains is { Count: > 0 } customDomains)
+        {
+            service.CustomDomains = [..customDomains];
         }
     }
 
