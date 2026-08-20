@@ -3,9 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/vpre/IntrepidDeveloper.Aspire.Hosting.Railway.svg?label=nuget)](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Aspire 13.5 hosting so `aspire publish` and `aspire deploy` provision [Railway](https://railway.com).
-
-Locally you keep the normal Aspire resource model: official Postgres and Redis, `WithReference`, `WaitFor`, health checks, and the dashboard. Publish writes `railway-plan.json`. Deploy talks to Railway over GraphQL. `aspire run` never needs a Railway token and never calls Railway.
+Aspire 13.5 hosting so `aspire publish` and `aspire deploy` provision [Railway](https://railway.com). Local `aspire run` stays the normal Aspire model and never needs a Railway token.
 
 ## Status
 
@@ -21,7 +19,7 @@ Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.H
 | [`IntrepidDeveloper.Aspire.Hosting.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway.Storage) | `AddRailwayBucket`: local S3-compatible container; Railway bucket on deploy |
 | [`IntrepidDeveloper.Aspire.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Railway.Storage) | Client: `AddRailwayBucketClient` registers `IAmazonS3` |
 
-AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`. Postgres and Redis templates are volume-backed; Railway [replicas cannot be used with volumes](https://docs.railway.com/volumes/reference).
+AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`. Official Postgres and Redis templates are volume-backed, so Railway [replicas cannot be used with them](https://docs.railway.com/volumes/reference).
 
 ## Quick start
 
@@ -64,7 +62,7 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-`AddContainerRegistry` is required for image deploy. Pass the GHCR namespace as the third argument (`<owner>/<repository>`). The two-argument form has no owner/repo, so Aspire would push `ghcr.io/api` and GHCR rejects it. Railway has no registry of its own; without `IContainerRegistry` (GHCR or Docker Hub), deploy of image-based services fails. Aspire currently marks the registry APIs experimental (`ASPIRECOMPUTE003`). The playground sample matches this snippet.
+`AddContainerRegistry` is required (GHCR or Docker Hub; Railway has no registry). Pass owner/repo as the third argument. Aspire marks the registry APIs experimental (`ASPIRECOMPUTE003`). See [Getting started](docs/getting-started.md) for the rest.
 
 In the API project:
 
@@ -84,7 +82,7 @@ dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Storage --prerelease
 dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
 ```
 
-GitHub Packages is still published if you want that feed; see [Getting started](docs/getting-started.md). Do not commit PATs or `packageSourceCredentials`.
+[GitHub Packages feed: see Getting started](docs/getting-started.md#restore-from-github-packages-optional). Do not commit PATs or `packageSourceCredentials`.
 
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
@@ -127,17 +125,24 @@ Local `aspire run` needs no token.
 
 `AddRailwayEnvironment` is the Railway **project** (compute environment). The Railway environment name is mapped from Aspire `--environment`: Production → `production`, Staging → `staging` (lowercase). Override with `WithRailwayEnvironmentName`.
 
-## Limits (honest)
+## Limits
 
-- Railway has **no image registry**. Push to GHCR or Docker Hub, then deploy sets `source.image`. Missing `IContainerRegistry` fails clearly.
-- Scale uses Aspire [`WithReplicas`](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/annotations-overview) → Railway `numReplicas` (single-region) or `multiRegionConfig` (region / multi-region). Never both. Region is `RailwayRegion` (`UsWest2`, `UsEast4`, `EuropeWest4`, `AsiaSoutheast1`); GraphQL gets the official deploy keys (`us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`). Airport codes and older ids are not members. Max 50 replicas. Replicas cannot be used with volumes (Postgres / Redis templates). Sleep-when-idle is `sleepApplication` (no GraphQL field named `serverless`). Per-replica CPU and RAM are Railway-specific (`PublishAsRailwayService` `Cpu` / `MemoryGb`) and apply via `serviceInstanceLimitsUpdate` (`vCPUs` / `memoryGB`). Deploy healthcheck path is Aspire-core [`WithHttpHealthCheck`](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/health-checks) → Railway `healthcheckPath`. Timeout is Railway-specific (`PublishAsRailwayService` `HealthcheckTimeoutSeconds` → `healthcheckTimeout`). Railway probes until HTTP 200, then flips traffic ([healthchecks](https://docs.railway.com/deployments/healthchecks)). It is not continuous monitoring. Origin host is `healthcheck.railway.app`. Volume-backed services still have cutover downtime. Restart policy is Railway-specific (`PublishAsRailwayService` `RestartPolicy` / `RestartPolicyMaxRetries` → `restartPolicyType` / `restartPolicyMaxRetries`). Unset leaves Railway's default (On Failure / 10 retries). See [restart policy](https://docs.railway.com/deployments/restart-policy). Start and pre-deploy commands are Railway-specific (`PublishAsRailwayService` `StartCommand` / `PreDeployCommand` → `startCommand` / `preDeployCommand`). Unset leaves the image ENTRYPOINT/CMD. Aspire `WithArgs` is not mapped. Image/Dockerfile start is exec form — wrap `$PORT` as `/bin/sh -c "exec … $PORT"`. Pre-deploy runs between build and deploy, cannot touch volumes, and a non-zero exit stops the deploy. See [start command](https://docs.railway.com/guides/start-command) and [pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command). Deployment teardown is Railway-specific (`PublishAsRailwayService` `OverlapSeconds` / `DrainingSeconds` → `overlapSeconds` / `drainingSeconds`). After the new deploy is active, the previous replica stays up for the overlap, then SIGTERM, then SIGKILL after the drain. This is in-deploy cutover, not `aspire destroy`. See [deployment teardown](https://docs.railway.com/guides/deployment-teardown). Cron is Railway-specific (`PublishAsRailwayService` `CronSchedule` → `cronSchedule`). Unset leaves an always-on service. Five-field crontab, UTC, minimum every 5 minutes. The service must exit; if it is still running at the next tick, Railway skips. Wrong fit for always-on HTTP APIs. See [cron jobs](https://docs.railway.com/cron-jobs). Custom hostnames are Railway-specific (`PublishAsRailwayService` `CustomDomains` → `customDomainCreate` / adopt via `domains`). Requires `WithExternalHttpEndpoints()`. Deploy reports DNS records plus the verification TXT; missing TXT returns 404 even if CNAME resolves. Railway issues Let's Encrypt after verify. See [working with domains](https://docs.railway.com/networking/domains/working-with-domains). Official Postgres volume backup schedules are Railway-specific (`PublishAsRailwayPostgres` `VolumeBackupDaily` / `VolumeBackupWeekly` / `VolumeBackupMonthly` → confirmed `volumeInstanceBackupScheduleUpdate`). Unset leaves the dashboard as-is. See [volume backups](https://docs.railway.com/volumes/backups). PITR enable is HA-only on the live schema (`enablePitrForHaCluster`) and is not in this slice.
+- Railway has **no image registry**. Push to GHCR or Docker Hub, then deploy sets `source.image`.
 - This integration does not shell out to `railway up`. Railpack has no .NET support; use an image or a Dockerfile.
-- `destroy-{name}` is a stub for project/environment teardown. Confirmed GraphQL operations do not include project or environment delete. It is not the same as in-deploy overlap/drain.
+- `destroy-{name}` is a stub. It is not the same as in-deploy overlap/drain.
 - PR / ephemeral Railway environments are not in this release.
-- MySQL, MongoDB, and HA / PgBouncer are later.
+- MySQL, MongoDB, and HA / PgBouncer are later. PITR enable is HA-only and is not in this slice.
 - Railway buckets are **private**. Use S3 credentials or presigned URLs. They are not on private DNS.
 
-Replica count is Aspire-core `WithReplicas`. Deploy healthcheck path is Aspire-core `WithHttpHealthCheck`. Public HTTP is Aspire-core `WithExternalHttpEndpoints`. Railway region, `sleepApplication`, per-replica CPU/RAM, healthcheck timeout, restart policy, start command, pre-deploy command, deployment teardown, cron schedule, and custom hostnames are set on the materialized service. Official Postgres volume backup schedules are set on `PublishAsRailwayPostgres`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron / custom-domain annotation. `WithArgs` is not mapped to Railway start.
+| Where | Settings |
+| --- | --- |
+| Aspire-core | `WithReplicas`, `WithHttpHealthCheck`, `WithExternalHttpEndpoints` |
+| `PublishAsRailwayService` | `Region` / `ReplicaRegions`, `Serverless`, `Cpu` / `MemoryGb`, `HealthcheckTimeoutSeconds`, `RestartPolicy`, `StartCommand` / `PreDeployCommand`, `OverlapSeconds` / `DrainingSeconds`, `CronSchedule`, `CustomDomains` |
+| `PublishAsRailwayPostgres` | `VolumeBackupDaily` / `Weekly` / `Monthly` |
+
+Full mapping and constraints (5-minute cron floor, no replicas with volumes, cron vs replicas/serverless, DNS TXT for custom domains, image start is exec form / wrap `$PORT`) live in [Publish and deploy](docs/publish-and-deploy.md).
+
+Kitchen-sink service: region, CPU/RAM, sleep-when-idle, healthcheck timeout, restart, start / pre-deploy, overlap / drain, and a custom hostname. Image start is exec form — wrap `$PORT`.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -159,13 +164,21 @@ builder.AddProject<Projects.Api>("api")
         s.DrainingSeconds = 10;
         s.CustomDomains.Add("api.example.com");
     });
+```
 
+Cron worker: five-field crontab, UTC. The service must exit. Do not combine with replicas greater than 1 or `Serverless`.
+
+```csharp
 builder.AddProject<Projects.Worker>("nightly")
     .PublishAsRailwayService(s =>
     {
         s.CronSchedule = "0 3 * * *"; // 03:00 UTC
     });
+```
 
+Multi-region: `ReplicaRegions` wins over `WithReplicas` + `Region`.
+
+```csharp
 builder.AddProject<Projects.Api>("api")
     .WithComputeEnvironment(railway)
     .PublishAsRailwayService(s =>
@@ -179,12 +192,10 @@ builder.AddProject<Projects.Api>("api")
     });
 ```
 
-`RailwayRegion` (`Aspire.Hosting.Railway`) is the closed AppHost type: `UsWest2` → `us-west2`, `UsEast4` → `us-east4-eqdc4a`, `EuropeWest4` → `europe-west4-drams3a`, `AsiaSoutheast1` → `asia-southeast1-eqsg3a`. Airport codes (`sjc`, `iad`, `ams`, `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are not members. GraphQL and `railway-plan.json` still use those official `Region.region` strings. When `ReplicaRegions` is set, it wins over `WithReplicas` + `Region` and deploy sends `multiRegionConfig` only. `WithReplicas` alone sends `numReplicas` for the service's current Railway region. `Serverless` writes `sleepApplication` for every replica of that service. `Cpu` / `MemoryGb` write `vCPUs` / `memoryGB` on `serviceInstanceLimitsUpdate` (after `serviceInstanceUpdate`) and apply to each replica. Values must be greater than 0; Railway plan caps are not hardcoded. `WithHttpHealthCheck` writes `healthcheckPath` on the same `serviceInstanceUpdate` as image/scale. `HealthcheckTimeoutSeconds` writes `healthcheckTimeout` (Int seconds) on that mutation; unset omits the field (Railway default 300). `RestartPolicy` (`RailwayRestartPolicy`) writes `restartPolicyType` (`ON_FAILURE` / `ALWAYS` / `NEVER`) on that same mutation. `RestartPolicyMaxRetries` writes `restartPolicyMaxRetries` (Int); either field can be set alone, and unset omits both so Railway's default (On Failure / 10 retries) applies. Free/trial caps are not hardcoded. With multiple replicas, only the crashed replica restarts ([restart policy](https://docs.railway.com/deployments/restart-policy)). `StartCommand` writes `startCommand` (String) on that same mutation; unset omits it so the image ENTRYPOINT/CMD applies. On the image/Dockerfile path this is exec form — no shell expansion unless wrapped as `/bin/sh -c "exec … $PORT"` ([start command](https://docs.railway.com/guides/start-command)). `PreDeployCommand` writes `preDeployCommand` as a one-element `[String!]` array (migrations). It runs between build and deploy on the private network with the app environment; a non-zero exit is not retried and the deploy stops. The step is a separate container with no volume, so the filesystem does not persist ([pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command)). Either start or pre-deploy can be set alone. Empty or whitespace fails. `OverlapSeconds` writes `overlapSeconds` (Int) on that same mutation; `DrainingSeconds` writes `drainingSeconds` (Int). After the new deploy is active, the previous replica stays up for the overlap, then SIGTERM, then SIGKILL after the drain ([deployment teardown](https://docs.railway.com/guides/deployment-teardown)). Either field can be set alone. Values must be greater than or equal to 0 (0 is no wait / immediate kill). This is in-deploy cutover, not `aspire destroy`. `CronSchedule` writes `cronSchedule` (String) on that same mutation; unset omits it so the service stays always-on. Five-field crontab only, UTC. Railway's minimum frequency is every 5 minutes (`* * * * *` and minute-field `*/1` through `*/4` fail). Timezone names are not converted. The service starts, runs the start command, and must exit. If it is still running at the next tick, Railway skips and does not kill the previous run ([cron jobs](https://docs.railway.com/cron-jobs), [cron workers and queues](https://docs.railway.com/guides/cron-workers-queues)). Wrong fit for always-on HTTP APIs and bots; HTTP healthchecks are a poor fit but are not auto-blocked. Combining cron with replicas greater than 1 or `Serverless = true` fails. `CustomDomains` is a list of hostname strings. Publish writes them as `customDomains` (no tokens). Deploy creates-missing / adopts-existing via confirmed `domains` / `customDomainAvailable` / `customDomainCreate` (live schema 2026-08-20). Requires `WithExternalHttpEndpoints()`. The deploy report prints DNS records plus the verification TXT; missing TXT returns 404 even if CNAME resolves. Railway issues Let's Encrypt after verify ([working with domains](https://docs.railway.com/networking/domains/working-with-domains)). This integration does not talk to your DNS provider. TCP proxies are out of scope. Destroy of domains is a later slice. These input fields were confirmed on the live schema 2026-08-20. Config-as-code `deploy.startCommand` / `deploy.preDeployCommand` / `deploy.overlapSeconds` / `deploy.drainingSeconds` / `deploy.cronSchedule` and the `RAILWAY_DEPLOYMENT_*` variables are mapping only. Managed Redis / buckets do not get these fields. Official Postgres volume backup schedules use `PublishAsRailwayPostgres` (`VolumeBackupDaily` / `VolumeBackupWeekly` / `VolumeBackupMonthly`); publish writes `volumeBackupScheduleKinds` and deploy applies confirmed `volumeInstanceBackupScheduleUpdate` (live schema 2026-08-20) after resolving `environment.volumeInstances` by Postgres service id. Unset omits the field. PITR enable is HA-only on the live schema and is not in this slice. Allow `healthcheck.railway.app` if the app filters Host. The app must listen on `PORT` (Railway's probe uses that). Volume-backed services still have a cutover gap even with a healthcheck.
-
 ## Docs
 
 - [Getting started](docs/getting-started.md) — restore, AppHost, first publish/deploy, token setup
-- [Publish and deploy](docs/publish-and-deploy.md) — pipeline, plan vs apply, adopt, staging, state, images
+- [Publish and deploy](docs/publish-and-deploy.md) — pipeline, plan vs apply, adopt, staging, images, settings
 - [Storage](docs/storage.md) — buckets, local S3Mock, `IAmazonS3`, connection strings
 - [GraphQL](docs/graphql.md) — confirmed operations only
 - [CHANGELOG.md](CHANGELOG.md) — preview.11 and later

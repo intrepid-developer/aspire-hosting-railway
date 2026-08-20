@@ -13,7 +13,7 @@
 
 The hosting package is `IntrepidDeveloper.Aspire.Hosting.Railway.Storage`. It is not the deprecated CommunityToolkit MinIO package. Region is immutable after `bucketCreate`. Railway buckets are **not** on private DNS.
 
-On deploy of an adopted project, apply lists `project.buckets` from the documented `project(id)` query (same confirmed operation that lists services — verified on Railway's GraphQL schema as a Relay connection of `Bucket { id name }`; this is not a new query name). If a planned `Kind = bucket` resource matches a bucket display name (case-insensitive), that id is recorded in `BucketIds` and `bucketCreate` is skipped. `bucketCreate` runs only when no matching bucket exists. A same-name **service** is unrelated and is never passed to `bucketS3Credentials`.
+On deploy of an adopted project, apply lists `project.buckets` from the documented `project(id)` query (same operation that lists services). If a planned bucket matches a display name (case-insensitive), that id is recorded and `bucketCreate` is skipped. `bucketCreate` runs only when no matching bucket exists. A same-name **service** is unrelated and is never passed to `bucketS3Credentials`.
 
 After a real `bucketCreate`, apply retries `bucketS3Credentials` with backoff until a `BucketInstance` exists in the target environment (or the wait times out). Credentials are then used in memory only.
 
