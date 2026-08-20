@@ -13,7 +13,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -67,6 +67,68 @@ jobs:
             echo "No nupkg files to push" >&2
             exit 1
           fi
-          dotnet nuget push "${packages[@]}" \
+
+          # gh release create writes a v* tag, which retriggers this workflow.
+          # GitHub Packages returns 409 Conflict for a version that is already
+          # published; treat that as success so a duplicate pack cannot fail
+          # the job, then still ensure the GitHub Release exists.
+          set +e
+          output="$(dotnet nuget push "${packages[@]}" \
             --source https://nuget.pkg.github.com/intrepid-developer/index.json \
-            --api-key "$NUGET_AUTH_TOKEN"
+            --api-key "$NUGET_AUTH_TOKEN" \
+            --skip-duplicate 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            if printf '%s\n' "$output" | grep -qiE '409|Conflict'; then
+              echo "Version already on GitHub Packages (409 Conflict); continuing."
+            else
+              exit "$status"
+            fi
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+          TARGET: ${{ github.sha }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; skipping create."
+            exit 0
+          fi
+
+          notes_file="$(mktemp)"
+          {
+            awk -v ver="$VERSION" '
+              { sub(/\r$/, "") }
+              BEGIN { heading = "## " ver }
+              $0 == heading { found = 1 }
+              found && $0 ~ /^## / && $0 != heading { exit }
+              found { print }
+            ' CHANGELOG.md
+            echo
+            echo "Packages are on GitHub Packages: https://nuget.pkg.github.com/intrepid-developer/index.json"
+          } > "$notes_file"
+
+          if ! tr -d '\r' < CHANGELOG.md | grep -Fxq "## ${VERSION}"; then
+            echo "No ## ${VERSION} section in CHANGELOG.md; notes will only mention GitHub Packages." >&2
+          fi
+
+          echo "Release notes:"
+          cat "$notes_file"
+
+          args=(--title "$VERSION" --notes-file "$notes_file" --target "$TARGET")
+          if [[ "$VERSION" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+
+          if ! gh release create "$tag" "${args[@]}"; then
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Release $tag already exists; skipping create."
+              exit 0
+            fi
+            exit 1
+          fi
