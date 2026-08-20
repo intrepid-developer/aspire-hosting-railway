@@ -201,6 +201,69 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task ServiceInstanceUpdate_ImageOnly_OmitsScaleFields()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceUpdateAsync(
+            "svc_placeholder",
+            "env_placeholder",
+            new ServiceInstanceUpdateInput
+            {
+                Source = new ServiceSourceInput { Image = "nginx" }
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("nginx", input.GetProperty("source").GetProperty("image").GetString());
+        Assert.False(input.TryGetProperty("multiRegionConfig", out _));
+        Assert.False(input.TryGetProperty("sleepApplication", out _));
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+        Assert.False(input.TryGetProperty("region", out _));
+        Assert.Contains("serviceInstanceUpdate", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("env_placeholder", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ServiceInstanceUpdate_SerializesMultiRegionConfigAndSleepApplication()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceUpdateAsync(
+            "svc_placeholder",
+            "env_placeholder",
+            new ServiceInstanceUpdateInput
+            {
+                Source = new ServiceSourceInput { Image = "nginx" },
+                MultiRegionConfig = new Dictionary<string, ServiceInstanceRegionConfig>(StringComparer.Ordinal)
+                {
+                    ["us-west2"] = new() { NumReplicas = 2 },
+                    ["europe-west4-drams3a"] = new() { NumReplicas = 1 }
+                },
+                SleepApplication = true
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        var multiRegion = input.GetProperty("multiRegionConfig");
+        Assert.Equal("nginx", input.GetProperty("source").GetProperty("image").GetString());
+        Assert.Equal(2, multiRegion.GetProperty("us-west2").GetProperty("numReplicas").GetInt32());
+        Assert.Equal(1, multiRegion.GetProperty("europe-west4-drams3a").GetProperty("numReplicas").GetInt32());
+        Assert.True(input.GetProperty("sleepApplication").GetBoolean());
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+        Assert.False(input.TryGetProperty("region", out _));
+        Assert.DoesNotContain("replicaRegions", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("serverless", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task SendAsync_Http400_SurfacesRailwayErrorText()
     {
         var handler = new RecordingHandler(

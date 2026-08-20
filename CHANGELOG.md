@@ -2,6 +2,16 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.2
+
+- `aspire publish` writes replica, region, and `sleepApplication` settings into `railway-plan.json`. `aspire deploy` applies them on the existing `serviceInstanceUpdate` call together with `source.image`. `environmentId` is still sent on that mutation.
+- Replica count comes from Aspire `WithReplicas` / `ReplicaAnnotation` (`GetReplicaCount`). Implicit compute on `AddRailwayEnvironment` picks this up; `PublishAsRailwayService` is not required just to set replicas.
+- `WithReplicas` (no region / no map) sends `numReplicas` (documented single-region path). A region or multi-region map sends `multiRegionConfig`. Never both.
+- Region and `sleepApplication` are Railway-specific and use `PublishAsRailwayService`. There is no GraphQL field named `serverless`; `sleepApplication` applies to all replicas of the service.
+- Official deploy region ids only (`Region.region`): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Airport codes (`sjc` / `iad` / `ams` / `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are rejected.
+- Replica counts must be at least 1 and at most 50 total (CLI / product docs), not the 200 in `railway.schema.json`.
+- Replicas cannot be used with volumes. `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` fail honestly if scale is requested. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query.
+
 ## 13.5.0-preview.1
 
 - Retarget to Aspire.Hosting 13.5.0.

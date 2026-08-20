@@ -85,7 +85,14 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Updates a service instance (image, start command, and similar settings).</summary>
+    /// <summary>
+    /// Updates a service instance. Always pass <c>environmentId</c> (official docs and
+    /// this apply path; the live schema marks it optional). Confirmed input fields:
+    /// <c>source.image</c>, <c>multiRegionConfig</c>, <c>sleepApplication</c>, and
+    /// <c>numReplicas</c> when only <c>WithReplicas</c> is set. Never send
+    /// <c>numReplicas</c> and <c>multiRegionConfig</c> together. ServiceInstance has
+    /// no <c>multiRegionConfig</c> read field.
+    /// </summary>
     public const string ServiceInstanceUpdate = """
         mutation serviceInstanceUpdate($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
           serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input)

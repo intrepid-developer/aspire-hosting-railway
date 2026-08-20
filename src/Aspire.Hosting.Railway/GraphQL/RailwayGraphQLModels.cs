@@ -57,6 +57,46 @@ public sealed class ServiceInstanceUpdateInput
     /// <summary>Gets or sets the image source. Railway has no registry; push to GHCR or Docker Hub first.</summary>
     [JsonPropertyName("source")]
     public ServiceSourceInput? Source { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-region replica counts. GraphQL type is JSON: official deploy
+    /// region id keys to <c>{ numReplicas }</c>. Sent for a region or multi-region map.
+    /// Never sent together with <see cref="NumReplicas"/>.
+    /// </summary>
+    [JsonPropertyName("multiRegionConfig")]
+    public Dictionary<string, ServiceInstanceRegionConfig>? MultiRegionConfig { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the service sleeps when idle. GraphQL field is
+    /// <c>sleepApplication</c> (<c>railway.json</c> <c>deploy.sleepApplication</c>).
+    /// There is no GraphQL field named <c>serverless</c>. Applies to all replicas.
+    /// </summary>
+    [JsonPropertyName("sleepApplication")]
+    public bool? SleepApplication { get; set; }
+
+    /// <summary>
+    /// Gets or sets the documented single-region replica count
+    /// (<see href="https://docs.railway.com/guides/autoscale-horizontally"/>)
+    /// when only <c>WithReplicas</c> is set (no region / no multi-region map).
+    /// Never sent together with <see cref="MultiRegionConfig"/>.
+    /// </summary>
+    [JsonPropertyName("numReplicas")]
+    public int? NumReplicas { get; set; }
+
+    /// <summary>
+    /// Gets or sets the single-region field. This integration prefers
+    /// <see cref="MultiRegionConfig"/> when a region is set.
+    /// </summary>
+    [JsonPropertyName("region")]
+    public string? Region { get; set; }
+}
+
+/// <summary>Per-region replica count inside <c>multiRegionConfig</c>.</summary>
+public sealed class ServiceInstanceRegionConfig
+{
+    /// <summary>Gets or sets the replica count for one official Railway region.</summary>
+    [JsonPropertyName("numReplicas")]
+    public int NumReplicas { get; set; }
 }
 
 /// <summary>Image or repo source for a service instance.</summary>

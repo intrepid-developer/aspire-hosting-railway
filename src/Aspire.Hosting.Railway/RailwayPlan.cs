@@ -91,6 +91,32 @@ public sealed class RailwayPlanService
     /// </summary>
     [JsonPropertyName("environment")]
     public Dictionary<string, string> Environment { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Gets or sets the official Railway region id when a single region was requested.
+    /// </summary>
+    [JsonPropertyName("region")]
+    public string? Region { get; set; }
+
+    /// <summary>
+    /// Gets or sets the replica count from Aspire <c>WithReplicas</c> /
+    /// <c>ReplicaAnnotation</c>. Omitted when the annotation is absent.
+    /// </summary>
+    [JsonPropertyName("replicas")]
+    public int? Replicas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether <c>sleepApplication</c> was requested. Plan JSON uses
+    /// <c>serverless</c>; GraphQL writes <c>sleepApplication</c>.
+    /// </summary>
+    [JsonPropertyName("serverless")]
+    public bool? Serverless { get; set; }
+
+    /// <summary>
+    /// Gets or sets official region id to replica count when multi-region scale was requested.
+    /// </summary>
+    [JsonPropertyName("replicaRegions")]
+    public Dictionary<string, int>? ReplicaRegions { get; set; }
 }
 
 /// <summary>

@@ -9,7 +9,7 @@ Locally you keep the normal Aspire resource model: official Postgres and Redis, 
 
 ## Status
 
-Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.0-preview.1** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.0** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.0-preview.2** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.0** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -21,7 +21,7 @@ Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.H
 | [`IntrepidDeveloper.Aspire.Hosting.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway.Storage) | `AddRailwayBucket`: local S3-compatible container; Railway bucket on deploy |
 | [`IntrepidDeveloper.Aspire.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Railway.Storage) | Client: `AddRailwayBucketClient` registers `IAmazonS3` |
 
-AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
+AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`. Postgres and Redis templates are volume-backed; Railway [replicas cannot be used with volumes](https://docs.railway.com/volumes/reference).
 
 ## Quick start
 
@@ -37,11 +37,16 @@ var cache = builder.AddRedis("redis").PublishAsRailwayRedis();
 var uploads = builder.AddRailwayBucket("uploads");
 
 builder.AddProject<Projects.Api>("api")
+    .WithReplicas(2)
     .WithReference(db)
     .WithReference(cache)
     .WithReference(uploads)
     .WaitFor(db)
-    .WithExternalHttpEndpoints();
+    .WithExternalHttpEndpoints()
+    .PublishAsRailwayService(s =>
+    {
+        s.Region = "us-west2";
+    });
 
 builder.Build().Run();
 ```
@@ -71,16 +76,16 @@ GitHub Packages is still published if you want that feed; see [Getting started](
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.2" />
 ```
 
 API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.2" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.0" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.0" />
 ```
@@ -112,11 +117,39 @@ Local `aspire run` needs no token.
 ## Limits (honest)
 
 - Railway has **no image registry**. Push to GHCR or Docker Hub, then deploy sets `source.image`. Missing `IContainerRegistry` fails clearly.
+- Scale uses Aspire [`WithReplicas`](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/annotations-overview) → Railway `numReplicas` (single-region) or `multiRegionConfig` (region / multi-region). Never both. Official deploy region ids only (`us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`); not airport codes. Max 50 replicas. Replicas cannot be used with volumes (Postgres / Redis templates). Sleep-when-idle is `sleepApplication` (no GraphQL field named `serverless`).
 - This integration does not shell out to `railway up`. Railpack has no .NET support; use an image or a Dockerfile.
 - `destroy-{name}` is a stub. Confirmed GraphQL operations do not include project or environment delete.
 - PR / ephemeral Railway environments are not in this release.
 - MySQL, MongoDB, and HA / PgBouncer are later.
 - Railway buckets are **private**. Use S3 credentials or presigned URLs. They are not on private DNS.
+
+Replica count is Aspire-core `WithReplicas`. Railway region and `sleepApplication` are set on the materialized service:
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithReplicas(2)
+    .WithComputeEnvironment(railway)
+    .PublishAsRailwayService(s =>
+    {
+        s.Region = "europe-west4-drams3a";
+        s.Serverless = true;
+    });
+
+builder.AddProject<Projects.Api>("api")
+    .WithComputeEnvironment(railway)
+    .PublishAsRailwayService(s =>
+    {
+        s.ReplicaRegions = new Dictionary<string, int>
+        {
+            ["us-west2"] = 2,
+            ["europe-west4-drams3a"] = 1
+        };
+        s.Serverless = false;
+    });
+```
+
+Official deploy region ids (`Region.region`): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Airport codes (`sjc`, `iad`, `ams`, `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are rejected. When `ReplicaRegions` is set, it wins over `WithReplicas` + `Region` and deploy sends `multiRegionConfig` only. `WithReplicas` alone sends `numReplicas` for the service's current Railway region. `Serverless` writes `sleepApplication` for every replica of that service.
 
 ## Docs
 

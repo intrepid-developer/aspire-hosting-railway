@@ -9,10 +9,15 @@ var cache = builder.AddRedis("redis").PublishAsRailwayRedis();
 var uploads = builder.AddRailwayBucket("uploads");
 
 builder.AddProject<Projects.Api>("api")
+    .WithReplicas(2)
     .WithReference(db)
     .WithReference(cache)
     .WithReference(uploads)
     .WaitFor(db)
-    .WithExternalHttpEndpoints();
+    .WithExternalHttpEndpoints()
+    .PublishAsRailwayService(s =>
+    {
+        s.Region = "us-west2";
+    });
 
 builder.Build().Run();
