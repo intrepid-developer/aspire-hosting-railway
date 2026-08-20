@@ -2,6 +2,16 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.3
+
+- `PublishAsRailwayService` can set per-replica `Cpu` and `MemoryGb` on `RailwayServiceResource`. There is no Aspire-core `WithCpu` / `WithMemory` in Aspire.Hosting 13.5.0.
+- `aspire publish` writes `cpu` / `memoryGb` into `railway-plan.json`. Unset fields are omitted.
+- `aspire deploy` applies them with the confirmed `serviceInstanceLimitsUpdate` mutation after the service id exists (create and later updates), after today's `serviceInstanceUpdate` image/scale call. Always sends `serviceId` and `environmentId`. GraphQL fields are `vCPUs` and `memoryGB` (floats). Unset fields are omitted; an empty limits update is not sent.
+- This is a different mutation from `serviceInstanceUpdate`. vCPU / memory are not added onto `ServiceInstanceUpdateInput`.
+- Values must be greater than 0 when set. Dashboard plan caps (for example 24) are plan-specific and are not hardcoded; Railway GraphQL errors are surfaced.
+- `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets do not get these fields and do not call `serviceInstanceLimitsUpdate`.
+- Config-as-code `deploy.limitOverride.containers` (`cpu` / `memoryBytes`) is documented as a mapping only. GraphQL uses GB and vCPU floats, not bytes.
+
 ## 13.5.0-preview.2
 
 - `aspire publish` writes replica, region, and `sleepApplication` settings into `railway-plan.json`. `aspire deploy` applies them on the existing `serviceInstanceUpdate` call together with `source.image`. `environmentId` is still sent on that mutation.

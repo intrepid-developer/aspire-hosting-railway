@@ -65,6 +65,33 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public bool? Serverless { get; set; }
 
     /// <summary>
+    /// Gets or sets per-replica vCPU for this service. Maps to
+    /// <c>ServiceInstanceLimitsUpdateInput.vCPUs</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Must be greater than 0. There is no Aspire-core
+    /// <c>WithCpu</c> in Aspire.Hosting 13.5.0; configure this through
+    /// <c>PublishAsRailwayService</c>. Railway plan caps (for example 24 vCPU)
+    /// are plan-specific and are not hardcoded here — over-plan values fail
+    /// with the GraphQL error. Not sent for
+    /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> / buckets.
+    /// </remarks>
+    public double? Cpu { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-replica memory in GB for this service. Maps to
+    /// <c>ServiceInstanceLimitsUpdateInput.memoryGB</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Must be greater than 0. Units are GraphQL
+    /// <c>memoryGB</c> floats, not config-as-code <c>memoryBytes</c>. There is
+    /// no Aspire-core <c>WithMemory</c> in Aspire.Hosting 13.5.0; configure this
+    /// through <c>PublishAsRailwayService</c>. Not sent for
+    /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> / buckets.
+    /// </remarks>
+    public double? MemoryGb { get; set; }
+
+    /// <summary>
     /// Gets or sets a multi-region replica map of official Railway region id to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>

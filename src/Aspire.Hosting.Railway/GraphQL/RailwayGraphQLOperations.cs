@@ -99,6 +99,23 @@ public static class RailwayGraphQLOperations
         }
         """;
 
+    /// <summary>
+    /// Updates per-replica CPU and memory. Always pass <c>environmentId</c> and
+    /// <c>serviceId</c> on <c>ServiceInstanceLimitsUpdateInput</c>. Confirmed
+    /// optional fields: <c>vCPUs</c> and <c>memoryGB</c> (floats). This is a
+    /// different mutation from <c>serviceInstanceUpdate</c>; do not add those
+    /// fields onto <c>ServiceInstanceUpdateInput</c>. Official
+    /// <see href="https://docs.railway.com/guides/manage-services"/> and live
+    /// schema 2026-08-20. Config-as-code equivalent is
+    /// <c>deploy.limitOverride.containers</c> (<c>cpu</c> / <c>memoryBytes</c>)
+    /// and is not the apply path.
+    /// </summary>
+    public const string ServiceInstanceLimitsUpdate = """
+        mutation serviceInstanceLimitsUpdate($input: ServiceInstanceLimitsUpdateInput!) {
+          serviceInstanceLimitsUpdate(input: $input)
+        }
+        """;
+
     /// <summary>Deploys a service instance from its current source image.</summary>
     public const string ServiceInstanceDeployV2 = """
         mutation serviceInstanceDeployV2($serviceId: String!, $environmentId: String!) {

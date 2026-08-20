@@ -298,6 +298,8 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("replicaRegions", json, StringComparison.Ordinal);
         Assert.DoesNotContain("serverless", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"region\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"cpu\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("memoryGb", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -313,7 +315,11 @@ public class RailwayEnvironmentTests
 
         Assert.Equal(1, api.Resource.GetReplicaCount());
         Assert.Null(service.Replicas);
+        Assert.Null(service.Cpu);
+        Assert.Null(service.MemoryGb);
         Assert.DoesNotContain("replicas", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
+        Assert.DoesNotContain("\"cpu\"", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
+        Assert.DoesNotContain("memoryGb", RailwayPlanBuilder.ToJson(plan), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -355,6 +361,63 @@ public class RailwayEnvironmentTests
     }
 
     [Fact]
+    public void Plan_PublishAsRailwayService_CopiesCpuAndMemoryGb()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .PublishAsRailwayService(s =>
+            {
+                s.Region = "europe-west4-drams3a";
+                s.Cpu = 1;
+                s.MemoryGb = 2;
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(2, service.Replicas);
+        Assert.Equal("europe-west4-drams3a", service.Region);
+        Assert.Equal(1, service.Cpu);
+        Assert.Equal(2, service.MemoryGb);
+        Assert.Contains("\"cpu\": 1", json, StringComparison.Ordinal);
+        Assert.Contains("\"memoryGb\": 2", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("vCPUs", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("memoryGB", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("memoryBytes", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("limitOverride", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(-1, 2)]
+    [InlineData(double.NaN, 2)]
+    [InlineData(1, 0)]
+    [InlineData(1, -1)]
+    [InlineData(1, double.NegativeInfinity)]
+    public void Plan_InvalidCpuOrMemory_FailsBeforeGraphQL(double cpu, double memoryGb)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.Cpu = cpu;
+                s.MemoryGb = memoryGb;
+            });
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("must be greater than 0", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("24", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Plan_PublishAsRailwayService_AfterPrepare_UsesDeploymentTarget()
     {
         var builder = TestAppBuilder.CreatePublish();
@@ -365,6 +428,8 @@ public class RailwayEnvironmentTests
             {
                 s.Region = "us-west2";
                 s.Serverless = false;
+                s.Cpu = 0.5;
+                s.MemoryGb = 1;
             });
 
         using var app = builder.Build();
@@ -376,6 +441,8 @@ public class RailwayEnvironmentTests
         Assert.Equal(3, service.Replicas);
         Assert.Equal("us-west2", service.Region);
         Assert.False(service.Serverless);
+        Assert.Equal(0.5, service.Cpu);
+        Assert.Equal(1, service.MemoryGb);
     }
 
     [Fact]
@@ -450,11 +517,17 @@ public class RailwayEnvironmentTests
         var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
 
         Assert.Single(plan.Services);
-        Assert.Equal(2, Assert.Single(plan.Services).Replicas);
+        var api = Assert.Single(plan.Services);
+        Assert.Equal(2, api.Replicas);
+        Assert.Null(api.Cpu);
+        Assert.Null(api.MemoryGb);
         Assert.All(plan.ManagedServices, managed =>
         {
             Assert.Contains(managed.Kind, ["postgres", "redis"], StringComparer.Ordinal);
         });
+        var json = RailwayPlanBuilder.ToJson(plan);
+        Assert.DoesNotContain("\"cpu\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("memoryGb", json, StringComparison.Ordinal);
     }
 
     [Fact]

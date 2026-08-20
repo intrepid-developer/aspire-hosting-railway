@@ -264,6 +264,65 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task ServiceInstanceLimitsUpdate_SerializesConfirmedFieldNames()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceLimitsUpdateAsync(
+            new ServiceInstanceLimitsUpdateInput
+            {
+                ServiceId = "svc_placeholder",
+                EnvironmentId = "env_placeholder",
+                VCpus = 1,
+                MemoryGb = 2
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("svc_placeholder", input.GetProperty("serviceId").GetString());
+        Assert.Equal("env_placeholder", input.GetProperty("environmentId").GetString());
+        Assert.Equal(1, input.GetProperty("vCPUs").GetDouble());
+        Assert.Equal(2, input.GetProperty("memoryGB").GetDouble());
+        Assert.Contains("serviceInstanceLimitsUpdate", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("ServiceInstanceLimitsUpdateInput", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("\"vCPUs\":", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("\"memoryGB\":", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("$input: ServiceInstanceLimitsUpdateInput!", RailwayGraphQLOperations.ServiceInstanceLimitsUpdate, StringComparison.Ordinal);
+        Assert.DoesNotContain("vCpus", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"memoryGb\"", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("memoryBytes", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("limitOverride", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+        Assert.False(input.TryGetProperty("source", out _));
+        Assert.False(input.TryGetProperty("numReplicas", out _));
+    }
+
+    [Fact]
+    public async Task ServiceInstanceLimitsUpdate_OmitsUnsetFields()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceLimitsUpdateAsync(
+            new ServiceInstanceLimitsUpdateInput
+            {
+                ServiceId = "svc_placeholder",
+                EnvironmentId = "env_placeholder",
+                MemoryGb = 2
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("svc_placeholder", input.GetProperty("serviceId").GetString());
+        Assert.Equal("env_placeholder", input.GetProperty("environmentId").GetString());
+        Assert.Equal(2, input.GetProperty("memoryGB").GetDouble());
+        Assert.False(input.TryGetProperty("vCPUs", out _));
+    }
+
+    [Fact]
     public async Task SendAsync_Http400_SurfacesRailwayErrorText()
     {
         var handler = new RecordingHandler(

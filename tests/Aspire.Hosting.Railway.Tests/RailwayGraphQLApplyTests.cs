@@ -732,6 +732,9 @@ public class RailwayGraphQLApplyTests
         Assert.False(input.TryGetProperty("sleepApplication", out _));
         Assert.False(input.TryGetProperty("numReplicas", out _));
         Assert.False(input.TryGetProperty("region", out _));
+        Assert.False(input.TryGetProperty("vCPUs", out _));
+        Assert.False(input.TryGetProperty("memoryGB", out _));
+        Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
     }
 
     [Fact]
@@ -765,6 +768,154 @@ public class RailwayGraphQLApplyTests
         Assert.True(input.GetProperty("sleepApplication").GetBoolean());
         Assert.False(input.TryGetProperty("numReplicas", out _));
         Assert.False(input.TryGetProperty("region", out _));
+        Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_CpuAndMemory_SendsServiceInstanceLimitsUpdateAfterImageUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Cpu = 1;
+        plan.Services[0].MemoryGb = 2;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(1, handler.Count("serviceInstanceLimitsUpdate"));
+        var updateIndex = handler.Operations.IndexOf("serviceInstanceUpdate");
+        var limitsIndex = handler.Operations.IndexOf("serviceInstanceLimitsUpdate");
+        Assert.True(updateIndex >= 0 && limitsIndex == updateIndex + 1);
+
+        var updateInput = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("ghcr.io/example/api:placeholder", updateInput.GetProperty("source").GetProperty("image").GetString());
+        Assert.False(updateInput.TryGetProperty("vCPUs", out _));
+        Assert.False(updateInput.TryGetProperty("memoryGB", out _));
+
+        var limitsInput = GraphQLFixtures.GetServiceInstanceLimitsUpdateInput(handler.Bodies);
+        Assert.Equal(GraphQLFixtures.ApiServiceId, limitsInput.GetProperty("serviceId").GetString());
+        Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, limitsInput.GetProperty("environmentId").GetString());
+        Assert.Equal(1, limitsInput.GetProperty("vCPUs").GetDouble());
+        Assert.Equal(2, limitsInput.GetProperty("memoryGB").GetDouble());
+        Assert.False(limitsInput.TryGetProperty("source", out _));
+    }
+
+    [Fact]
+    public async Task Apply_CpuOnly_OmitsUnsetMemoryGb()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Cpu = 0.5;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var limitsInput = GraphQLFixtures.GetServiceInstanceLimitsUpdateInput(handler.Bodies);
+        Assert.Equal(0.5, limitsInput.GetProperty("vCPUs").GetDouble());
+        Assert.False(limitsInput.TryGetProperty("memoryGB", out _));
+    }
+
+    [Fact]
+    public async Task Apply_WithoutCpuMemory_DoesNotCallLimitsUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
+        Assert.DoesNotContain(
+            handler.Bodies,
+            body => body.Contains("serviceInstanceLimitsUpdate", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(0d, null)]
+    [InlineData(-1d, null)]
+    [InlineData(null, 0d)]
+    [InlineData(null, -2d)]
+    public async Task Apply_InvalidCpuOrMemory_FailsBeforeGraphQL(double? cpu, double? memoryGb)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Cpu = cpu;
+        plan.Services[0].MemoryGb = memoryGb;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("must be greater than 0", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("24", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("projectCreate"));
+    }
+
+    [Fact]
+    public async Task Apply_LimitsGraphQLError_FailsHonestly()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.GraphQLError("over plan vCPU limit"));
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Cpu = 32;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("serviceInstanceLimitsUpdate", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("over plan vCPU limit", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(1, handler.Count("serviceInstanceLimitsUpdate"));
+        Assert.Equal(0, handler.Count("serviceInstanceDeployV2"));
     }
 
     [Fact]
@@ -890,6 +1041,29 @@ public class RailwayGraphQLApplyTests
         Assert.Contains("docs.railway.com/volumes/reference", exception.Message, StringComparison.Ordinal);
         Assert.Empty(handler.Operations);
         Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_VolumeBackedManagedServiceLimits_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true);
+        plan.Services[0].Name = "postgres";
+        plan.Services[0].Cpu = 1;
+        plan.Services[0].MemoryGb = 2;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("managed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("serviceInstanceLimitsUpdate", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
     }
 
     [Fact]
@@ -966,7 +1140,11 @@ public class RailwayGraphQLApplyTests
         {
             Assert.DoesNotContain("multiRegionConfig", body, StringComparison.Ordinal);
             Assert.DoesNotContain("sleepApplication", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("serviceInstanceLimitsUpdate", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("vCPUs", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("memoryGB", body, StringComparison.Ordinal);
         });
+        Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
     }
 
     [Fact]
@@ -1047,6 +1225,52 @@ public class RailwayGraphQLApplyTests
             input.GetProperty("multiRegionConfig").GetProperty("europe-west4-drams3a").GetProperty("numReplicas").GetInt32());
         Assert.True(input.GetProperty("sleepApplication").GetBoolean());
         Assert.False(input.TryGetProperty("numReplicas", out _));
+    }
+
+    [Fact]
+    public async Task DeployAsync_PublishAsRailwayServiceLimits_SendsServiceInstanceLimitsUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .PublishAsRailwayService(s =>
+            {
+                s.Region = "europe-west4-drams3a";
+                s.Cpu = 1;
+                s.MemoryGb = 2;
+            });
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        Assert.Equal(1, handler.Count("serviceInstanceLimitsUpdate"));
+        var limitsInput = GraphQLFixtures.GetServiceInstanceLimitsUpdateInput(handler.Bodies);
+        Assert.Equal(GraphQLFixtures.ApiServiceId, limitsInput.GetProperty("serviceId").GetString());
+        Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, limitsInput.GetProperty("environmentId").GetString());
+        Assert.Equal(1, limitsInput.GetProperty("vCPUs").GetDouble());
+        Assert.Equal(2, limitsInput.GetProperty("memoryGB").GetDouble());
     }
 
     private static void EnqueueProductionServiceTemplateAndBucket(ScriptedGraphQLHandler handler)

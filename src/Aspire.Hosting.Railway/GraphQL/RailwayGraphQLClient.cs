@@ -236,6 +236,30 @@ public sealed class RailwayGraphQLClient
             token,
             cancellationToken);
 
+    /// <summary>
+    /// Sends <c>serviceInstanceLimitsUpdate</c>.
+    /// <see cref="ServiceInstanceLimitsUpdateInput.ServiceId"/> and
+    /// <see cref="ServiceInstanceLimitsUpdateInput.EnvironmentId"/> are required.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<JsonElement>> ServiceInstanceLimitsUpdateAsync(
+        ServiceInstanceLimitsUpdateInput input,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.ServiceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.EnvironmentId);
+        return SendAsync<JsonElement>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.ServiceInstanceLimitsUpdate,
+                OperationName = "serviceInstanceLimitsUpdate",
+                Variables = new { input }
+            },
+            token,
+            cancellationToken);
+    }
+
     /// <summary>Sends <c>serviceInstanceDeployV2</c>.</summary>
     public Task<RailwayGraphQLResponse<JsonElement>> ServiceInstanceDeployV2Async(
         string serviceId,

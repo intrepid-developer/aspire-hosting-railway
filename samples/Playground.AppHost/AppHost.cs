@@ -18,6 +18,8 @@ builder.AddProject<Projects.Api>("api")
     .PublishAsRailwayService(s =>
     {
         s.Region = "us-west2";
+        s.Cpu = 1;
+        s.MemoryGb = 2;
     });
 
 builder.Build().Run();

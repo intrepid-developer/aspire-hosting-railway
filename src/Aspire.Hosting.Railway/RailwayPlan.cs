@@ -113,6 +113,20 @@ public sealed class RailwayPlanService
     public bool? Serverless { get; set; }
 
     /// <summary>
+    /// Gets or sets per-replica vCPU from <c>PublishAsRailwayService</c>.
+    /// Omitted when unset. GraphQL writes <c>vCPUs</c>.
+    /// </summary>
+    [JsonPropertyName("cpu")]
+    public double? Cpu { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-replica memory in GB from <c>PublishAsRailwayService</c>.
+    /// Omitted when unset. GraphQL writes <c>memoryGB</c>.
+    /// </summary>
+    [JsonPropertyName("memoryGb")]
+    public double? MemoryGb { get; set; }
+
+    /// <summary>
     /// Gets or sets official region id to replica count when multi-region scale was requested.
     /// </summary>
     [JsonPropertyName("replicaRegions")]

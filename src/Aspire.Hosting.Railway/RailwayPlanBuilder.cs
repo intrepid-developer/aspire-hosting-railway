@@ -183,7 +183,7 @@ public static class RailwayPlanBuilder
         throw new InvalidOperationException(
             $"Railway {managed.Kind} '{managed.ServiceName}' is volume-backed and cannot be scaled. " +
             "Replicas cannot be used with volumes (https://docs.railway.com/volumes/reference). " +
-            "Do not set WithReplicas or PublishAsRailwayService scale/region on PublishAsRailwayPostgres / PublishAsRailwayRedis.");
+            "Do not set WithReplicas or PublishAsRailwayService scale/region/cpu/memory on PublishAsRailwayPostgres / PublishAsRailwayRedis.");
     }
 
     private static void CopyComputeSettings(
@@ -215,6 +215,16 @@ public static class RailwayPlanBuilder
         if (railwayService.ReplicaRegions is { Count: > 0 } replicaRegions)
         {
             service.ReplicaRegions = new Dictionary<string, int>(replicaRegions, StringComparer.Ordinal);
+        }
+
+        if (railwayService.Cpu is { } cpu)
+        {
+            service.Cpu = cpu;
+        }
+
+        if (railwayService.MemoryGb is { } memoryGb)
+        {
+            service.MemoryGb = memoryGb;
         }
     }
 
