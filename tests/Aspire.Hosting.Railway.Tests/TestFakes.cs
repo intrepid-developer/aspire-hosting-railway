@@ -311,6 +311,13 @@ internal static class GraphQLFixtures
         return document.RootElement.GetProperty("variables").GetProperty("input").Clone();
     }
 
+    public static JsonElement GetServiceInstanceLimitsUpdateInput(IEnumerable<string> bodies)
+    {
+        var body = bodies.Single(item => item.Contains("\"operationName\":\"serviceInstanceLimitsUpdate\"", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("variables").GetProperty("input").Clone();
+    }
+
     public static string ReadTemplateIdFromDeployBody(string templateDeployV2RequestBody)
     {
         using var document = JsonDocument.Parse(templateDeployV2RequestBody);

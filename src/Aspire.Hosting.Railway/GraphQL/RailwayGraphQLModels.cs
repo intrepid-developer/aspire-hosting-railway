@@ -91,6 +91,37 @@ public sealed class ServiceInstanceUpdateInput
     public string? Region { get; set; }
 }
 
+/// <summary>
+/// Input for <c>serviceInstanceLimitsUpdate</c>. Always include
+/// <see cref="ServiceId"/> and <see cref="EnvironmentId"/>. This is a
+/// different mutation from <c>serviceInstanceUpdate</c>; do not add
+/// <c>vCPUs</c> / <c>memoryGB</c> onto <see cref="ServiceInstanceUpdateInput"/>.
+/// </summary>
+public sealed class ServiceInstanceLimitsUpdateInput
+{
+    /// <summary>Gets or sets the service id. Required.</summary>
+    [JsonPropertyName("serviceId")]
+    public required string ServiceId { get; set; }
+
+    /// <summary>Gets or sets the environment id. Required.</summary>
+    [JsonPropertyName("environmentId")]
+    public required string EnvironmentId { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-replica vCPU. GraphQL field is <c>vCPUs</c>.
+    /// Omitted when unset.
+    /// </summary>
+    [JsonPropertyName("vCPUs")]
+    public double? VCpus { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-replica memory in GB. GraphQL field is <c>memoryGB</c>.
+    /// Omitted when unset.
+    /// </summary>
+    [JsonPropertyName("memoryGB")]
+    public double? MemoryGb { get; set; }
+}
+
 /// <summary>Per-region replica count inside <c>multiRegionConfig</c>.</summary>
 public sealed class ServiceInstanceRegionConfig
 {

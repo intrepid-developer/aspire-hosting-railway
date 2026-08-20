@@ -2,14 +2,14 @@ namespace Aspire.Hosting.Railway;
 
 /// <summary>
 /// Validates plan-time compute settings and maps them onto confirmed
-/// <c>serviceInstanceUpdate</c> input fields.
+/// <c>serviceInstanceUpdate</c> and <c>serviceInstanceLimitsUpdate</c> input fields.
 /// </summary>
 internal static class RailwayServiceComputeSettings
 {
     /// <summary>
-    /// Validates region ids and replica counts on every compute service in
-    /// <paramref name="plan"/>. Managed templates and buckets are not in
-    /// <see cref="RailwayPlan.Services"/> and are not validated here.
+    /// Validates region ids, replica counts, and cpu/memory on every compute
+    /// service in <paramref name="plan"/>. Managed templates and buckets are
+    /// not in <see cref="RailwayPlan.Services"/> and are not validated here.
     /// </summary>
     public static void ValidatePlanServices(RailwayPlan plan)
     {
@@ -24,6 +24,13 @@ internal static class RailwayServiceComputeSettings
                     $"Railway service '{service.Name}' is volume-backed and cannot be scaled. " +
                     "Replicas cannot be used with volumes (https://docs.railway.com/volumes/reference). " +
                     "numReplicas and multiRegionConfig are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis.");
+            }
+
+            if (HasResourceLimits(service) && IsManagedService(plan, service.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set cpu / memoryGb. " +
+                    "serviceInstanceLimitsUpdate is not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
             }
         }
     }
@@ -43,6 +50,16 @@ internal static class RailwayServiceComputeSettings
         if (service.Replicas is { } replicas)
         {
             EnsureReplicaCount(service.Name, replicas, "replica count");
+        }
+
+        if (service.Cpu is { } cpu)
+        {
+            EnsurePositiveLimit(service.Name, cpu, "cpu");
+        }
+
+        if (service.MemoryGb is { } memoryGb)
+        {
+            EnsurePositiveLimit(service.Name, memoryGb, "memoryGb");
         }
 
         if (service.ReplicaRegions is not { Count: > 0 } replicaRegions)
@@ -100,14 +117,50 @@ internal static class RailwayServiceComputeSettings
         return input;
     }
 
+    /// <summary>
+    /// Builds <c>serviceInstanceLimitsUpdate</c> input when the plan requested
+    /// cpu and/or memoryGb. Returns <see langword="null"/> when both are unset
+    /// so apply does not send an empty limits mutation.
+    /// </summary>
+    public static ServiceInstanceLimitsUpdateInput? CreateLimitsUpdateInput(
+        RailwayPlanService service,
+        string serviceId,
+        string environmentId)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        Validate(service);
+
+        if (!HasResourceLimits(service))
+        {
+            return null;
+        }
+
+        return new ServiceInstanceLimitsUpdateInput
+        {
+            ServiceId = serviceId,
+            EnvironmentId = environmentId,
+            VCpus = service.Cpu,
+            MemoryGb = service.MemoryGb
+        };
+    }
+
     internal static bool HasReplicaPlacement(RailwayPlanService service) =>
         service.Replicas is not null ||
         !string.IsNullOrWhiteSpace(service.Region) ||
         service.ReplicaRegions is { Count: > 0 };
 
+    internal static bool HasResourceLimits(RailwayPlanService service) =>
+        service.Cpu is not null || service.MemoryGb is not null;
+
     internal static bool IsVolumeBackedManagedService(RailwayPlan plan, string serviceName) =>
         plan.ManagedServices.Any(managed =>
             !string.IsNullOrWhiteSpace(managed.TemplateCode) &&
+            string.Equals(managed.Name, serviceName, StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsManagedService(RailwayPlan plan, string serviceName) =>
+        plan.ManagedServices.Any(managed =>
             string.Equals(managed.Name, serviceName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
@@ -148,6 +201,17 @@ internal static class RailwayServiceComputeSettings
             $"Use official deploy region ids (Region.region): {string.Join(", ", RailwayConstants.OfficialRegionIds)}. " +
             "Airport codes (sjc, iad, ams, sin) and older ids (us-west1, us-east4, europe-west4) are not deploy keys. " +
             "See https://docs.railway.com/deployments/regions.");
+    }
+
+    private static void EnsurePositiveLimit(string serviceName, double value, string what)
+    {
+        if (double.IsFinite(value) && value > 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Railway service '{serviceName}' {what} must be greater than 0.");
     }
 
     private static void EnsureReplicaCount(string serviceName, int count, string what)

@@ -89,11 +89,11 @@ Resolution order (`RailwayEnvironmentResource.ResolveDeployImageAsync`):
 
 `resolveContainerRegistry` uses `WithContainerRegistry` when present, otherwise the single `IContainerRegistry` in the model.
 
-## Compute settings (replicas, region, sleepApplication)
+## Compute settings (replicas, region, sleepApplication, CPU/RAM)
 
 Replica count is Aspire-core. Call `WithReplicas` on a project (`ProjectResource`). Publish copies `resource.GetReplicaCount()` into `railway-plan.json` when a `ReplicaAnnotation` is present. Implicit compute on `AddRailwayEnvironment` is enough; you do not need `PublishAsRailwayService` just to set replicas.
 
-Railway-specific settings use `PublishAsRailwayService`:
+Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory`.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -102,6 +102,8 @@ builder.AddProject<Projects.Api>("api")
     .PublishAsRailwayService(s =>
     {
         s.Region = "europe-west4-drams3a";
+        s.Cpu = 1;
+        s.MemoryGb = 2;
         s.Serverless = true;
     });
 
@@ -120,17 +122,22 @@ builder.AddProject<Projects.Api>("api")
 
 Official deploy region ids ([Railway regions](https://docs.railway.com/deployments/regions), `Region.region`): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Airport codes from `Query.regions.id` (`sjc`, `iad`, `ams`, `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are rejected. Total replicas must be at least 1 and at most 50 ([scale](https://docs.railway.com/cli/scale), [scaling](https://docs.railway.com/deployments/scaling)) — not the 200 in `railway.schema.json`.
 
-How apply maps plan fields onto the existing `serviceInstanceUpdate` input (`environmentId` is always passed):
+How apply maps plan fields onto GraphQL (`environmentId` is always passed):
 
 | Plan fields | GraphQL input |
 | --- | --- |
-| `replicaRegions` set | `multiRegionConfig` (region id → `{ numReplicas }`). `numReplicas` is not sent. This map wins over `WithReplicas` + `region`. |
-| `region` set (no map) | `multiRegionConfig` `{ [region]: { numReplicas: replicas ?? 1 } }` |
-| `replicas` only (`WithReplicas`, no region / no map) | `numReplicas` — official single-region path ([autoscale](https://docs.railway.com/guides/autoscale-horizontally)); applies to the service's current Railway region |
-| `serverless` set | `sleepApplication` (only when the user set it; there is no GraphQL field named `serverless`; applies to all replicas) |
+| `replicaRegions` set | `serviceInstanceUpdate.multiRegionConfig` (region id → `{ numReplicas }`). `numReplicas` is not sent. This map wins over `WithReplicas` + `region`. |
+| `region` set (no map) | `serviceInstanceUpdate.multiRegionConfig` `{ [region]: { numReplicas: replicas ?? 1 } }` |
+| `replicas` only (`WithReplicas`, no region / no map) | `serviceInstanceUpdate.numReplicas` — official single-region path ([autoscale](https://docs.railway.com/guides/autoscale-horizontally)); applies to the service's current Railway region |
+| `serverless` set | `serviceInstanceUpdate.sleepApplication` (only when the user set it; there is no GraphQL field named `serverless`; applies to all replicas) |
+| `cpu` and/or `memoryGb` set | `serviceInstanceLimitsUpdate` with `vCPUs` / `memoryGB` (floats). Always `serviceId` + `environmentId`. Unset fields are omitted. Not sent when both are absent. After `serviceInstanceUpdate`. |
 | none of the above | today's image-only `source.image` update |
 
-Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends them on `serviceInstanceUpdate` after the service id exists (create and later updates). If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query.
+Config-as-code equivalent for CPU/RAM (mapping only, not the apply path): [`deploy.limitOverride.containers`](https://railway.com/railway.schema.json) with `cpu` and `memoryBytes`. GraphQL uses vCPU and GB floats, not bytes.
 
-Replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region is set on them. Apply never sends `numReplicas` / `multiRegionConfig` for those services. Buckets are not Railway volumes and stay on the existing create/credentials path.
+Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends scale/region/sleep on `serviceInstanceUpdate` after the service id exists (create and later updates), then `serviceInstanceLimitsUpdate` when CPU and/or RAM were requested. Do not add `vCPUs` / `memoryGB` onto `ServiceInstanceUpdateInput`. If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query. Related read queries (`serviceInstanceLimits`, `serviceInstanceLimitOverride`) exist but are not used.
+
+`Cpu` / `MemoryGb` must be greater than 0 when set. Dashboard plan caps (for example 24 vCPU) are plan-specific and are not hardcoded; if Railway rejects an over-plan value, deploy surfaces the GraphQL error.
+
+Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM fields.
 

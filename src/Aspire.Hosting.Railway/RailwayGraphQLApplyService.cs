@@ -627,6 +627,19 @@ public sealed class RailwayGraphQLApplyService
                     cancellationToken).ConfigureAwait(false);
                 RailwayGraphQLClient.ThrowIfFailed(update, "serviceInstanceUpdate");
 
+                var limitsInput = RailwayServiceComputeSettings.CreateLimitsUpdateInput(
+                    service,
+                    serviceId,
+                    result.EnvironmentId);
+                if (limitsInput is not null)
+                {
+                    var limits = await _client.ServiceInstanceLimitsUpdateAsync(
+                        limitsInput,
+                        request.Token,
+                        cancellationToken).ConfigureAwait(false);
+                    RailwayGraphQLClient.ThrowIfFailed(limits, "serviceInstanceLimitsUpdate");
+                }
+
                 var variables = ResolveServiceEnvironment(service, request, result);
                 if (variables.Count > 0)
                 {
