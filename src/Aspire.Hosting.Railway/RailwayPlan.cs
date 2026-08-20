@@ -106,7 +106,8 @@ public sealed class RailwayPlanService
     public int? Replicas { get; set; }
 
     /// <summary>
-    /// Gets or sets whether Railway serverless (<c>sleepApplication</c>) was requested.
+    /// Gets or sets whether <c>sleepApplication</c> was requested. Plan JSON uses
+    /// <c>serverless</c>; GraphQL writes <c>sleepApplication</c>.
     /// </summary>
     [JsonPropertyName("serverless")]
     public bool? Serverless { get; set; }

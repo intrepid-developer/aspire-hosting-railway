@@ -392,7 +392,49 @@ public class RailwayEnvironmentTests
 
         Assert.Contains("not-a-railway-region", exception.Message, StringComparison.Ordinal);
         Assert.Contains("us-west2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Region.region", exception.Message, StringComparison.Ordinal);
         Assert.Contains("docs.railway.com/deployments/regions", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("sjc")]
+    [InlineData("iad")]
+    [InlineData("us-west1")]
+    [InlineData("us-east4")]
+    [InlineData("europe-west4")]
+    public void Plan_AirportCodeOrOldRegionId_Fails(string regionId)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.Region = regionId);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains(regionId, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Airport codes", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("deprecat", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_VolumeBackedPostgresWithReplicas_FailsHonestly()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddPostgres("postgres")
+            .PublishAsRailwayPostgres()
+            .WithAnnotation(new ReplicaAnnotation(2));
+        builder.AddContainer("api", "nginx");
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("volume-backed", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("docs.railway.com/volumes/reference", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("PublishAsRailwayPostgres", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

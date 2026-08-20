@@ -59,28 +59,32 @@ public sealed class ServiceInstanceUpdateInput
     public ServiceSourceInput? Source { get; set; }
 
     /// <summary>
-    /// Gets or sets per-region replica counts. GraphQL type is JSON: region id keys
-    /// to <c>{ numReplicas }</c>. Preferred over <see cref="NumReplicas"/>.
+    /// Gets or sets per-region replica counts. GraphQL type is JSON: official deploy
+    /// region id keys to <c>{ numReplicas }</c>. Sent for a region or multi-region map.
+    /// Never sent together with <see cref="NumReplicas"/>.
     /// </summary>
     [JsonPropertyName("multiRegionConfig")]
     public Dictionary<string, ServiceInstanceRegionConfig>? MultiRegionConfig { get; set; }
 
     /// <summary>
-    /// Gets or sets Railway serverless. Official field is <c>sleepApplication</c>
-    /// (<c>railway.json</c> <c>deploy.sleepApplication</c>).
+    /// Gets or sets whether the service sleeps when idle. GraphQL field is
+    /// <c>sleepApplication</c> (<c>railway.json</c> <c>deploy.sleepApplication</c>).
+    /// There is no GraphQL field named <c>serverless</c>. Applies to all replicas.
     /// </summary>
     [JsonPropertyName("sleepApplication")]
     public bool? SleepApplication { get; set; }
 
     /// <summary>
-    /// Gets or sets the deprecated single-region replica count. Sent only when the
-    /// plan has <c>WithReplicas</c> and no region / multi-region map.
+    /// Gets or sets the single-region replica count. Official autoscale path when
+    /// only <c>WithReplicas</c> is set (no region / no multi-region map). Never sent
+    /// together with <see cref="MultiRegionConfig"/>.
     /// </summary>
     [JsonPropertyName("numReplicas")]
     public int? NumReplicas { get; set; }
 
     /// <summary>
-    /// Gets or sets the legacy single-region field. Prefer <see cref="MultiRegionConfig"/>.
+    /// Gets or sets the single-region field. This integration prefers
+    /// <see cref="MultiRegionConfig"/> when a region is set.
     /// </summary>
     [JsonPropertyName("region")]
     public string? Region { get; set; }

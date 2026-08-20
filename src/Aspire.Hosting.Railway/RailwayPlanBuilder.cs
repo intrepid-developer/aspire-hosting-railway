@@ -63,6 +63,7 @@ public static class RailwayPlanBuilder
         {
             foreach (var managed in resource.Annotations.OfType<IRailwayManagedServiceAnnotation>())
             {
+                RejectScaleOnVolumeBackedResource(resource, managed);
                 plan.ManagedServices.Add(new RailwayPlanManagedService
                 {
                     Name = managed.ServiceName,
@@ -162,6 +163,27 @@ public static class RailwayPlanBuilder
         return environmentKey.StartsWith(ConnectionStringPrefix, StringComparison.Ordinal)
             ? environmentKey[ConnectionStringPrefix.Length..]
             : null;
+    }
+
+    private static void RejectScaleOnVolumeBackedResource(
+        IResource resource,
+        IRailwayManagedServiceAnnotation managed)
+    {
+        if (string.IsNullOrWhiteSpace(managed.TemplateCode))
+        {
+            return;
+        }
+
+        if (!resource.TryGetLastAnnotation<ReplicaAnnotation>(out _) &&
+            !resource.Annotations.OfType<RailwayServiceCustomizationAnnotation>().Any())
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Railway {managed.Kind} '{managed.ServiceName}' is volume-backed and cannot be scaled. " +
+            "Replicas cannot be used with volumes (https://docs.railway.com/volumes/reference). " +
+            "Do not set WithReplicas or PublishAsRailwayService scale/region on PublishAsRailwayPostgres / PublishAsRailwayRedis.");
     }
 
     private static void CopyComputeSettings(

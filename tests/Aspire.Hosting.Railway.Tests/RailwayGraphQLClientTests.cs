@@ -223,6 +223,8 @@ public class RailwayGraphQLClientTests
         Assert.False(input.TryGetProperty("numReplicas", out _));
         Assert.False(input.TryGetProperty("region", out _));
         Assert.Contains("serviceInstanceUpdate", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("env_placeholder", handler.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
     }
 

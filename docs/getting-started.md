@@ -101,7 +101,7 @@ builder.AddRailwayBucketClient("uploads");
 
 Existing Aspire client packages keep working. `AddRailwayEnvironment` is the Railway **project** (compute environment). The Railway environment name is mapped from Aspire `--environment`: Production → `production`, Staging → `staging` (lowercase). Override with `WithRailwayEnvironmentName`.
 
-Replica count is Aspire-core `WithReplicas`. Implicit compute on the Railway environment picks it up. Region, serverless, and multi-region maps are Railway-specific and use `PublishAsRailwayService`:
+Replica count is Aspire-core `WithReplicas` (project resources). Implicit compute on the Railway environment picks it up and deploy sends `numReplicas`. Region and `sleepApplication` are Railway-specific and use `PublishAsRailwayService`. There is no GraphQL field named `serverless`; sleep applies to all replicas. Replicas cannot be used with Railway volumes — do not scale `PublishAsRailwayPostgres` / `PublishAsRailwayRedis`.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")

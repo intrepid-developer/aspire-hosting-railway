@@ -46,19 +46,21 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     /// <c>asia-southeast1-eqsg3a</c>.
     /// </summary>
     /// <remarks>
-    /// When set, deploy sends <c>multiRegionConfig</c> for this region using
-    /// <c>WithReplicas</c> (or 1 when <c>WithReplicas</c> is omitted). Replica count
-    /// itself comes from Aspire <c>WithReplicas</c>, not from this type.
+    /// Must be a <c>Region.region</c> deploy key, not a <c>Query.regions.id</c> airport
+    /// code (<c>sjc</c>, <c>iad</c>, <c>ams</c>, <c>sin</c>) and not an older id
+    /// (<c>us-west1</c>, <c>us-east4</c>, <c>europe-west4</c>). When set, deploy sends
+    /// <c>multiRegionConfig</c> for this region using <c>WithReplicas</c> (or 1 when
+    /// omitted). Replica count itself comes from Aspire <c>WithReplicas</c>.
     /// </remarks>
     public string? Region { get; set; }
 
     /// <summary>
-    /// Gets or sets whether this service should sleep when idle (Railway serverless).
-    /// Maps to <c>ServiceInstanceUpdateInput.sleepApplication</c>.
+    /// Gets or sets whether this service should sleep when idle. Deploy writes
+    /// <c>sleepApplication</c> (there is no GraphQL field named <c>serverless</c>).
     /// </summary>
     /// <remarks>
-    /// Sent only when set. There is no Aspire-core equivalent; configure this through
-    /// <c>PublishAsRailwayService</c>.
+    /// Sent only when set. Applies to all replicas of the service. There is no
+    /// Aspire-core equivalent; configure this through <c>PublishAsRailwayService</c>.
     /// </remarks>
     public bool? Serverless { get; set; }
 

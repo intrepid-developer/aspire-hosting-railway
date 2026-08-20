@@ -117,14 +117,14 @@ Local `aspire run` needs no token.
 ## Limits (honest)
 
 - Railway has **no image registry**. Push to GHCR or Docker Hub, then deploy sets `source.image`. Missing `IContainerRegistry` fails clearly.
-- Scale uses Aspire [`WithReplicas`](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/annotations-overview). Region, serverless, and multi-region maps use `PublishAsRailwayService`. Official region ids only; max 50 replicas across regions.
+- Scale uses Aspire [`WithReplicas`](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/annotations-overview) → Railway `numReplicas` (single-region) or `multiRegionConfig` (region / multi-region). Never both. Official deploy region ids only (`us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`); not airport codes. Max 50 replicas. Replicas cannot be used with volumes (Postgres / Redis templates). Sleep-when-idle is `sleepApplication` (no GraphQL field named `serverless`).
 - This integration does not shell out to `railway up`. Railpack has no .NET support; use an image or a Dockerfile.
 - `destroy-{name}` is a stub. Confirmed GraphQL operations do not include project or environment delete.
 - PR / ephemeral Railway environments are not in this release.
 - MySQL, MongoDB, and HA / PgBouncer are later.
 - Railway buckets are **private**. Use S3 credentials or presigned URLs. They are not on private DNS.
 
-Replica count is Aspire-core. Railway region, serverless, and multi-region maps are set on the materialized service:
+Replica count is Aspire-core `WithReplicas`. Railway region and `sleepApplication` are set on the materialized service:
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -149,7 +149,7 @@ builder.AddProject<Projects.Api>("api")
     });
 ```
 
-Official region ids: `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. When `ReplicaRegions` is set, it is the source of truth and wins over `WithReplicas` + `Region`. `WithReplicas` alone (no region / no map) sets Railway `numReplicas` on the service's current region.
+Official deploy region ids (`Region.region`): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Airport codes (`sjc`, `iad`, `ams`, `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are rejected. When `ReplicaRegions` is set, it wins over `WithReplicas` + `Region` and deploy sends `multiRegionConfig` only. `WithReplicas` alone sends `numReplicas` for the service's current Railway region. `Serverless` writes `sleepApplication` for every replica of that service.
 
 ## Docs
 

@@ -89,9 +89,9 @@ Resolution order (`RailwayEnvironmentResource.ResolveDeployImageAsync`):
 
 `resolveContainerRegistry` uses `WithContainerRegistry` when present, otherwise the single `IContainerRegistry` in the model.
 
-## Compute settings (replicas, region, serverless)
+## Compute settings (replicas, region, sleepApplication)
 
-Replica count is Aspire-core. Call `WithReplicas` on the project or container. Publish copies `resource.GetReplicaCount()` into `railway-plan.json` when a `ReplicaAnnotation` is present. Implicit compute on `AddRailwayEnvironment` is enough; you do not need `PublishAsRailwayService` just to set replicas.
+Replica count is Aspire-core. Call `WithReplicas` on a project (`ProjectResource`). Publish copies `resource.GetReplicaCount()` into `railway-plan.json` when a `ReplicaAnnotation` is present. Implicit compute on `AddRailwayEnvironment` is enough; you do not need `PublishAsRailwayService` just to set replicas.
 
 Railway-specific settings use `PublishAsRailwayService`:
 
@@ -118,17 +118,19 @@ builder.AddProject<Projects.Api>("api")
     });
 ```
 
-Official region ids ([Railway regions](https://docs.railway.com/deployments/regions)): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Unknown ids fail at publish and before GraphQL apply. Total replicas must be at least 1 and at most 50 ([scale](https://docs.railway.com/cli/scale), [scaling](https://docs.railway.com/deployments/scaling)).
+Official deploy region ids ([Railway regions](https://docs.railway.com/deployments/regions), `Region.region`): `us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`. Airport codes from `Query.regions.id` (`sjc`, `iad`, `ams`, `sin`) and older ids (`us-west1`, `us-east4`, `europe-west4`) are rejected. Total replicas must be at least 1 and at most 50 ([scale](https://docs.railway.com/cli/scale), [scaling](https://docs.railway.com/deployments/scaling)) — not the 200 in `railway.schema.json`.
 
-How apply maps plan fields onto the existing `serviceInstanceUpdate` input:
+How apply maps plan fields onto the existing `serviceInstanceUpdate` input (`environmentId` is always passed):
 
 | Plan fields | GraphQL input |
 | --- | --- |
 | `replicaRegions` set | `multiRegionConfig` (region id → `{ numReplicas }`). `numReplicas` is not sent. This map wins over `WithReplicas` + `region`. |
 | `region` set (no map) | `multiRegionConfig` `{ [region]: { numReplicas: replicas ?? 1 } }` |
-| `replicas` only (`WithReplicas`, no region / no map) | `numReplicas` — documented single-region path; applies to the service's current Railway region |
-| `serverless` set | `sleepApplication` (only when the user set it) |
+| `replicas` only (`WithReplicas`, no region / no map) | `numReplicas` — official single-region path ([autoscale](https://docs.railway.com/guides/autoscale-horizontally)); applies to the service's current Railway region |
+| `serverless` set | `sleepApplication` (only when the user set it; there is no GraphQL field named `serverless`; applies to all replicas) |
 | none of the above | today's image-only `source.image` update |
 
-`serviceCreate` does not take these fields. Apply sends them on `serviceInstanceUpdate` after the service id exists (create and later updates). If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. Managed Postgres, Redis, and buckets are not scaled this way.
+Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends them on `serviceInstanceUpdate` after the service id exists (create and later updates). If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query.
+
+Replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region is set on them. Apply never sends `numReplicas` / `multiRegionConfig` for those services. Buckets are not Railway volumes and stay on the existing create/credentials path.
 

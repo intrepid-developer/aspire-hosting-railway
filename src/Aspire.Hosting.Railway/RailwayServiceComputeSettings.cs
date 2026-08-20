@@ -18,6 +18,13 @@ internal static class RailwayServiceComputeSettings
         foreach (var service in plan.Services)
         {
             Validate(service);
+            if (HasReplicaPlacement(service) && IsVolumeBackedManagedService(plan, service.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' is volume-backed and cannot be scaled. " +
+                    "Replicas cannot be used with volumes (https://docs.railway.com/volumes/reference). " +
+                    "numReplicas and multiRegionConfig are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis.");
+            }
         }
     }
 
@@ -93,6 +100,16 @@ internal static class RailwayServiceComputeSettings
         return input;
     }
 
+    internal static bool HasReplicaPlacement(RailwayPlanService service) =>
+        service.Replicas is not null ||
+        !string.IsNullOrWhiteSpace(service.Region) ||
+        service.ReplicaRegions is { Count: > 0 };
+
+    internal static bool IsVolumeBackedManagedService(RailwayPlan plan, string serviceName) =>
+        plan.ManagedServices.Any(managed =>
+            !string.IsNullOrWhiteSpace(managed.TemplateCode) &&
+            string.Equals(managed.Name, serviceName, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
     /// Prefer <c>replicaRegions</c> over <c>region</c> + <c>WithReplicas</c>. An empty
     /// map is treated as unset so it is not sent.
@@ -128,7 +145,8 @@ internal static class RailwayServiceComputeSettings
 
         throw new InvalidOperationException(
             $"Unknown Railway region '{regionId}' for service '{serviceName}'. " +
-            $"Official region ids are: {string.Join(", ", RailwayConstants.OfficialRegionIds)}. " +
+            $"Use official deploy region ids (Region.region): {string.Join(", ", RailwayConstants.OfficialRegionIds)}. " +
+            "Airport codes (sjc, iad, ams, sin) and older ids (us-west1, us-east4, europe-west4) are not deploy keys. " +
             "See https://docs.railway.com/deployments/regions.");
     }
 

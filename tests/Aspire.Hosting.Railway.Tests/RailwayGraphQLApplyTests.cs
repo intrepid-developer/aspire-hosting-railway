@@ -872,6 +872,27 @@ public class RailwayGraphQLApplyTests
     }
 
     [Fact]
+    public async Task Apply_VolumeBackedManagedServiceScale_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true);
+        plan.Services[0].Name = "postgres";
+        plan.Services[0].Replicas = 2;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("volume-backed", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("docs.railway.com/volumes/reference", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
     public async Task Apply_UnknownRegion_FailsBeforeGraphQL()
     {
         var handler = new ScriptedGraphQLHandler();
