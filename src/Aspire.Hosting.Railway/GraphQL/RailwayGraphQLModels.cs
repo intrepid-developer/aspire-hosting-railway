@@ -75,9 +75,10 @@ public sealed class ServiceInstanceUpdateInput
     public bool? SleepApplication { get; set; }
 
     /// <summary>
-    /// Gets or sets the single-region replica count. Official autoscale path when
-    /// only <c>WithReplicas</c> is set (no region / no multi-region map). Never sent
-    /// together with <see cref="MultiRegionConfig"/>.
+    /// Gets or sets the documented single-region replica count
+    /// (<see href="https://docs.railway.com/guides/autoscale-horizontally"/>)
+    /// when only <c>WithReplicas</c> is set (no region / no multi-region map).
+    /// Never sent together with <see cref="MultiRegionConfig"/>.
     /// </summary>
     [JsonPropertyName("numReplicas")]
     public int? NumReplicas { get; set; }

@@ -21,7 +21,7 @@ Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.H
 | [`IntrepidDeveloper.Aspire.Hosting.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway.Storage) | `AddRailwayBucket`: local S3-compatible container; Railway bucket on deploy |
 | [`IntrepidDeveloper.Aspire.Railway.Storage`](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Railway.Storage) | Client: `AddRailwayBucketClient` registers `IAmazonS3` |
 
-AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`.
+AppHost extensions live in `Aspire.Hosting`. Resource types live in `Aspire.Hosting.Railway` / `.PostgreSQL` / `.Redis` / `.Storage`. Postgres and Redis templates are volume-backed; Railway [replicas cannot be used with volumes](https://docs.railway.com/volumes/reference).
 
 ## Quick start
 
