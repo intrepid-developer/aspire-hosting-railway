@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.11** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
+Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.12** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
 
 ## Restore from nuget.org
 
@@ -51,10 +51,10 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using` fo
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Railway replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference), so those templates are not scaled. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.12" />
 ```
 
 ```csharp
@@ -101,7 +101,7 @@ builder.Build().Run();
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.12" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.0" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.0" />
 ```
@@ -129,15 +129,18 @@ Copy `.env.example` to a local `.env` (gitignored) or set environment variables 
 
 Local `aspire run` needs no token and never talks to Railway. The Railway environment resource is not added to the model in run mode.
 
-## First publish / deploy
+## First publish / deploy / destroy
 
 ```bash
 aspire publish
 aspire deploy
+aspire destroy
 ```
 
 Publish writes `railway-plan.json` plus a `.env.example` of captured parameter names. It does not call Railway. Secrets stay out of the plan only when they are Aspire parameters (`AddParameter(secret: true)`). `WithEnvironment("API_KEY", value)` string literals are written as-is.
 
 Deploy resolves the token, applies the plan, persists Railway ids, and reports real progress or failures. Image-based services need `IContainerRegistry` (GHCR or Docker Hub). Missing registry fails with a message to add one. This integration does not run `railway up`.
 
-See [publish-and-deploy.md](publish-and-deploy.md) for pipeline steps, adopt, staging, and image resolution.
+Destroy tears down resources **this integration created** in the mapped Railway environment (`aspire destroy --environment Staging` → `staging`). Aspire already prompts; `--yes` / `--non-interactive --yes` skip that prompt. Adopted resources are skipped. Buckets stay (no public `bucketDelete`). The Railway project is not deleted. This is not in-deploy overlap/drain.
+
+See [publish-and-deploy.md](publish-and-deploy.md) for pipeline steps, adopt, staging, destroy, and image resolution.

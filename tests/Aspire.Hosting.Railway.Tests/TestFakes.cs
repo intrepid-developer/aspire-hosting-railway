@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Railway;
 
 using Microsoft.Extensions.Logging;
 
@@ -186,6 +187,24 @@ internal static class GraphQLFixtures
 
     public static string ScalarSuccess => """{"data":true}""";
 
+    public static string ServiceDelete => """{"data":{"serviceDelete":true}}""";
+
+    public static string ServiceDomainDelete => """{"data":{"serviceDomainDelete":true}}""";
+
+    public static string CustomDomainDelete => """{"data":{"customDomainDelete":true}}""";
+
+    public static string EnvironmentDelete => """{"data":{"environmentDelete":true}}""";
+
+    public static string ProjectWithProductionAndStaging =>
+        ProjectCanvas(
+            [(ApiServiceId, "api"), (PostgresServiceId, "Postgres")],
+            buckets: [(BucketId, "uploads")],
+            environments:
+            [
+                (ProductionEnvironmentId, "production"),
+                (StagingEnvironmentId, "staging")
+            ]);
+
     public static string TemplatePostgres =>
         """{"data":{"template":{"id":"tpl_postgres_placeholder","code":"postgres","serializedConfig":{"services":{"postgres":{}}}}}}""";
 
@@ -237,10 +256,12 @@ internal static class GraphQLFixtures
 
     public static string ProjectCanvas(
         IReadOnlyList<(string Id, string Name)> services,
-        IReadOnlyList<(string Id, string Name)>? buckets = null)
+        IReadOnlyList<(string Id, string Name)>? buckets = null,
+        IReadOnlyList<(string Id, string Name)>? environments = null)
     {
         var serviceEdges = NamedEdges(services);
         var bucketEdges = NamedEdges(buckets);
+        var environmentEdges = NamedEdges(environments ?? [(ProductionEnvironmentId, "production")]);
 
         var payload = new JsonObject
         {
@@ -250,20 +271,7 @@ internal static class GraphQLFixtures
                 {
                     ["name"] = "railway",
                     ["services"] = new JsonObject { ["edges"] = serviceEdges },
-                    ["environments"] = new JsonObject
-                    {
-                        ["edges"] = new JsonArray
-                        {
-                            new JsonObject
-                            {
-                                ["node"] = new JsonObject
-                                {
-                                    ["id"] = ProductionEnvironmentId,
-                                    ["name"] = "production"
-                                }
-                            }
-                        }
-                    },
+                    ["environments"] = new JsonObject { ["edges"] = environmentEdges },
                     ["buckets"] = new JsonObject { ["edges"] = bucketEdges }
                 }
             }
@@ -271,6 +279,22 @@ internal static class GraphQLFixtures
 
         return payload.ToJsonString();
     }
+
+    public static RailwayGraphQLDestroyService CreateDestroyService(ScriptedGraphQLHandler handler)
+    {
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+        return new RailwayGraphQLDestroyService(client);
+    }
+
+    public static RailwayDestroyRequest CreateDestroyRequest(
+        string? adoptedProjectId = null,
+        string? adoptedEnvironmentId = null) =>
+        new()
+        {
+            Token = Token,
+            AdoptedProjectId = adoptedProjectId,
+            AdoptedEnvironmentId = adoptedEnvironmentId
+        };
 
     private static JsonArray NamedEdges(IReadOnlyList<(string Id, string Name)>? items)
     {

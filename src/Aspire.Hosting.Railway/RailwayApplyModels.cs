@@ -79,6 +79,26 @@ public sealed class RailwayApplyResult
     public Dictionary<string, string> CustomDomainIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets Railway-provided domain ids this apply created, keyed by service name.
+    /// </summary>
+    public Dictionary<string, string> CreatedServiceDomainIds { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets custom-domain ids this apply (or a previous apply) created, keyed by hostname.
+    /// Adopted hostnames stay out of this map so destroy can skip them.
+    /// </summary>
+    public Dictionary<string, string> CreatedCustomDomainIds { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets service ids this integration created (not name-adopted), keyed by
+    /// Railway service name. Used by destroy; not a second ledger.
+    /// </summary>
+    public Dictionary<string, string> CreatedServiceIds { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets volume instance ids keyed by managed service name.
     /// Flatten-safe objects only — never backup payloads.
     /// </summary>
@@ -148,6 +168,37 @@ public sealed class RailwayApplyOptions
 }
 
 /// <summary>
+/// Inputs for <see cref="RailwayGraphQLDestroyService"/>. Token and adopt
+/// ids are resolved by the pipeline and never written to plan files.
+/// </summary>
+public sealed class RailwayDestroyRequest
+{
+    /// <summary>Gets or sets the account or workspace token. Never logged or written to plan files.</summary>
+    public required string Token { get; init; }
+
+    /// <summary>Gets or sets an adopted Railway project id, when <c>AsExisting</c>.</summary>
+    public string? AdoptedProjectId { get; init; }
+
+    /// <summary>Gets or sets an adopted Railway environment id, when <c>AsExisting</c>.</summary>
+    public string? AdoptedEnvironmentId { get; init; }
+}
+
+/// <summary>
+/// Result of a GraphQL destroy. Contains names and skip reasons only — never tokens.
+/// </summary>
+public sealed class RailwayDestroyResult
+{
+    /// <summary>Gets resources that were deleted with a confirmed mutation.</summary>
+    public List<string> Deleted { get; } = [];
+
+    /// <summary>Gets resources that were skipped, with a reason.</summary>
+    public List<string> Skipped { get; } = [];
+
+    /// <summary>Gets warning messages that were reported without failing destroy.</summary>
+    public List<string> Warnings { get; } = [];
+}
+
+/// <summary>
 /// Snapshot of Railway ids stored in <see cref="IDeploymentStateManager"/>.
 /// </summary>
 internal sealed class RailwayDeploymentSnapshot
@@ -155,10 +206,15 @@ internal sealed class RailwayDeploymentSnapshot
     public string? ProjectId { get; set; }
     public string? EnvironmentId { get; set; }
     public string? ProductionEnvironmentId { get; set; }
+    public bool? CreatedProject { get; set; }
+    public bool? CreatedEnvironment { get; set; }
     public Dictionary<string, string> EnvironmentIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> CreatedServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> BucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> CustomDomainIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> CreatedCustomDomainIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> CreatedServiceDomainIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> VolumeInstanceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> VolumeBackupScheduleIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> TemplateCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -182,6 +238,11 @@ internal static class RailwayDeploymentStateStore
     internal const string VolumeInstancesKey = "VolumeInstances";
     internal const string VolumeBackupSchedulesKey = "VolumeBackupSchedules";
     internal const string TemplatesKey = "Templates";
+    internal const string CreatedProjectKey = "CreatedProject";
+    internal const string CreatedEnvironmentsKey = "CreatedEnvironments";
+    internal const string CreatedServicesKey = "CreatedServices";
+    internal const string CreatedCustomDomainsKey = "CreatedCustomDomains";
+    internal const string CreatedServiceDomainsKey = "CreatedServiceDomains";
 
     /// <summary>
     /// Legacy key that stored a JSON array string such as
@@ -201,7 +262,8 @@ internal static class RailwayDeploymentStateStore
         var snapshot = new RailwayDeploymentSnapshot
         {
             ProjectId = ReadString(section.Data, ProjectIdKey),
-            ProductionEnvironmentId = ReadString(section.Data, ProductionEnvironmentIdKey)
+            ProductionEnvironmentId = ReadString(section.Data, ProductionEnvironmentIdKey),
+            CreatedProject = ReadBool(section.Data, CreatedProjectKey)
         };
 
         CopyStringMap(section.Data[EnvironmentIdsKey] as JsonObject, snapshot.EnvironmentIds);
@@ -238,6 +300,13 @@ internal static class RailwayDeploymentStateStore
         CopyTemplateCodes(templatesRoot?["production"], snapshot.ProductionTemplateCodes);
         CopyTemplateCodes(section.Data[AppliedTemplateCodesKey], snapshot.TemplateCodes);
 
+        var createdEnvironments = section.Data[CreatedEnvironmentsKey] as JsonObject;
+        snapshot.CreatedEnvironment = ReadScopedBool(createdEnvironments, railwayEnvironmentName);
+
+        CopyStringMap(section.Data[CreatedServicesKey] as JsonObject, railwayEnvironmentName, snapshot.CreatedServiceIds);
+        CopyStringMap(section.Data[CreatedCustomDomainsKey] as JsonObject, railwayEnvironmentName, snapshot.CreatedCustomDomainIds);
+        CopyStringMap(section.Data[CreatedServiceDomainsKey] as JsonObject, railwayEnvironmentName, snapshot.CreatedServiceDomainIds);
+
         return snapshot;
     }
 
@@ -267,6 +336,18 @@ internal static class RailwayDeploymentStateStore
         WriteScopedMap(section.Data, CustomDomainsKey, railwayEnvironmentName, result.CustomDomainIds);
         WriteScopedMap(section.Data, VolumeInstancesKey, railwayEnvironmentName, result.VolumeInstanceIds);
         WriteScopedMap(section.Data, VolumeBackupSchedulesKey, railwayEnvironmentName, result.VolumeBackupScheduleIds);
+        WriteScopedMap(section.Data, CreatedServicesKey, railwayEnvironmentName, result.CreatedServiceIds);
+        WriteScopedMap(section.Data, CreatedCustomDomainsKey, railwayEnvironmentName, result.CreatedCustomDomainIds);
+        WriteScopedMap(section.Data, CreatedServiceDomainsKey, railwayEnvironmentName, result.CreatedServiceDomainIds);
+
+        var existingCreatedProject = ReadBool(section.Data, CreatedProjectKey);
+        section.Data[CreatedProjectKey] = JsonValue.Create(result.CreatedProject || existingCreatedProject == true);
+
+        var createdEnvironments = section.Data[CreatedEnvironmentsKey] as JsonObject ?? [];
+        var existingCreatedEnvironment = ReadScopedBool(createdEnvironments, railwayEnvironmentName);
+        createdEnvironments[railwayEnvironmentName] =
+            JsonValue.Create(result.CreatedEnvironment || existingCreatedEnvironment == true);
+        section.Data[CreatedEnvironmentsKey] = createdEnvironments;
 
         var templatesRoot = section.Data[TemplatesKey] as JsonObject ?? [];
         // Persist as an object (not a JSON array). Aspire FileDeploymentStateManager
@@ -284,8 +365,89 @@ internal static class RailwayDeploymentStateStore
         await stateManager.SaveSectionAsync(section, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Removes flatten-safe ids for one Railway environment after a successful
+    /// destroy. Keeps <c>ProjectId</c> so a later deploy adopts the leftover
+    /// project instead of calling <c>projectCreate</c> again. v1 never calls
+    /// <c>projectDelete</c>.
+    /// </summary>
+    public static async Task ClearDestroyedEnvironmentAsync(
+        IDeploymentStateManager stateManager,
+        string computeEnvironmentName,
+        string railwayEnvironmentName,
+        CancellationToken cancellationToken)
+    {
+        var section = await stateManager.AcquireSectionAsync($"Railway:{computeEnvironmentName}", cancellationToken)
+            .ConfigureAwait(false);
+
+        RemoveScoped(section.Data, ServicesKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, BucketsKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, CustomDomainsKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, VolumeInstancesKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, VolumeBackupSchedulesKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, TemplatesKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, CreatedServicesKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, CreatedCustomDomainsKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, CreatedServiceDomainsKey, railwayEnvironmentName);
+
+        var destroyedEnvironmentId = ReadString(
+            section.Data[EnvironmentIdsKey] as JsonObject ?? [],
+            railwayEnvironmentName);
+
+        if (section.Data[EnvironmentIdsKey] is JsonObject environmentIds)
+        {
+            environmentIds.Remove(railwayEnvironmentName);
+            section.Data[EnvironmentIdsKey] = environmentIds;
+        }
+
+        if (section.Data[CreatedEnvironmentsKey] is JsonObject createdEnvironments)
+        {
+            createdEnvironments.Remove(railwayEnvironmentName);
+            section.Data[CreatedEnvironmentsKey] = createdEnvironments;
+        }
+
+        var currentEnvironmentId = ReadString(section.Data, EnvironmentIdKey);
+        if (!string.IsNullOrWhiteSpace(destroyedEnvironmentId) &&
+            string.Equals(currentEnvironmentId, destroyedEnvironmentId, StringComparison.Ordinal))
+        {
+            section.Data.Remove(EnvironmentIdKey);
+        }
+
+        await stateManager.SaveSectionAsync(section, cancellationToken).ConfigureAwait(false);
+    }
+
     private static string? ReadString(JsonObject data, string key) =>
-        data[key]?.GetValue<string>();
+        data[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
+    private static bool? ReadBool(JsonObject data, string key)
+    {
+        if (data[key] is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue<bool>(out var flag))
+        {
+            return flag;
+        }
+
+        if (value.TryGetValue<string>(out var text) && bool.TryParse(text, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    private static bool? ReadScopedBool(JsonObject? source, string railwayEnvironmentName)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        return ReadBool(source, railwayEnvironmentName);
+    }
 
     private static void CopyTemplateCodes(JsonNode? source, HashSet<string> destination)
     {
@@ -365,6 +527,12 @@ internal static class RailwayDeploymentStateStore
     private static string? TryGetString(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
+    private static void CopyStringMap(
+        JsonObject? root,
+        string railwayEnvironmentName,
+        Dictionary<string, string> destination) =>
+        CopyStringMap(root?[railwayEnvironmentName] as JsonObject, destination);
+
     private static void CopyStringMap(JsonObject? source, Dictionary<string, string> destination)
     {
         if (source is null)
@@ -380,6 +548,17 @@ internal static class RailwayDeploymentStateStore
                 destination[pair.Key] = value;
             }
         }
+    }
+
+    private static void RemoveScoped(JsonObject data, string rootKey, string railwayEnvironmentName)
+    {
+        if (data[rootKey] is not JsonObject root)
+        {
+            return;
+        }
+
+        root.Remove(railwayEnvironmentName);
+        data[rootKey] = root;
     }
 
     private static void WriteScopedMap(

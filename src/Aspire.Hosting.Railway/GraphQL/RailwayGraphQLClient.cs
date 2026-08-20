@@ -620,6 +620,90 @@ public sealed class RailwayGraphQLClient
             cancellationToken);
 
     /// <summary>
+    /// Sends <c>serviceDelete</c>. <paramref name="id"/> is required.
+    /// Always pass <paramref name="environmentId"/> when known (same habit
+    /// as <c>serviceInstanceUpdate</c>). The live schema marks it optional;
+    /// for non-fork environments Railway deletes the service in every
+    /// non-fork environment.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<JsonElement>> ServiceDeleteAsync(
+        string id,
+        string? environmentId,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        return SendAsync<JsonElement>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.ServiceDelete,
+                OperationName = "serviceDelete",
+                Variables = string.IsNullOrWhiteSpace(environmentId)
+                    ? new { id }
+                    : new { id, environmentId }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>Sends <c>serviceDomainDelete</c>.</summary>
+    public Task<RailwayGraphQLResponse<JsonElement>> ServiceDomainDeleteAsync(
+        string id,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        return SendAsync<JsonElement>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.ServiceDomainDelete,
+                OperationName = "serviceDomainDelete",
+                Variables = new { id }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>Sends <c>customDomainDelete</c>. Destroy only.</summary>
+    public Task<RailwayGraphQLResponse<JsonElement>> CustomDomainDeleteAsync(
+        string id,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        return SendAsync<JsonElement>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.CustomDomainDelete,
+                OperationName = "customDomainDelete",
+                Variables = new { id }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends <c>environmentDelete</c>. Destroy only, and only when this
+    /// integration created the environment.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<JsonElement>> EnvironmentDeleteAsync(
+        string id,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        return SendAsync<JsonElement>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.EnvironmentDelete,
+                OperationName = "environmentDelete",
+                Variables = new { id }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Fetches <c>template(code)</c> and deploys it with <c>templateDeployV2</c> using the returned
     /// <c>id</c> (as <c>templateId</c>) and <c>serializedConfig</c>. Does not invent template UUIDs
     /// or send an empty config.

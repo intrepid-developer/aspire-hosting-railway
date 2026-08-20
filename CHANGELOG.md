@@ -2,6 +2,18 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.0-preview.12
+
+- `aspire destroy` / `destroy-{name}` tears down Railway resources this integration created. It is a new type (`RailwayGraphQLDestroyService`), not an overload of deploy. Aspire already prompts; `--yes` / `--non-interactive --yes` skip that prompt. This is not in-deploy overlap/drain.
+- Confirmed delete operations only (live schema 2026-08-20): `serviceDomainDelete`, `customDomainDelete`, `serviceDelete(environmentId, id)`, `environmentDelete`. Always pass `environmentId` on `serviceDelete` when known. Empty deployment state with no `railway-project-id` fails closed.
+- Adopted resources (`AsExisting()`, `railway-project-id` / `railway-environment-id`, or a live name match on a project we did not create) are skipped with a printed reason.
+- Default blast radius is the mapped Railway environment (`production` / `staging`), not the project. v1 never calls `projectDelete` even though the mutation exists.
+- `serviceDelete` is skipped when another Railway environment remains. The live schema deletes a non-fork service in every non-fork environment, so staging-only destroy does not wipe production services. Staging that we created is removed with `environmentDelete`.
+- Buckets are skipped. Public GraphQL has no `bucketDelete`. Destroy does not call `bucketCredentialsReset` as a fake delete and does not treat the bucket as gone.
+- Volumes and backups are not deleted in this slice (`volumeDelete` / `volumeInstanceBackupDelete` are not called). Cascade from `serviceDelete` is not proven.
+- Persist created-vs-adopted flags in the existing flatten-safe `IDeploymentStateManager` section. After a successful destroy, ids for that Railway environment are cleared; `ProjectId` stays so a later deploy adopts the leftover project.
+- See [publish and deploy](docs/publish-and-deploy.md#destroy) and [GraphQL](docs/graphql.md).
+
 ## 13.5.0-preview.11
 
 - `PublishAsRailwayPostgres` can request Railway volume backup schedules via a callback (`VolumeBackupDaily` / `VolumeBackupWeekly` / `VolumeBackupMonthly`). The no-arg overload is unchanged. Unset / false omits that kind. All false / no callback omits the field so deploy leaves the dashboard as-is. At least one true kind is required to send the mutation.

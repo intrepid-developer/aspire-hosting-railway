@@ -3,11 +3,11 @@
 [![NuGet](https://img.shields.io/nuget/vpre/IntrepidDeveloper.Aspire.Hosting.Railway.svg?label=nuget)](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Aspire 13.5 hosting so `aspire publish` and `aspire deploy` provision [Railway](https://railway.com). Local `aspire run` stays the normal Aspire model and never needs a Railway token.
+Aspire 13.5 hosting so `aspire publish`, `aspire deploy`, and `aspire destroy` can target [Railway](https://railway.com). Local `aspire run` stays the normal Aspire model and never needs a Railway token.
 
 ## Status
 
-Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.0-preview.11** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.0** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.0-preview.12** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.0** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -87,16 +87,16 @@ dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.11" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.12" />
 ```
 
 API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.11" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.12" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.0" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.0" />
 ```
@@ -116,12 +116,12 @@ Local `aspire run` needs no token.
 
 ## Publish vs deploy
 
-| | Publish | Deploy |
-| --- | --- | --- |
-| Command | `aspire publish` | `aspire deploy` |
-| Talks to Railway? | No | Yes (GraphQL) |
-| Output | `railway-plan.json` plus a `.env.example` of captured parameter names | Created or adopted Railway project, environment, services, templates, buckets |
-| Secrets | Parameter **names** and Railway expressions when you use `AddParameter`. `WithEnvironment` string literals are written as-is | Resolves the token and parameter values in memory; never writes those to the plan or deployment state |
+| | Publish | Deploy | Destroy |
+| --- | --- | --- | --- |
+| Command | `aspire publish` | `aspire deploy` | `aspire destroy` (`--yes` / `--non-interactive --yes` skip the prompt) |
+| Talks to Railway? | No | Yes (GraphQL) | Yes (GraphQL) |
+| Output | `railway-plan.json` plus a `.env.example` of captured parameter names | Created or adopted Railway project, environment, services, templates, buckets | Tears down resources **this integration created** in the mapped Railway environment |
+| Secrets | Parameter **names** and Railway expressions when you use `AddParameter`. `WithEnvironment` string literals are written as-is | Resolves the token and parameter values in memory; never writes those to the plan or deployment state | Same token rules as deploy; never writes secrets |
 
 `AddRailwayEnvironment` is the Railway **project** (compute environment). The Railway environment name is mapped from Aspire `--environment`: Production → `production`, Staging → `staging` (lowercase). Override with `WithRailwayEnvironmentName`.
 
@@ -129,7 +129,7 @@ Local `aspire run` needs no token.
 
 - Railway has **no image registry**. Push to GHCR or Docker Hub, then deploy sets `source.image`.
 - This integration does not shell out to `railway up`. Railpack has no .NET support; use an image or a Dockerfile.
-- `destroy-{name}` is a stub. It is not the same as in-deploy overlap/drain.
+- `aspire destroy` tears down resources this integration created in the mapped Railway environment (`production` / `staging`). Adopted resources (`AsExisting()`, `railway-project-id` / `railway-environment-id`, or a live name match) are skipped. The Railway project is not deleted. Buckets are skipped — public GraphQL has no `bucketDelete`. This is not in-deploy overlap/drain.
 - PR / ephemeral Railway environments are not in this release.
 - MySQL, MongoDB, and HA / PgBouncer are later. PITR enable is HA-only and is not in this slice.
 - Railway buckets are **private**. Use S3 credentials or presigned URLs. They are not on private DNS.

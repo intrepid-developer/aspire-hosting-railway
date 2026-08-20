@@ -6,7 +6,7 @@ The integration talks only to Railway GraphQL v2:
 https://backboard.railway.com/graphql/v2
 ```
 
-The typed client lives in `src/Aspire.Hosting.Railway/GraphQL/`. Deploy calls `RailwayGraphQLApplyService`. Do not change the public AppHost surface when extending apply.
+The typed client lives in `src/Aspire.Hosting.Railway/GraphQL/`. Deploy calls `RailwayGraphQLApplyService`. Destroy calls `RailwayGraphQLDestroyService` (a separate type). Do not change the public AppHost surface when extending apply or destroy.
 
 ## Do not invent operations
 
@@ -30,7 +30,7 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 | `domains` | `domains(environmentId, projectId, serviceId)` → `AllDomains` (`customDomains`, `serviceDomains`). Always pass all three ids. |
 | `customDomain` | `customDomain(id, projectId)`. Re-query status after adopt. `verificationToken` lives on `CustomDomainStatus`, not `DNSRecords`. |
 | `customDomainAvailable` | `customDomainAvailable(domain)` → `DomainAvailable { available, message }`. |
-| `customDomainCreate` | `CustomDomainCreateInput`: `domain`, `environmentId`, `projectId`, `serviceId` required; optional `targetPort`. Omit unset; do not send `null`. Do not call `customDomainDelete` or `customDomainIssueCertificate` on this path. |
+| `customDomainCreate` | `CustomDomainCreateInput`: `domain`, `environmentId`, `projectId`, `serviceId` required; optional `targetPort`. Omit unset; do not send `null`. Do not call `customDomainDelete` or `customDomainIssueCertificate` on the **deploy** path. |
 | `customDomainUpdate` | `customDomainUpdate(environmentId, id, targetPort)`. Only when an adopted domain's known target port differs. |
 | `template` | Fetches a template by code. Use returned `id` as `templateId` and returned `serializedConfig`. Never invent template UUIDs. |
 | `templateDeployV2` | Deploys that fetched template. |
@@ -42,6 +42,10 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 | `environment` | `environment(id: String!, projectId: String)`. Selects `volumeInstances` (`edges { node { id serviceId } }`). Match `node.serviceId` to the official Postgres template service id. Retry if not visible yet. Do not use `adminVolumeInstancesForVolume` or `volumeInstance(id)` unless the id is already known. Service has no `volumes` field. |
 | `volumeInstanceBackupScheduleList` | `volumeInstanceBackupScheduleList(volumeInstanceId)` → list of `VolumeInstanceBackupSchedule` (not a connection). |
 | `volumeInstanceBackupScheduleUpdate` | `volumeInstanceBackupScheduleUpdate(kinds: [VolumeInstanceBackupScheduleKind!]!, volumeInstanceId)` → `Boolean!`. Enum: `DAILY` / `WEEKLY` / `MONTHLY`. Replaces the kinds set — apply unions requested with already-present. |
+| `serviceDelete` | Destroy. `serviceDelete(environmentId: String, id: String!)` → `Boolean!`. Always pass `environmentId` when known. For non-fork environments the live schema deletes the service in every non-fork environment — skip when another environment remains. |
+| `serviceDomainDelete` | Destroy. `serviceDomainDelete(id: String!)` → `Boolean!`. Only domains this integration created. |
+| `customDomainDelete` | Destroy. `customDomainDelete(id: String!)` → `Boolean!`. Only hostnames this integration created. Deploy does not call this. |
+| `environmentDelete` | Destroy. `environmentDelete(id: String!)` → `Boolean!`. Only when this integration created the environment. |
 
 Documents are in `RailwayGraphQLOperations`. Apply maps `RailwayRegion` to official `Region.region` strings (`us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`). Cap total replicas at 50. Config-as-code `deploy.*` names are mapping only.
 
@@ -49,10 +53,10 @@ Custom hostnames: after `serviceDomainCreate`, list `domains`, adopt case-insens
 
 ## Not in v1
 
-- No project or environment delete. `destroy-{name}` is a stub and must not invent backup or volume deletes.
+- No `projectDelete` (the mutation exists; v1 does not call it). No public `bucketDelete`.
 - Never `pluginCreate`. Never invent `cronCreate` / `scheduleCreate` / `WAL_ARCHIVE_*` / `bucketCreate` of `Postgres-PITR`.
-- Do not call `customDomainDelete` or `customDomainIssueCertificate` on this path.
-- Do not call `volumeInstanceBackupCreate` / `Delete` / `Lock` / `Restore`, `volumeInstancePITRRestore`, `enablePitrForHaCluster` / `disablePitrForHaCluster`.
+- Do not call `customDomainDelete` or `customDomainIssueCertificate` on the **deploy** path. Destroy may call `customDomainDelete` for hostnames we created.
+- Do not call `volumeDelete`, `volumeInstanceBackupCreate` / `Delete` / `Lock` / `Restore`, `volumeInstancePITRRestore`, `enablePitrForHaCluster` / `disablePitrForHaCluster`.
 - PITR enable is HA-only. Non-HA PITR enable is not a confirmed public mutation.
 - Do not send scale / limits / healthcheck / restart / start / pre-deploy / teardown / cron / custom domains for `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets.
 - Do not use `environmentPatchCommit` / staged patches for those compute settings.

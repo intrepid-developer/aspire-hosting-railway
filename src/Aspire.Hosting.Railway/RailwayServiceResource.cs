@@ -267,8 +267,8 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     /// errors are surfaced. Optional GraphQL <c>targetPort</c> comes from the
     /// Aspire HTTP endpoint when present — there is no separate AppHost
     /// setter. Not sent for <c>PublishAsRailwayPostgres</c> /
-    /// <c>PublishAsRailwayRedis</c> / buckets. Destroy of domains is a later
-    /// slice. See
+    /// <c>PublishAsRailwayRedis</c> / buckets. Destroy deletes domains this
+    /// integration created; adopted hostnames are skipped. See
     /// <see href="https://docs.railway.com/networking/domains/working-with-domains"/>
     /// and
     /// <see href="https://docs.railway.com/integrations/api/manage-domains"/>.

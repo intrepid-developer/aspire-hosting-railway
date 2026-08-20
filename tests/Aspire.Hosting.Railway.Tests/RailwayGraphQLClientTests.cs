@@ -618,6 +618,39 @@ public class RailwayGraphQLClientTests
         Assert.Equal(0, handler.Count("templateDeployV2"));
     }
 
+    [Fact]
+    public async Task ServiceDelete_PostsIdAndEnvironmentId()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.ServiceDelete);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceDeleteAsync(
+            GraphQLFixtures.ApiServiceId,
+            GraphQLFixtures.ProductionEnvironmentId,
+            "placeholder-token");
+
+        Assert.Contains("\"operationName\":\"serviceDelete\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.ApiServiceId, handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.ProductionEnvironmentId, handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("projectDelete", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("bucketDelete", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EnvironmentDelete_PostsConfirmedMutation()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.EnvironmentDelete);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.EnvironmentDeleteAsync(GraphQLFixtures.StagingEnvironmentId, "placeholder-token");
+
+        Assert.Contains("\"operationName\":\"environmentDelete\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.StagingEnvironmentId, handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("projectDelete", handler.Body, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingHandler(string responseJson, HttpStatusCode statusCode = HttpStatusCode.OK) : HttpMessageHandler
     {
         public string Body { get; private set; } = "";
