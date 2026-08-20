@@ -2,6 +2,17 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.8
+
+- `PublishAsRailwayService` can set `OverlapSeconds` and `DrainingSeconds`. There is no Aspire-core annotation. Unset omits the fields. Either field can be set alone. Values must be greater than or equal to 0 when set (0 is no wait / immediate kill). Negative fails honestly. Railway defaults are not hardcoded.
+- This is **in-deploy lifecycle** (zero-downtime cutover: overlap the new replica with the old, then SIGTERM → SIGKILL). It is not `aspire destroy` / `destroy-{name}` (project teardown is a separate stub).
+- `aspire publish` writes `overlapSeconds` / `drainingSeconds` into `railway-plan.json` as ints. Unset fields are omitted. Do not send `null`.
+- `aspire deploy` applies them on the existing `serviceInstanceUpdate` call (`ServiceInstanceUpdateInput.overlapSeconds` Int, `drainingSeconds` Int). Always pass `environmentId`. These fields were confirmed on the live schema 2026-08-20. No new mutation. Limits stay on `serviceInstanceLimitsUpdate`.
+- After the new deploy is active, the previous replica stays up for `overlapSeconds`. Then Railway sends SIGTERM and waits `drainingSeconds` before SIGKILL. See [deployment teardown](https://docs.railway.com/guides/deployment-teardown) and [deployments teardown](https://docs.railway.com/deployments/deployment-teardown).
+- Volume-backed services cannot do zero-downtime; overlap does not invent a second volume mount.
+- Config-as-code `deploy.overlapSeconds` / `deploy.drainingSeconds` and the `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` / `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` variables are mapping only. The apply path is `serviceInstanceUpdate` (GraphQL Int, not the string form in railway.json examples).
+- `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets do not get these fields.
+
 ## 13.5.0-preview.7
 
 - `PublishAsRailwayService` can set `StartCommand` and `PreDeployCommand`. There is no Aspire-core annotation, and Aspire `WithArgs` is not mapped. Unset omits the fields so the image ENTRYPOINT/CMD applies for start. Either field can be set alone. Empty or whitespace fails honestly.

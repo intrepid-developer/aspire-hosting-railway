@@ -256,6 +256,16 @@ public static class RailwayPlanBuilder
         {
             service.PreDeployCommand = [railwayService.PreDeployCommand];
         }
+
+        if (railwayService.OverlapSeconds is { } overlapSeconds)
+        {
+            service.OverlapSeconds = overlapSeconds;
+        }
+
+        if (railwayService.DrainingSeconds is { } drainingSeconds)
+        {
+            service.DrainingSeconds = drainingSeconds;
+        }
     }
 
     private static RailwayServiceResource? GetConfiguredRailwayService(

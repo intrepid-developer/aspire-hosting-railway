@@ -353,6 +353,37 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task ServiceInstanceUpdate_SerializesOverlapAndDrainingSeconds()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceUpdateAsync(
+            "svc_placeholder",
+            "env_placeholder",
+            new ServiceInstanceUpdateInput
+            {
+                Source = new ServiceSourceInput { Image = "nginx" },
+                OverlapSeconds = 60,
+                DrainingSeconds = 10
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("overlapSeconds").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("drainingSeconds").ValueKind);
+        Assert.Equal(60, input.GetProperty("overlapSeconds").GetInt32());
+        Assert.Equal(10, input.GetProperty("drainingSeconds").GetInt32());
+        Assert.False(input.TryGetProperty("startCommand", out _));
+        Assert.False(input.TryGetProperty("RAILWAY_DEPLOYMENT_OVERLAP_SECONDS", out _));
+        Assert.False(input.TryGetProperty("RAILWAY_DEPLOYMENT_DRAINING_SECONDS", out _));
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ServiceInstanceLimitsUpdate_SerializesConfirmedFieldNames()
     {
         var handler = new RecordingHandler("""{"data":true}""");

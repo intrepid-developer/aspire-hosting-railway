@@ -190,6 +190,24 @@ public sealed class RailwayPlanService
     /// </summary>
     [JsonPropertyName("preDeployCommand")]
     public List<string>? PreDeployCommand { get; set; }
+
+    /// <summary>
+    /// Gets or sets overlap seconds from
+    /// <c>PublishAsRailwayService</c> <c>OverlapSeconds</c>. Omitted when
+    /// unset. GraphQL writes <c>overlapSeconds</c> (Int). In-deploy
+    /// lifecycle, not <c>aspire destroy</c>.
+    /// </summary>
+    [JsonPropertyName("overlapSeconds")]
+    public int? OverlapSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets draining seconds from
+    /// <c>PublishAsRailwayService</c> <c>DrainingSeconds</c>. Omitted when
+    /// unset. GraphQL writes <c>drainingSeconds</c> (Int). In-deploy
+    /// lifecycle, not <c>aspire destroy</c>.
+    /// </summary>
+    [JsonPropertyName("drainingSeconds")]
+    public int? DrainingSeconds { get; set; }
 }
 
 /// <summary>
