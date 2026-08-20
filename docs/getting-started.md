@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on GitHub Packages, not nuget.org. Current version is **0.1.0-preview.12** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
+Preview packages live on GitHub Packages and nuget.org. Pack publishes to nuget.org via Trusted Publishing (OIDC, no stored key). Current version is **0.1.0-preview.12** (`Directory.Build.props`). Pinned Aspire.Hosting **13.4.6** / `net10.0`.
 
 ## Restore from GitHub Packages
 

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Package version to publish to GitHub Packages
+        description: Package version to publish to GitHub Packages and nuget.org
         required: false
         default: "0.1.0-preview.12"
         type: string
@@ -15,10 +15,15 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   pack:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,6 +93,47 @@ jobs:
             fi
           fi
 
+      - name: NuGet login
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: Intrepid-Developer
+
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          shopt -s nullglob
+          packages=()
+          for pkg in artifacts/*.nupkg; do
+            [[ "$pkg" == *.symbols.nupkg ]] && continue
+            packages+=("$pkg")
+          done
+          if [ ${#packages[@]} -eq 0 ]; then
+            echo "No nupkg files to push" >&2
+            exit 1
+          fi
+
+          # nuget.org returns 409 / already-published for a version that is
+          # already on the feed; --skip-duplicate and an explicit 409 /
+          # already-published fallback treat that as success so a re-pack
+          # of the same version cannot fail the job.
+          set +e
+          output="$(dotnet nuget push "${packages[@]}" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            if printf '%s\n' "$output" | grep -qiE '409|Conflict|already|duplicate'; then
+              echo "Version already on nuget.org; continuing."
+            else
+              exit "$status"
+            fi
+          fi
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -110,11 +156,11 @@ jobs:
               found { print }
             ' CHANGELOG.md
             echo
-            echo "Packages are on GitHub Packages: https://nuget.pkg.github.com/intrepid-developer/index.json"
+            echo "Packages are on nuget.org and GitHub Packages: https://nuget.pkg.github.com/intrepid-developer/index.json"
           } > "$notes_file"
 
           if ! tr -d '\r' < CHANGELOG.md | grep -Fxq "## ${VERSION}"; then
-            echo "No ## ${VERSION} section in CHANGELOG.md; notes will only mention GitHub Packages." >&2
+            echo "No ## ${VERSION} section in CHANGELOG.md; notes will only mention nuget.org and GitHub Packages." >&2
           fi
 
           echo "Release notes:"
