@@ -137,6 +137,23 @@ public sealed class RailwayPlanService
     /// </summary>
     [JsonPropertyName("replicaRegions")]
     public Dictionary<string, int>? ReplicaRegions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Railway deploy healthcheck path copied from Aspire
+    /// <c>WithHttpHealthCheck</c> / <c>HealthCheckAnnotation</c>. Omitted when
+    /// no HTTP health check is present. GraphQL writes <c>healthcheckPath</c>.
+    /// Railway probes until HTTP 200; a non-200 Aspire statusCode is ignored.
+    /// </summary>
+    [JsonPropertyName("healthcheckPath")]
+    public string? HealthcheckPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Railway deploy healthcheck timeout in seconds from
+    /// <c>PublishAsRailwayService</c>. Omitted when unset (Railway default 300).
+    /// GraphQL writes <c>healthcheckTimeout</c>.
+    /// </summary>
+    [JsonPropertyName("healthcheckTimeout")]
+    public int? HealthcheckTimeout { get; set; }
 }
 
 /// <summary>

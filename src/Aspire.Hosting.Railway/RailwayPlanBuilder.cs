@@ -196,6 +196,11 @@ public static class RailwayPlanBuilder
             service.Replicas = resource.GetReplicaCount();
         }
 
+        if (RailwayHttpHealthCheckMapper.TryGetPath(resource) is { } healthcheckPath)
+        {
+            service.HealthcheckPath = healthcheckPath;
+        }
+
         var railwayService = GetConfiguredRailwayService(resource, environment);
         if (railwayService is null)
         {
@@ -225,6 +230,11 @@ public static class RailwayPlanBuilder
         if (railwayService.MemoryGb is { } memoryGb)
         {
             service.MemoryGb = memoryGb;
+        }
+
+        if (railwayService.HealthcheckTimeoutSeconds is { } healthcheckTimeout)
+        {
+            service.HealthcheckTimeout = healthcheckTimeout;
         }
     }
 

@@ -89,6 +89,23 @@ public sealed class ServiceInstanceUpdateInput
     /// </summary>
     [JsonPropertyName("region")]
     public string? Region { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deploy healthcheck path. Confirmed
+    /// <c>ServiceInstanceUpdateInput.healthcheckPath</c> (live schema 2026-08-20).
+    /// Omitted when unset. Railway GETs this path until HTTP 200, then flips
+    /// traffic. Not continuous monitoring.
+    /// </summary>
+    [JsonPropertyName("healthcheckPath")]
+    public string? HealthcheckPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deploy healthcheck timeout in seconds. Confirmed
+    /// <c>ServiceInstanceUpdateInput.healthcheckTimeout</c> (live schema 2026-08-20).
+    /// Omitted when unset (Railway default 300). Do not send <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("healthcheckTimeout")]
+    public int? HealthcheckTimeout { get; set; }
 }
 
 /// <summary>

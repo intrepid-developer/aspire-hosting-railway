@@ -12,6 +12,7 @@ var uploads = builder.AddRailwayBucket("uploads");
 
 builder.AddProject<Projects.Api>("api")
     .WithReplicas(2)
+    .WithHttpHealthCheck("/health")
     .WithReference(db)
     .WithReference(cache)
     .WithReference(uploads)
@@ -22,6 +23,7 @@ builder.AddProject<Projects.Api>("api")
         s.Region = RailwayRegion.UsWest2;
         s.Cpu = 1;
         s.MemoryGb = 2;
+        s.HealthcheckTimeoutSeconds = 120;
     });
 
 builder.Build().Run();

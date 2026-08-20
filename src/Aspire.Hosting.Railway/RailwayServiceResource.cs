@@ -91,6 +91,22 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public double? MemoryGb { get; set; }
 
     /// <summary>
+    /// Gets or sets the Railway deploy healthcheck timeout in seconds. Maps to
+    /// <c>ServiceInstanceUpdateInput.healthcheckTimeout</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Must be greater than 0. Unset omits the field so
+    /// Railway's default (300 seconds) applies. There is no Aspire-core timeout
+    /// annotation; configure this through <c>PublishAsRailwayService</c>. The
+    /// path comes from Aspire <c>WithHttpHealthCheck</c>. Not sent for
+    /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> / buckets.
+    /// Railway probes until HTTP 200, then flips traffic. It is not continuous
+    /// monitoring. Origin host is <c>healthcheck.railway.app</c>. Volume-backed
+    /// services still have cutover downtime.
+    /// </remarks>
+    public int? HealthcheckTimeoutSeconds { get; set; }
+
+    /// <summary>
     /// Gets or sets a multi-region replica map of <see cref="RailwayRegion"/> to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>
