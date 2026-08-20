@@ -3,13 +3,13 @@
 [![NuGet](https://img.shields.io/nuget/vpre/IntrepidDeveloper.Aspire.Hosting.Railway.svg?label=nuget)](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Aspire 13.4 hosting so `aspire publish` and `aspire deploy` provision [Railway](https://railway.com).
+Aspire 13.5 hosting so `aspire publish` and `aspire deploy` provision [Railway](https://railway.com).
 
 Locally you keep the normal Aspire resource model: official Postgres and Redis, `WithReference`, `WaitFor`, health checks, and the dashboard. Publish writes `railway-plan.json`. Deploy talks to Railway over GraphQL. `aspire run` never needs a Railway token and never calls Railway.
 
 ## Status
 
-Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **0.1.0-preview.12** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.4.6** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.0-preview.1** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.0** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -71,18 +71,18 @@ GitHub Packages is still published if you want that feed; see [Getting started](
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="0.1.0-preview.12" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="0.1.0-preview.12" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="0.1.0-preview.12" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="0.1.0-preview.12" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.1" />
 ```
 
 API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="0.1.0-preview.12" />
-<PackageReference Include="Aspire.Npgsql" Version="13.4.6" />
-<PackageReference Include="Aspire.StackExchange.Redis" Version="13.4.6" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.1" />
+<PackageReference Include="Aspire.Npgsql" Version="13.5.0" />
+<PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.0" />
 ```
 
 ## Auth

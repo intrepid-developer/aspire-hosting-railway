@@ -6,7 +6,7 @@ on:
       version:
         description: Package version to publish to GitHub Packages and nuget.org
         required: false
-        default: "0.1.0-preview.12"
+        default: "13.5.0-preview.1"
         type: string
   push:
     tags:

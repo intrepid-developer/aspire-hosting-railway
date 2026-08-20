@@ -1,6 +1,6 @@
 # Agent notes
 
-This repository is a public Aspire 13.4 / `net10.0` hosting integration for Railway. Humans read [README.md](README.md) and [docs/](docs/). This file is the contract for coding agents.
+This repository is a public Aspire 13.5 / `net10.0` hosting integration for Railway. Humans read [README.md](README.md) and [docs/](docs/). This file is the contract for coding agents.
 
 ## Layout
 
@@ -20,7 +20,7 @@ NuGet IDs use the `IntrepidDeveloper.` prefix. C# AppHost extensions live in `As
 
 ## Hard rules
 
-- Aspire 13.4 compute-environment + pipeline hooks only (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`). Do not use the obsolete publisher-callback model (`IDistributedApplicationPublisher`, `DeployingCallbackAnnotation`).
+- Aspire 13.5 compute-environment + pipeline hooks only (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`). Do not use the obsolete publisher-callback model (`IDistributedApplicationPublisher`, `DeployingCallbackAnnotation`).
 - Official resource types: `AddPostgres` / `AddRedis` + `PublishAsRailway*`. Buckets: `AddRailwayBucket` + `AddRailwayBucketClient` (`IAmazonS3`). Do not invent public AppHost APIs.
 - Core must not reference `Aspire.Hosting.PostgreSQL`, `Aspire.Hosting.Redis`, or the Storage hosting package. Satellites implement `IRailwayManagedServiceAnnotation`.
 - GraphQL only, confirmed operations only. Never invent mutation or query names. Never `pluginCreate`. Endpoint: `https://backboard.railway.com/graphql/v2`. See [docs/graphql.md](docs/graphql.md).
