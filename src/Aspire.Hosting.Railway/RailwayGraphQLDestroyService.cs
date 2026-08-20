@@ -243,49 +243,80 @@ public sealed class RailwayGraphQLDestroyService
                 ?.CustomDomains
                 ?? [];
 
-            var customDomains = (domains?.CustomDomains ?? [])
-                .Concat(snapshot.CustomDomainIds.Select(pair => new RailwayCustomDomain
-                {
-                    Id = pair.Value,
-                    Domain = pair.Key
-                }))
-                .GroupBy(domain => domain.Domain, StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.First());
-
-            foreach (var customDomain in customDomains)
+            foreach (var customDomain in domains?.CustomDomains ?? [])
             {
-                if (string.IsNullOrWhiteSpace(customDomain.Id) ||
-                    string.IsNullOrWhiteSpace(customDomain.Domain))
-                {
-                    continue;
-                }
-
-                var planned = plannedHostnames.Any(hostname =>
-                    string.Equals(hostname, customDomain.Domain, StringComparison.OrdinalIgnoreCase));
-                if (!planned && !snapshot.CustomDomainIds.ContainsKey(customDomain.Domain))
-                {
-                    continue;
-                }
-
-                if (!ShouldDeleteCustomDomain(snapshot, customDomain.Domain, adoptedProject))
-                {
-                    Skip(
-                        result,
-                        reportingStep,
-                        $"Custom domain `{customDomain.Domain}`",
-                        AdoptedReason(customDomain.Domain));
-                    continue;
-                }
-
-                await DeleteAsync(
+                await DeleteCustomDomainIfCreatedAsync(
+                    customDomain,
+                    plannedHostnames,
+                    snapshot,
+                    adoptedProject,
+                    request,
                     result,
                     reportingStep,
-                    $"Custom domain `{customDomain.Domain}`",
-                    () => _client.CustomDomainDeleteAsync(customDomain.Id, request.Token, cancellationToken),
-                    "customDomainDelete",
                     cancellationToken).ConfigureAwait(false);
             }
         }
+
+        foreach (var pair in snapshot.CreatedCustomDomainIds)
+        {
+            if (result.Deleted.Any(item =>
+                    item.Contains($"`{pair.Key}`", StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            await DeleteCustomDomainIfCreatedAsync(
+                new RailwayCustomDomain { Domain = pair.Key, Id = pair.Value },
+                plannedHostnames: [pair.Key],
+                snapshot,
+                adoptedProject,
+                request,
+                result,
+                reportingStep,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task DeleteCustomDomainIfCreatedAsync(
+        RailwayCustomDomain customDomain,
+        IReadOnlyList<string> plannedHostnames,
+        RailwayDeploymentSnapshot snapshot,
+        bool adoptedProject,
+        RailwayDestroyRequest request,
+        RailwayDestroyResult result,
+        IReportingStep reportingStep,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customDomain.Id) ||
+            string.IsNullOrWhiteSpace(customDomain.Domain))
+        {
+            return;
+        }
+
+        var planned = plannedHostnames.Any(hostname =>
+            string.Equals(hostname, customDomain.Domain, StringComparison.OrdinalIgnoreCase));
+        if (!planned && !snapshot.CustomDomainIds.ContainsKey(customDomain.Domain))
+        {
+            return;
+        }
+
+        if (!ShouldDeleteCustomDomain(snapshot, customDomain.Domain, adoptedProject))
+        {
+            Skip(
+                result,
+                reportingStep,
+                $"Custom domain `{customDomain.Domain}`",
+                AdoptedReason(customDomain.Domain));
+            return;
+        }
+
+        await DeleteAsync(
+            result,
+            reportingStep,
+            $"Custom domain `{customDomain.Domain}`",
+            () => _client.CustomDomainDeleteAsync(customDomain.Id, request.Token, cancellationToken),
+            "customDomainDelete",
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task DeleteCreatedServicesAsync(

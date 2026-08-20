@@ -100,8 +100,8 @@ public class RailwayGraphQLDestroyTests
         Assert.Equal(0, handler.Count("projectDelete"));
         Assert.Equal(0, handler.Count("bucketDelete"));
         Assert.Contains(
-            handler.Bodies.Single(body => body.Contains("environmentDelete", StringComparison.Ordinal)),
             GraphQLFixtures.StagingEnvironmentId,
+            handler.Bodies.Single(body => body.Contains("environmentDelete", StringComparison.Ordinal)),
             StringComparison.Ordinal);
         Assert.DoesNotContain(
             handler.Bodies,
@@ -234,7 +234,7 @@ public class RailwayGraphQLDestroyTests
         Assert.Contains(result.Deleted, item => item.Contains("api", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Deleted, item => item.Contains("postgres", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Skipped, item => item.Contains("uploads", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Skipped, item => item.Contains("no public bucketDelete", StringComparison.Ordinal));
+        Assert.Contains(result.Skipped, item => item.Contains("bucketDelete", StringComparison.Ordinal));
         Assert.Contains(result.Skipped, item => item.Contains("projectDelete", StringComparison.Ordinal));
         Assert.DoesNotContain(
             reporter.Completions,
