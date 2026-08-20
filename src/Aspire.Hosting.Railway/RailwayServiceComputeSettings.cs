@@ -67,6 +67,13 @@ internal static class RailwayServiceComputeSettings
                     $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set cronSchedule. " +
                     "That field is not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
             }
+
+            if (HasCustomDomains(service) && IsManagedService(plan, service.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set customDomains. " +
+                    "Custom hostnames are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
+            }
         }
     }
 
@@ -144,6 +151,11 @@ internal static class RailwayServiceComputeSettings
         if (service.CronSchedule is not null)
         {
             EnsureCronSchedule(service);
+        }
+
+        if (service.CustomDomains is { Count: > 0 })
+        {
+            EnsureCustomDomains(service);
         }
 
         if (service.ReplicaRegions is not { Count: > 0 } replicaRegions)
@@ -256,6 +268,9 @@ internal static class RailwayServiceComputeSettings
 
     internal static bool HasCronSchedule(RailwayPlanService service) =>
         service.CronSchedule is not null;
+
+    internal static bool HasCustomDomains(RailwayPlanService service) =>
+        service.CustomDomains is { Count: > 0 };
 
     internal static bool IsVolumeBackedManagedService(RailwayPlan plan, string serviceName) =>
         plan.ManagedServices.Any(managed =>
@@ -427,6 +442,25 @@ internal static class RailwayServiceComputeSettings
         }
 
         return service.Replicas ?? 1;
+    }
+
+    private static void EnsureCustomDomains(RailwayPlanService service)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var hostname in service.CustomDomains!)
+        {
+            if (string.IsNullOrWhiteSpace(hostname))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' customDomains entries must be non-empty hostnames.");
+            }
+
+            if (!seen.Add(hostname))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' customDomains cannot contain duplicate hostname '{hostname}'.");
+            }
+        }
     }
 
     private static void EnsureNonNegativeSeconds(string serviceName, int seconds, string what)

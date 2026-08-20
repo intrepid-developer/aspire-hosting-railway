@@ -546,6 +546,7 @@ public class RailwayEnvironmentTests
         Assert.Null(api.OverlapSeconds);
         Assert.Null(api.DrainingSeconds);
         Assert.Null(api.CronSchedule);
+        Assert.Null(api.CustomDomains);
         Assert.All(plan.ManagedServices, managed =>
         {
             Assert.Contains(managed.Kind, ["postgres", "redis"], StringComparer.Ordinal);
@@ -562,6 +563,8 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("overlapSeconds", json, StringComparison.Ordinal);
         Assert.DoesNotContain("drainingSeconds", json, StringComparison.Ordinal);
         Assert.DoesNotContain("cronSchedule", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("customDomains", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("verificationToken", json, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -2,6 +2,18 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.10
+
+- `PublishAsRailwayService` can declare custom hostnames on `CustomDomains` (hostname strings). There is no Aspire-core annotation. Empty or whitespace hostnames fail honestly. Duplicates in the list fail. Hostnames are not secretly lowercased; adopt matches existing Railway domains case-insensitively.
+- Requires Aspire `WithExternalHttpEndpoints()` — the same public-HTTP signal as today's Railway `*.up.railway.app` service domain. Private services get neither a service domain nor a custom hostname. Apex, subdomain, and wildcard all use the same confirmed `customDomainCreate`. This integration does not talk to the user's DNS provider and does not special-case Cloudflare.
+- Optional GraphQL `targetPort` comes from the Aspire HTTP endpoint when present (same for `serviceDomainCreate`). There is no separate AppHost `TargetPort` setter. Railway plan caps are not hardcoded; GraphQL errors are surfaced.
+- `aspire publish` writes `customDomains` (hostnames only) into `railway-plan.json`. Unset / empty is omitted. Verification tokens never land in the plan.
+- `aspire deploy` lists existing domains with confirmed `domains(environmentId, projectId, serviceId)`, adopts a same-hostname custom domain (re-queries `customDomain` for the report, or `customDomainUpdate` only when the known target port differs), otherwise checks `customDomainAvailable` and calls `customDomainCreate`. Always pass the confirmed ids. Omit unset `targetPort`; do not send `null`.
+- The deploy report prints DNS records as Railway returned them (`recordType` / `fqdn` / `requiredValue`) plus `verificationDnsHost`, `verificationToken`, `verified`, and `certificateStatus`. Missing TXT returns 404 even if the routing record resolves. Railway issues Let's Encrypt after verify. Pending DNS or certificate does not fail the deploy. `customDomainDelete` and `customDomainIssueCertificate` are not called. Destroy of domains is [#22](https://github.com/intrepid-developer/aspire-hosting-railway/issues/22).
+- Persist flatten-safe custom-domain **ids** only in `IDeploymentStateManager`. Tokens stay out of plan and state.
+- These operations were confirmed on the live schema 2026-08-20. See [working with domains](https://docs.railway.com/networking/domains/working-with-domains) and [manage domains](https://docs.railway.com/integrations/api/manage-domains).
+- `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets do not get custom domains. TCP proxies are out of scope.
+
 ## 13.5.0-preview.9
 
 - `PublishAsRailwayService` can set `CronSchedule`. There is no Aspire-core annotation. Unset omits the field so the service stays always-on. Empty or whitespace fails honestly.

@@ -291,8 +291,45 @@ internal static class GraphQLFixtures
         return edges;
     }
 
+    public const string CustomDomainId = "cdom_placeholder";
+
     public static string ServiceDomainCreate =>
         """{"data":{"serviceDomainCreate":{"id":"domain_placeholder","domain":"api-placeholder.up.railway.app"}}}""";
+
+    public static string DomainsEmpty =>
+        """{"data":{"domains":{"customDomains":[],"serviceDomains":[]}}}""";
+
+    public static string DomainsWithCustom =>
+        """{"data":{"domains":{"customDomains":[{"id":"cdom_placeholder","domain":"api.example.com","targetPort":8080,"status":{"verified":false,"verificationToken":"verify-placeholder","verificationDnsHost":"_railway.example.com","certificateStatus":"CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP","dnsRecords":[{"fqdn":"api.example.com","recordType":"DNS_RECORD_TYPE_CNAME","requiredValue":"api-placeholder.up.railway.app","purpose":"DNS_RECORD_PURPOSE_TRAFFIC_ROUTE","status":"DNS_RECORD_STATUS_REQUIRES_UPDATE"}]}}],"serviceDomains":[{"id":"domain_placeholder","domain":"api-placeholder.up.railway.app"}]}}}""";
+
+    public static string CustomDomainAvailableTrue =>
+        """{"data":{"customDomainAvailable":{"available":true,"message":"available"}}}""";
+
+    public static string CustomDomainAvailableFalse =>
+        """{"data":{"customDomainAvailable":{"available":false,"message":"domain is already in use"}}}""";
+
+    public static string CustomDomainCreate =>
+        """{"data":{"customDomainCreate":{"id":"cdom_placeholder","domain":"api.example.com","targetPort":8080,"status":{"verified":false,"verificationToken":"verify-placeholder","verificationDnsHost":"_railway.example.com","certificateStatus":"CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP","dnsRecords":[{"fqdn":"api.example.com","recordType":"DNS_RECORD_TYPE_CNAME","requiredValue":"api-placeholder.up.railway.app","purpose":"DNS_RECORD_PURPOSE_TRAFFIC_ROUTE","status":"DNS_RECORD_STATUS_REQUIRES_UPDATE"}]}}}}""";
+
+    public static string CustomDomainQuery =>
+        """{"data":{"customDomain":{"id":"cdom_placeholder","domain":"api.example.com","targetPort":8080,"status":{"verified":false,"verificationToken":"verify-placeholder","verificationDnsHost":"_railway.example.com","certificateStatus":"CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP","dnsRecords":[{"fqdn":"api.example.com","recordType":"DNS_RECORD_TYPE_CNAME","requiredValue":"api-placeholder.up.railway.app","purpose":"DNS_RECORD_PURPOSE_TRAFFIC_ROUTE","status":"DNS_RECORD_STATUS_REQUIRES_UPDATE"}]}}}}""";
+
+    public static string CustomDomainUpdate =>
+        """{"data":{"customDomainUpdate":{"id":"cdom_placeholder","domain":"api.example.com","targetPort":80,"status":{"verified":false,"verificationToken":"verify-placeholder","verificationDnsHost":"_railway.example.com","certificateStatus":"CERTIFICATE_STATUS_TYPE_ISSUING","dnsRecords":[{"fqdn":"api.example.com","recordType":"DNS_RECORD_TYPE_CNAME","requiredValue":"api-placeholder.up.railway.app","purpose":"DNS_RECORD_PURPOSE_TRAFFIC_ROUTE","status":"DNS_RECORD_STATUS_REQUIRES_UPDATE"}]}}}}""";
+
+    public static JsonElement GetCustomDomainCreateInput(IEnumerable<string> bodies)
+    {
+        var body = bodies.Single(item => item.Contains("\"operationName\":\"customDomainCreate\"", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("variables").GetProperty("input").Clone();
+    }
+
+    public static JsonElement GetServiceDomainCreateInput(IEnumerable<string> bodies)
+    {
+        var body = bodies.Single(item => item.Contains("\"operationName\":\"serviceDomainCreate\"", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("variables").GetProperty("input").Clone();
+    }
 
     public static string GraphQLError(string message) =>
         $$"""{"errors":[{"message":"{{message}}"}]}""";

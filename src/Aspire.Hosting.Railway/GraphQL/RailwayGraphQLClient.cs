@@ -306,6 +306,122 @@ public sealed class RailwayGraphQLClient
             token,
             cancellationToken);
 
+    /// <summary>
+    /// Sends <c>domains</c>. <paramref name="environmentId"/>,
+    /// <paramref name="projectId"/>, and <paramref name="serviceId"/> are
+    /// required.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<DomainsData>> DomainsAsync(
+        string environmentId,
+        string projectId,
+        string serviceId,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceId);
+        return SendAsync<DomainsData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.Domains,
+                OperationName = "domains",
+                Variables = new { environmentId, projectId, serviceId }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>Sends <c>customDomain</c>.</summary>
+    public Task<RailwayGraphQLResponse<CustomDomainData>> CustomDomainAsync(
+        string id,
+        string projectId,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectId);
+        return SendAsync<CustomDomainData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.CustomDomain,
+                OperationName = "customDomain",
+                Variables = new { id, projectId }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>Sends <c>customDomainAvailable</c>.</summary>
+    public Task<RailwayGraphQLResponse<CustomDomainAvailableData>> CustomDomainAvailableAsync(
+        string domain,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        return SendAsync<CustomDomainAvailableData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.CustomDomainAvailable,
+                OperationName = "customDomainAvailable",
+                Variables = new { domain }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends <c>customDomainCreate</c>.
+    /// <see cref="CustomDomainCreateInput.EnvironmentId"/>,
+    /// <see cref="CustomDomainCreateInput.ProjectId"/>, and
+    /// <see cref="CustomDomainCreateInput.ServiceId"/> are required.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<CustomDomainCreateData>> CustomDomainCreateAsync(
+        CustomDomainCreateInput input,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.Domain);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.EnvironmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.ProjectId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.ServiceId);
+        return SendAsync<CustomDomainCreateData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.CustomDomainCreate,
+                OperationName = "customDomainCreate",
+                Variables = new { input }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends <c>customDomainUpdate</c>. Always pass
+    /// <paramref name="environmentId"/>. Call only when an adopted domain's
+    /// target port must change.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<CustomDomainUpdateData>> CustomDomainUpdateAsync(
+        string environmentId,
+        string id,
+        int targetPort,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        return SendAsync<CustomDomainUpdateData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.CustomDomainUpdate,
+                OperationName = "customDomainUpdate",
+                Variables = new { environmentId, id, targetPort }
+            },
+            token,
+            cancellationToken);
+    }
+
     /// <summary>Sends the <c>template</c> query.</summary>
     public Task<RailwayGraphQLResponse<TemplateData>> TemplateAsync(
         string code,

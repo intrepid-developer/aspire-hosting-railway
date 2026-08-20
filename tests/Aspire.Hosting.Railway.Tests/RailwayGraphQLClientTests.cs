@@ -411,6 +411,122 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task CustomDomainCreate_SerializesConfirmedFieldNamesAndOmitsUnset()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.CustomDomainCreate);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.CustomDomainCreateAsync(
+            new CustomDomainCreateInput
+            {
+                Domain = "api.example.com",
+                EnvironmentId = "env_placeholder",
+                ProjectId = "proj_placeholder",
+                ServiceId = "svc_placeholder",
+                TargetPort = 8080
+            },
+            "placeholder-token");
+
+        Assert.Equal("cdom_placeholder", response.Data?.CustomDomainCreate?.Id);
+        Assert.Equal("verify-placeholder", response.Data?.CustomDomainCreate?.Status?.VerificationToken);
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("api.example.com", input.GetProperty("domain").GetString());
+        Assert.Equal("env_placeholder", input.GetProperty("environmentId").GetString());
+        Assert.Equal("proj_placeholder", input.GetProperty("projectId").GetString());
+        Assert.Equal("svc_placeholder", input.GetProperty("serviceId").GetString());
+        Assert.Equal(8080, input.GetProperty("targetPort").GetInt32());
+        Assert.False(input.TryGetProperty("verificationToken", out _));
+        Assert.Contains("customDomainCreate", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("CustomDomainCreateInput", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("$input: CustomDomainCreateInput!", RailwayGraphQLOperations.CustomDomainCreate, StringComparison.Ordinal);
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("customDomainDelete", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("pluginCreate", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("dnsRecords.verificationToken", RailwayGraphQLOperations.CustomDomainCreate, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CustomDomainCreate_OmitsTargetPortWhenUnset()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.CustomDomainCreate);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.CustomDomainCreateAsync(
+            new CustomDomainCreateInput
+            {
+                Domain = "api.example.com",
+                EnvironmentId = "env_placeholder",
+                ProjectId = "proj_placeholder",
+                ServiceId = "svc_placeholder"
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.False(input.TryGetProperty("targetPort", out _));
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ServiceDomainCreate_OmitsTargetPortWhenUnset()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.ServiceDomainCreate);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceDomainCreateAsync(
+            new ServiceDomainCreateInput
+            {
+                ServiceId = "svc_placeholder",
+                EnvironmentId = "env_placeholder"
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("svc_placeholder", input.GetProperty("serviceId").GetString());
+        Assert.Equal("env_placeholder", input.GetProperty("environmentId").GetString());
+        Assert.False(input.TryGetProperty("targetPort", out _));
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DomainsAndAvailability_PostConfirmedShapes()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.DomainsEmpty);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.DomainsAsync("env_placeholder", "proj_placeholder", "svc_placeholder", "placeholder-token");
+        Assert.Contains("\"operationName\":\"domains\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("projectId", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("serviceId", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("customDomains", RailwayGraphQLOperations.Domains, StringComparison.Ordinal);
+        Assert.Contains("serviceDomains", RailwayGraphQLOperations.Domains, StringComparison.Ordinal);
+        Assert.Contains("verificationToken", RailwayGraphQLOperations.Domains, StringComparison.Ordinal);
+        Assert.DoesNotContain("customDomainDelete", RailwayGraphQLOperations.Domains, StringComparison.Ordinal);
+
+        await client.CustomDomainAvailableAsync("api.example.com", "placeholder-token");
+        Assert.Contains("\"operationName\":\"customDomainAvailable\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("\"domain\":\"api.example.com\"", handler.Body, StringComparison.Ordinal);
+
+        await client.CustomDomainAsync("cdom_placeholder", "proj_placeholder", "placeholder-token");
+        Assert.Contains("\"operationName\":\"customDomain\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("\"id\":\"cdom_placeholder\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("\"projectId\":\"proj_placeholder\"", handler.Body, StringComparison.Ordinal);
+
+        await client.CustomDomainUpdateAsync("env_placeholder", "cdom_placeholder", 80, "placeholder-token");
+        Assert.Contains("\"operationName\":\"customDomainUpdate\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("\"environmentId\":\"env_placeholder\"", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("\"targetPort\":80", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("customDomainDelete", RailwayGraphQLOperations.CustomDomainUpdate, StringComparison.Ordinal);
+        Assert.DoesNotContain("customDomainIssueCertificate", RailwayGraphQLOperations.CustomDomainCreate, StringComparison.Ordinal);
+        Assert.DoesNotContain("pluginCreate", RailwayGraphQLOperations.CustomDomainCreate, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ServiceInstanceLimitsUpdate_SerializesConfirmedFieldNames()
     {
         var handler = new RecordingHandler("""{"data":true}""");

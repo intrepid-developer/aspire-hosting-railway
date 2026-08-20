@@ -72,6 +72,12 @@ public sealed class RailwayApplyResult
     /// <summary>Gets bucket ids keyed by Aspire resource name.</summary>
     public Dictionary<string, string> BucketIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Gets created or adopted custom-domain ids keyed by hostname. Flatten-safe
+    /// objects only — never verification tokens or DNS secrets.
+    /// </summary>
+    public Dictionary<string, string> CustomDomainIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Gets template codes that were applied (or already present) in this environment.</summary>
     public List<string> AppliedTemplateCodes { get; init; } = [];
 
@@ -124,6 +130,7 @@ internal sealed class RailwayDeploymentSnapshot
     public Dictionary<string, string> EnvironmentIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> BucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> CustomDomainIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> TemplateCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ProductionServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ProductionBucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -141,6 +148,7 @@ internal static class RailwayDeploymentStateStore
     internal const string EnvironmentIdsKey = "EnvironmentIds";
     internal const string ServicesKey = "Services";
     internal const string BucketsKey = "Buckets";
+    internal const string CustomDomainsKey = "CustomDomains";
     internal const string TemplatesKey = "Templates";
 
     /// <summary>
@@ -184,6 +192,9 @@ internal static class RailwayDeploymentStateStore
         CopyStringMap(bucketsRoot?[railwayEnvironmentName] as JsonObject, snapshot.BucketIds);
         CopyStringMap(bucketsRoot?["production"] as JsonObject, snapshot.ProductionBucketIds);
 
+        var customDomainsRoot = section.Data[CustomDomainsKey] as JsonObject;
+        CopyStringMap(customDomainsRoot?[railwayEnvironmentName] as JsonObject, snapshot.CustomDomainIds);
+
         var templatesRoot = section.Data[TemplatesKey] as JsonObject;
         CopyTemplateCodes(templatesRoot?[railwayEnvironmentName], snapshot.TemplateCodes);
         CopyTemplateCodes(templatesRoot?["production"], snapshot.ProductionTemplateCodes);
@@ -215,6 +226,7 @@ internal static class RailwayDeploymentStateStore
 
         WriteScopedMap(section.Data, ServicesKey, railwayEnvironmentName, result.ServiceIds);
         WriteScopedMap(section.Data, BucketsKey, railwayEnvironmentName, result.BucketIds);
+        WriteScopedMap(section.Data, CustomDomainsKey, railwayEnvironmentName, result.CustomDomainIds);
 
         var templatesRoot = section.Data[TemplatesKey] as JsonObject ?? [];
         // Persist as an object (not a JSON array). Aspire FileDeploymentStateManager

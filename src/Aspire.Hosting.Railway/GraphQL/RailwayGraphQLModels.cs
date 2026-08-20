@@ -249,6 +249,46 @@ public sealed class ServiceDomainCreateInput
     /// <summary>Gets or sets the environment id.</summary>
     [JsonPropertyName("environmentId")]
     public required string EnvironmentId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional target port. Confirmed
+    /// <c>ServiceDomainCreateInput.targetPort</c> (Int, live schema
+    /// 2026-08-20). Omitted when unset. Do not send <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("targetPort")]
+    public int? TargetPort { get; set; }
+}
+
+/// <summary>
+/// Input for <c>customDomainCreate</c>. Always include
+/// <see cref="Domain"/>, <see cref="EnvironmentId"/>,
+/// <see cref="ProjectId"/>, and <see cref="ServiceId"/>.
+/// </summary>
+public sealed class CustomDomainCreateInput
+{
+    /// <summary>Gets or sets the hostname to bind.</summary>
+    [JsonPropertyName("domain")]
+    public required string Domain { get; set; }
+
+    /// <summary>Gets or sets the environment id. Required.</summary>
+    [JsonPropertyName("environmentId")]
+    public required string EnvironmentId { get; set; }
+
+    /// <summary>Gets or sets the project id. Required.</summary>
+    [JsonPropertyName("projectId")]
+    public required string ProjectId { get; set; }
+
+    /// <summary>Gets or sets the service id. Required.</summary>
+    [JsonPropertyName("serviceId")]
+    public required string ServiceId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional target port. Confirmed
+    /// <c>CustomDomainCreateInput.targetPort</c> (Int, live schema
+    /// 2026-08-20). Omitted when unset. Do not send <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("targetPort")]
+    public int? TargetPort { get; set; }
 }
 
 /// <summary>Input for <c>templateDeployV2</c>.</summary>
@@ -499,6 +539,154 @@ public sealed class RailwayServiceDomain
     /// <summary>Gets or sets the hostname.</summary>
     [JsonPropertyName("domain")]
     public string? Domain { get; set; }
+}
+
+/// <summary>Data wrapper for the <c>domains</c> query.</summary>
+public sealed class DomainsData
+{
+    /// <summary>Gets or sets Railway-provided and custom domains.</summary>
+    [JsonPropertyName("domains")]
+    public RailwayAllDomains? Domains { get; set; }
+}
+
+/// <summary>Confirmed <c>AllDomains</c> payload.</summary>
+public sealed class RailwayAllDomains
+{
+    /// <summary>Gets or sets custom hostnames on the service.</summary>
+    [JsonPropertyName("customDomains")]
+    public List<RailwayCustomDomain>? CustomDomains { get; set; }
+
+    /// <summary>Gets or sets Railway-provided <c>*.up.railway.app</c> domains.</summary>
+    [JsonPropertyName("serviceDomains")]
+    public List<RailwayServiceDomain>? ServiceDomains { get; set; }
+}
+
+/// <summary>Data wrapper for <c>customDomain</c>.</summary>
+public sealed class CustomDomainData
+{
+    /// <summary>Gets or sets the custom domain.</summary>
+    [JsonPropertyName("customDomain")]
+    public RailwayCustomDomain? CustomDomain { get; set; }
+}
+
+/// <summary>Data wrapper for <c>customDomainCreate</c>.</summary>
+public sealed class CustomDomainCreateData
+{
+    /// <summary>Gets or sets the created custom domain.</summary>
+    [JsonPropertyName("customDomainCreate")]
+    public RailwayCustomDomain? CustomDomainCreate { get; set; }
+}
+
+/// <summary>Data wrapper for <c>customDomainUpdate</c>.</summary>
+public sealed class CustomDomainUpdateData
+{
+    /// <summary>Gets or sets the updated custom domain.</summary>
+    [JsonPropertyName("customDomainUpdate")]
+    public RailwayCustomDomain? CustomDomainUpdate { get; set; }
+}
+
+/// <summary>Data wrapper for <c>customDomainAvailable</c>.</summary>
+public sealed class CustomDomainAvailableData
+{
+    /// <summary>Gets or sets availability.</summary>
+    [JsonPropertyName("customDomainAvailable")]
+    public RailwayDomainAvailable? CustomDomainAvailable { get; set; }
+}
+
+/// <summary>Confirmed <c>DomainAvailable</c> payload.</summary>
+public sealed class RailwayDomainAvailable
+{
+    /// <summary>Gets or sets whether the hostname can be added.</summary>
+    [JsonPropertyName("available")]
+    public bool Available { get; set; }
+
+    /// <summary>Gets or sets Railway's availability message.</summary>
+    [JsonPropertyName("message")]
+    public string? Message { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>CustomDomain</c> fields used by apply (live schema
+/// 2026-08-20). <c>verificationToken</c> lives on
+/// <see cref="Status"/>, not on a DNS record.
+/// </summary>
+public sealed class RailwayCustomDomain
+{
+    /// <summary>Gets or sets the custom domain id.</summary>
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    /// <summary>Gets or sets the hostname.</summary>
+    [JsonPropertyName("domain")]
+    public string? Domain { get; set; }
+
+    /// <summary>Gets or sets the optional target port.</summary>
+    [JsonPropertyName("targetPort")]
+    public int? TargetPort { get; set; }
+
+    /// <summary>Gets or sets DNS and certificate status.</summary>
+    [JsonPropertyName("status")]
+    public RailwayCustomDomainStatus? Status { get; set; }
+}
+
+/// <summary>Confirmed <c>CustomDomainStatus</c> fields used by apply.</summary>
+public sealed class RailwayCustomDomainStatus
+{
+    /// <summary>Gets or sets routing and challenge DNS records as Railway returned them.</summary>
+    [JsonPropertyName("dnsRecords")]
+    public List<RailwayDnsRecord>? DnsRecords { get; set; }
+
+    /// <summary>
+    /// Gets or sets the verification TXT token. Lives on this status object,
+    /// not on <see cref="RailwayDnsRecord"/>. Never written to the plan or
+    /// deployment state.
+    /// </summary>
+    [JsonPropertyName("verificationToken")]
+    public string? VerificationToken { get; set; }
+
+    /// <summary>Gets or sets the verification TXT host.</summary>
+    [JsonPropertyName("verificationDnsHost")]
+    public string? VerificationDnsHost { get; set; }
+
+    /// <summary>Gets or sets whether Railway has verified the hostname.</summary>
+    [JsonPropertyName("verified")]
+    public bool Verified { get; set; }
+
+    /// <summary>
+    /// Gets or sets certificate status (live enum
+    /// <c>CertificateStatus</c>, for example
+    /// <c>CERTIFICATE_STATUS_TYPE_VALID</c>).
+    /// </summary>
+    [JsonPropertyName("certificateStatus")]
+    public string? CertificateStatus { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>DNSRecords</c> fields used by the deploy report. Record
+/// types are reported as Railway returned them; this integration does not
+/// rewrite them to A records.
+/// </summary>
+public sealed class RailwayDnsRecord
+{
+    /// <summary>Gets or sets the fully-qualified name.</summary>
+    [JsonPropertyName("fqdn")]
+    public string? Fqdn { get; set; }
+
+    /// <summary>Gets or sets the record type (for example <c>DNS_RECORD_TYPE_CNAME</c>).</summary>
+    [JsonPropertyName("recordType")]
+    public string? RecordType { get; set; }
+
+    /// <summary>Gets or sets the value Railway wants configured.</summary>
+    [JsonPropertyName("requiredValue")]
+    public string? RequiredValue { get; set; }
+
+    /// <summary>Gets or sets the record purpose (for example <c>DNS_RECORD_PURPOSE_TRAFFIC_ROUTE</c>).</summary>
+    [JsonPropertyName("purpose")]
+    public string? Purpose { get; set; }
+
+    /// <summary>Gets or sets propagation status (for example <c>DNS_RECORD_STATUS_REQUIRES_UPDATE</c>).</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
 }
 
 /// <summary>Data wrapper for the <c>template</c> query.</summary>
