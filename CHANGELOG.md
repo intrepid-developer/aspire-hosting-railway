@@ -2,6 +2,16 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.5
+
+- Deploy healthcheck path comes from Aspire `WithHttpHealthCheck` / `HealthCheckAnnotation` (the same idea as `WithReplicas` → replica count). Implicit compute on `AddRailwayEnvironment` picks it up; `PublishAsRailwayService` is not required just to set the path.
+- Railway-specific timeout is `PublishAsRailwayService` `HealthcheckTimeoutSeconds`. There is no Aspire-core timeout annotation. Unset omits the field so Railway's default (300 seconds) applies. Values must be greater than 0 when set.
+- `aspire publish` writes `healthcheckPath` / `healthcheckTimeout` into `railway-plan.json`. Unset fields are omitted. Do not send `null`.
+- `aspire deploy` applies them on the existing `serviceInstanceUpdate` call (`ServiceInstanceUpdateInput.healthcheckPath` String, `healthcheckTimeout` Int). Always pass `environmentId`. These fields were confirmed on the live schema 2026-08-20. No new mutation. The documented variable `RAILWAY_HEALTHCHECK_TIMEOUT_SEC` is not the apply path.
+- Railway probes until HTTP 200, then flips traffic. It is not continuous monitoring. The probe uses `PORT`. Origin host is `healthcheck.railway.app`. Volume-backed services still have cutover downtime.
+- A non-200 Aspire `statusCode` on `WithHttpHealthCheck` is ignored; Railway always wants 200. Custom `WithHealthCheck` keys that are not HTTP probes are not mapped.
+- `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets do not get these fields.
+
 ## 13.5.0-preview.4
 
 - Breaking preview API: `PublishAsRailwayService` region is compile-time typed. `RailwayServiceResource.Region` is `RailwayRegion?` and `ReplicaRegions` is `Dictionary<RailwayRegion, int>?`. There is no string setter.

@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.4** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
+Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.5** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
 
 ## Restore from nuget.org
 
@@ -51,10 +51,10 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using` fo
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Railway replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference), so those templates are not scaled. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.4" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.4" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.4" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.4" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.5" />
 ```
 
 ```csharp
@@ -72,6 +72,7 @@ var uploads = builder.AddRailwayBucket("uploads");
 
 builder.AddProject<Projects.Api>("api")
     .WithReplicas(2)
+    .WithHttpHealthCheck("/health")
     .WithReference(db)
     .WithReference(cache)
     .WithReference(uploads)
@@ -82,6 +83,7 @@ builder.AddProject<Projects.Api>("api")
         s.Region = RailwayRegion.UsWest2;
         s.Cpu = 1;
         s.MemoryGb = 2;
+        s.HealthcheckTimeoutSeconds = 120;
     });
 
 builder.Build().Run();
@@ -92,7 +94,7 @@ builder.Build().Run();
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.4" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.5" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.0" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.0" />
 ```
@@ -105,11 +107,12 @@ builder.AddRailwayBucketClient("uploads");
 
 Existing Aspire client packages keep working. `AddRailwayEnvironment` is the Railway **project** (compute environment). The Railway environment name is mapped from Aspire `--environment`: Production → `production`, Staging → `staging` (lowercase). Override with `WithRailwayEnvironmentName`.
 
-Replica count is Aspire-core `WithReplicas` (project resources). Implicit compute on the Railway environment picks it up and deploy sends `numReplicas`. Region, `sleepApplication`, and per-replica CPU/RAM are Railway-specific and use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory`. There is no GraphQL field named `serverless`; sleep applies to all replicas. `Cpu` / `MemoryGb` map to GraphQL `vCPUs` / `memoryGB` (not config-as-code `memoryBytes`). Replicas and CPU/RAM limits cannot be used with Railway volumes — do not set them on `PublishAsRailwayPostgres` / `PublishAsRailwayRedis`.
+Replica count is Aspire-core `WithReplicas` (project resources). Implicit compute on the Railway environment picks it up and deploy sends `numReplicas`. Deploy healthcheck path is Aspire-core `WithHttpHealthCheck` — publish copies that path into `healthcheckPath` and deploy sends it on the existing `serviceInstanceUpdate`. Railway probes until HTTP 200, then flips traffic ([healthchecks](https://docs.railway.com/deployments/healthchecks)); it is not continuous monitoring. Region, `sleepApplication`, per-replica CPU/RAM, and healthcheck timeout are Railway-specific and use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout annotation. There is no GraphQL field named `serverless`; sleep applies to all replicas. `Cpu` / `MemoryGb` map to GraphQL `vCPUs` / `memoryGB` (not config-as-code `memoryBytes`). `HealthcheckTimeoutSeconds` maps to GraphQL `healthcheckTimeout` (Int seconds); omit it to leave Railway's default (300). Replicas, CPU/RAM limits, and healthcheck fields cannot be used with Railway volumes — do not set them on `PublishAsRailwayPostgres` / `PublishAsRailwayRedis`. Allow `healthcheck.railway.app` if the app filters Host. The app must listen on `PORT`. Volume-backed services still have cutover downtime even with a healthcheck.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
     .WithReplicas(2)
+    .WithHttpHealthCheck("/health")
     .WithComputeEnvironment(railway)
     .PublishAsRailwayService(s =>
     {
@@ -117,6 +120,7 @@ builder.AddProject<Projects.Api>("api")
         s.Cpu = 1;
         s.MemoryGb = 2;
         s.Serverless = true;
+        s.HealthcheckTimeoutSeconds = 120;
     });
 ```
 

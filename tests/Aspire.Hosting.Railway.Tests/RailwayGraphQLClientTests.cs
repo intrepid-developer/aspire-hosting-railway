@@ -222,6 +222,8 @@ public class RailwayGraphQLClientTests
         Assert.False(input.TryGetProperty("sleepApplication", out _));
         Assert.False(input.TryGetProperty("numReplicas", out _));
         Assert.False(input.TryGetProperty("region", out _));
+        Assert.False(input.TryGetProperty("healthcheckPath", out _));
+        Assert.False(input.TryGetProperty("healthcheckTimeout", out _));
         Assert.Contains("serviceInstanceUpdate", handler.Body, StringComparison.Ordinal);
         Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
         Assert.Contains("env_placeholder", handler.Body, StringComparison.Ordinal);
@@ -260,6 +262,34 @@ public class RailwayGraphQLClientTests
         Assert.False(input.TryGetProperty("region", out _));
         Assert.DoesNotContain("replicaRegions", handler.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("serverless", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ServiceInstanceUpdate_SerializesHealthcheckPathAndTimeout()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceUpdateAsync(
+            "svc_placeholder",
+            "env_placeholder",
+            new ServiceInstanceUpdateInput
+            {
+                Source = new ServiceSourceInput { Image = "nginx" },
+                HealthcheckPath = "/health",
+                HealthcheckTimeout = 120
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("/health", input.GetProperty("healthcheckPath").GetString());
+        Assert.Equal(120, input.GetProperty("healthcheckTimeout").GetInt32());
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("healthcheckTimeout").ValueKind);
+        Assert.False(input.TryGetProperty("RAILWAY_HEALTHCHECK_TIMEOUT_SEC", out _));
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
     }
 

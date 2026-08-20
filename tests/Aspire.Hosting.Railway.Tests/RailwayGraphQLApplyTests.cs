@@ -735,6 +735,8 @@ public class RailwayGraphQLApplyTests
         Assert.False(input.TryGetProperty("region", out _));
         Assert.False(input.TryGetProperty("vCPUs", out _));
         Assert.False(input.TryGetProperty("memoryGB", out _));
+        Assert.False(input.TryGetProperty("healthcheckPath", out _));
+        Assert.False(input.TryGetProperty("healthcheckTimeout", out _));
         Assert.Equal(0, handler.Count("serviceInstanceLimitsUpdate"));
     }
 
@@ -1323,6 +1325,238 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, limitsInput.GetProperty("environmentId").GetString());
         Assert.Equal(1, limitsInput.GetProperty("vCPUs").GetDouble());
         Assert.Equal(2, limitsInput.GetProperty("memoryGB").GetDouble());
+    }
+
+    [Fact]
+    public async Task Apply_HealthcheckPathOnly_SendsPathAndOmitsTimeout()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].HealthcheckPath = "/health";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/health", input.GetProperty("healthcheckPath").GetString());
+        Assert.False(input.TryGetProperty("healthcheckTimeout", out _));
+        Assert.DoesNotContain("RAILWAY_HEALTHCHECK_TIMEOUT_SEC", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+    }
+
+    [Fact]
+    public async Task Apply_HealthcheckTimeout_SendsIntOnServiceInstanceUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].HealthcheckPath = "/health";
+        plan.Services[0].HealthcheckTimeout = 120;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/health", input.GetProperty("healthcheckPath").GetString());
+        Assert.Equal(120, input.GetProperty("healthcheckTimeout").GetInt32());
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, input.GetProperty("healthcheckTimeout").ValueKind);
+        Assert.False(input.TryGetProperty("RAILWAY_HEALTHCHECK_TIMEOUT_SEC", out _));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task Apply_InvalidHealthcheckTimeout_FailsBeforeGraphQL(int timeout)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].HealthcheckTimeout = timeout;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("healthcheckTimeout", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("greater than 0", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_ManagedServiceHealthcheck_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true);
+        plan.Services[0].Name = "postgres";
+        plan.Services[0].HealthcheckPath = "/health";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("managed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("healthcheckPath", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_TemplatesAndBucket_DoNotSendHealthcheckOnManagedServices()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true, includeRedis: true, includeBucket: true);
+        plan.Services[0].HealthcheckPath = "/health";
+        plan.Services[0].HealthcheckTimeout = 90;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        var updateInput = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/health", updateInput.GetProperty("healthcheckPath").GetString());
+        Assert.Equal(90, updateInput.GetProperty("healthcheckTimeout").GetInt32());
+
+        var managedBodies = handler.Bodies.Where(body =>
+            body.Contains("\"operationName\":\"templateDeployV2\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketCreate\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketS3Credentials\"", StringComparison.Ordinal));
+        Assert.All(managedBodies, body =>
+        {
+            Assert.DoesNotContain("healthcheckPath", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("healthcheckTimeout", body, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task DeployAsync_WithHttpHealthCheck_SendsHealthcheckPathFromAnnotation()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .WithHttpEndpoint(targetPort: 80)
+            .WithHttpHealthCheck("/health");
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/health", input.GetProperty("healthcheckPath").GetString());
+        Assert.False(input.TryGetProperty("healthcheckTimeout", out _));
+        Assert.Contains("environmentId", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeployAsync_HealthcheckTimeout_SendsIntOnExistingMutation()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .WithHttpEndpoint(targetPort: 80)
+            .WithHttpHealthCheck("/health")
+            .PublishAsRailwayService(s => s.HealthcheckTimeoutSeconds = 120);
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/health", input.GetProperty("healthcheckPath").GetString());
+        Assert.Equal(120, input.GetProperty("healthcheckTimeout").GetInt32());
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.DoesNotContain(
+            handler.Operations,
+            name => name.Contains("healthcheck", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
     }
 
     private static void EnqueueProductionServiceTemplateAndBucket(ScriptedGraphQLHandler handler)
