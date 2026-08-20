@@ -97,7 +97,19 @@ public sealed class RailwayApplyOptions
     /// <summary>Gets or sets the maximum time to wait for a template workflow.</summary>
     public TimeSpan WorkflowTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
-    /// <summary>Gets or sets the time provider used for workflow deadlines. Tests may substitute a fake.</summary>
+    /// <summary>
+    /// Gets or sets how long to wait between <c>bucketS3Credentials</c> retries after
+    /// <c>bucketCreate</c> while Railway provisions a <c>BucketInstance</c>.
+    /// </summary>
+    public TimeSpan BucketCredentialsPollInterval { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Gets or sets the maximum time to wait for <c>bucketS3Credentials</c> after a
+    /// real <c>bucketCreate</c>.
+    /// </summary>
+    public TimeSpan BucketCredentialsTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>Gets or sets the time provider used for workflow and bucket-credential deadlines. Tests may substitute a fake.</summary>
     public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 }
 

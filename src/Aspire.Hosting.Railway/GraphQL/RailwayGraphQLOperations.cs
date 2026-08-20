@@ -8,9 +8,12 @@ namespace Aspire.Hosting.Railway;
 public static class RailwayGraphQLOperations
 {
     /// <summary>
-    /// Lists a project's services and environments. Documented in Railway's
-    /// GraphQL overview; service nodes include <c>id</c> so apply can adopt
-    /// existing resources by name.
+    /// Lists a project's services, environments, and buckets. Documented in
+    /// Railway's GraphQL overview as <c>project(id)</c>; this is the same
+    /// confirmed query, with the schema field <c>buckets</c> selected the same
+    /// way as <c>services</c> (Relay connection of <c>id</c> + <c>name</c>).
+    /// Apply adopts existing services and buckets by name. This is not a new
+    /// operation name.
     /// </summary>
     public const string Project = """
         query project($id: String!) {
@@ -25,6 +28,14 @@ public static class RailwayGraphQLOperations
               }
             }
             environments {
+              edges {
+                node {
+                  id
+                  name
+                }
+              }
+            }
+            buckets {
               edges {
                 node {
                   id

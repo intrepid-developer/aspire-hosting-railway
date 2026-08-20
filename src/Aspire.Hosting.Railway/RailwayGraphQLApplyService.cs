@@ -393,6 +393,55 @@ public sealed class RailwayGraphQLApplyService
         }
     }
 
+    private async Task<BucketS3Credentials> WaitForBucketS3CredentialsAsync(
+        string bucketId,
+        string bucketName,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        bool retryWhileInstanceMissing,
+        CancellationToken cancellationToken)
+    {
+        var deadline = _options.TimeProvider.GetUtcNow() + _options.BucketCredentialsTimeout;
+        while (true)
+        {
+            var credentialsResponse = await _client.BucketS3CredentialsAsync(
+                bucketId,
+                result.EnvironmentId,
+                result.ProjectId,
+                request.Token,
+                cancellationToken).ConfigureAwait(false);
+
+            if (retryWhileInstanceMissing &&
+                IsBucketInstanceNotFound(credentialsResponse) &&
+                _options.TimeProvider.GetUtcNow() < deadline)
+            {
+                await Task.Delay(_options.BucketCredentialsPollInterval, _options.TimeProvider, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            RailwayGraphQLClient.ThrowIfFailed(credentialsResponse, "bucketS3Credentials");
+
+            var credentials = credentialsResponse.Data?.BucketS3Credentials;
+            if (credentials is null ||
+                string.IsNullOrWhiteSpace(credentials.AccessKeyId) ||
+                string.IsNullOrWhiteSpace(credentials.SecretAccessKey))
+            {
+                throw new InvalidOperationException(
+                    $"bucketS3Credentials did not return access keys for bucket '{bucketName}'. " +
+                    "Credentials are not persisted; apply cannot invent them.");
+            }
+
+            return credentials;
+        }
+    }
+
+    private static bool IsBucketInstanceNotFound<T>(RailwayGraphQLResponse<T> response) =>
+        response.Errors is { Count: > 0 } &&
+        response.Errors.All(static error =>
+            !string.IsNullOrWhiteSpace(error.Message) &&
+            error.Message.Contains("BucketInstance not found", StringComparison.OrdinalIgnoreCase));
+
     private async Task ApplyBucketsAsync(
         RailwayPlan plan,
         RailwayApplyRequest request,
@@ -413,6 +462,7 @@ public sealed class RailwayGraphQLApplyService
                 cancellationToken).ConfigureAwait(false);
             await using (task.ConfigureAwait(false))
             {
+                var createdThisApply = false;
                 if (!result.BucketIds.TryGetValue(managed.Name, out var bucketId) ||
                     string.IsNullOrWhiteSpace(bucketId))
                 {
@@ -433,26 +483,20 @@ public sealed class RailwayGraphQLApplyService
                     }
 
                     result.BucketIds[managed.Name] = bucketId;
+                    createdThisApply = true;
                     await persistAsync().ConfigureAwait(false);
                 }
 
-                var credentialsResponse = await _client.BucketS3CredentialsAsync(
+                // After a real bucketCreate, Railway may not have a BucketInstance yet.
+                // Retry credentials with backoff instead of querying immediately.
+                // Adopted / persisted ids are queried once; they already have an instance.
+                var credentials = await WaitForBucketS3CredentialsAsync(
                     bucketId,
-                    result.EnvironmentId,
-                    result.ProjectId,
-                    request.Token,
+                    managed.Name,
+                    request,
+                    result,
+                    retryWhileInstanceMissing: createdThisApply,
                     cancellationToken).ConfigureAwait(false);
-                RailwayGraphQLClient.ThrowIfFailed(credentialsResponse, "bucketS3Credentials");
-
-                var credentials = credentialsResponse.Data?.BucketS3Credentials;
-                if (credentials is null ||
-                    string.IsNullOrWhiteSpace(credentials.AccessKeyId) ||
-                    string.IsNullOrWhiteSpace(credentials.SecretAccessKey))
-                {
-                    throw new InvalidOperationException(
-                        $"bucketS3Credentials did not return access keys for bucket '{managed.Name}'. " +
-                        "Credentials are not persisted; apply cannot invent them.");
-                }
 
                 // Image-less service that holds ${{uploads.ENDPOINT}} (and related) variables
                 // so WithReference can resolve them. It is not a compute target and must not
@@ -720,7 +764,7 @@ public sealed class RailwayGraphQLApplyService
         CancellationToken cancellationToken)
     {
         var task = await reportingStep.CreateTaskAsync(
-            new MarkdownString($"List existing Railway project `{result.ProjectId}` services"),
+            new MarkdownString($"List existing Railway project `{result.ProjectId}` services and buckets"),
             cancellationToken).ConfigureAwait(false);
         await using (task.ConfigureAwait(false))
         {
@@ -728,45 +772,103 @@ public sealed class RailwayGraphQLApplyService
                 .ConfigureAwait(false);
             RailwayGraphQLClient.ThrowIfFailed(response, "project");
 
-            var adopted = 0;
-            if (response.Data?.Project?.Services?.Edges is { } edges)
-            {
-                foreach (var edge in edges)
-                {
-                    if (edge.Node is not { } node ||
-                        string.IsNullOrWhiteSpace(node.Id) ||
-                        string.IsNullOrWhiteSpace(node.Name))
-                    {
-                        continue;
-                    }
-
-                    result.ServiceIds[node.Name] = node.Id;
-                    result.AdoptedRailwayServiceNames.Add(node.Name);
-                    adopted++;
-
-                    foreach (var managed in plan.ManagedServices)
-                    {
-                        if (!ServiceNameMatches(managed, node.Name))
-                        {
-                            continue;
-                        }
-
-                        result.ServiceIds[managed.Name] = node.Id;
-                        if (!string.IsNullOrWhiteSpace(managed.TemplateCode))
-                        {
-                            RecordAppliedTemplate(managed, result);
-                        }
-                    }
-                }
-            }
+            var adoptedServices = AdoptServicesFromProject(plan, result, response.Data?.Project);
+            var adoptedBuckets = AdoptBucketsFromProject(plan, result, response.Data?.Project);
 
             await task.CompleteAsync(
-                adopted == 0
-                    ? "No existing Railway services matched plan names."
-                    : $"Adopted {adopted} existing Railway service id(s) by name.",
+                FormatAdoptCompletion(adoptedServices, adoptedBuckets),
                 CompletionState.Completed,
                 cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private static int AdoptServicesFromProject(
+        RailwayPlan plan,
+        RailwayApplyResult result,
+        RailwayProject? project)
+    {
+        var adopted = 0;
+        if (project?.Services?.Edges is not { } edges)
+        {
+            return adopted;
+        }
+
+        foreach (var edge in edges)
+        {
+            if (edge.Node is not { } node ||
+                string.IsNullOrWhiteSpace(node.Id) ||
+                string.IsNullOrWhiteSpace(node.Name))
+            {
+                continue;
+            }
+
+            result.ServiceIds[node.Name] = node.Id;
+            result.AdoptedRailwayServiceNames.Add(node.Name);
+            adopted++;
+
+            foreach (var managed in plan.ManagedServices)
+            {
+                if (!ServiceNameMatches(managed, node.Name))
+                {
+                    continue;
+                }
+
+                result.ServiceIds[managed.Name] = node.Id;
+                if (!string.IsNullOrWhiteSpace(managed.TemplateCode))
+                {
+                    RecordAppliedTemplate(managed, result);
+                }
+            }
+        }
+
+        return adopted;
+    }
+
+    private static int AdoptBucketsFromProject(
+        RailwayPlan plan,
+        RailwayApplyResult result,
+        RailwayProject? project)
+    {
+        var adopted = 0;
+        if (project?.Buckets?.Edges is not { } edges)
+        {
+            return adopted;
+        }
+
+        foreach (var edge in edges)
+        {
+            if (edge.Node is not { } node ||
+                string.IsNullOrWhiteSpace(node.Id) ||
+                string.IsNullOrWhiteSpace(node.Name))
+            {
+                continue;
+            }
+
+            foreach (var managed in plan.ManagedServices)
+            {
+                if (!string.Equals(managed.Kind, "bucket", StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(managed.Name, node.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // A same-name service is unrelated. Never copy ServiceIds into BucketIds.
+                result.BucketIds[managed.Name] = node.Id;
+                adopted++;
+            }
+        }
+
+        return adopted;
+    }
+
+    private static string FormatAdoptCompletion(int adoptedServices, int adoptedBuckets)
+    {
+        if (adoptedServices == 0 && adoptedBuckets == 0)
+        {
+            return "No existing Railway services or buckets matched plan names.";
+        }
+
+        return $"Adopted {adoptedServices} existing Railway service id(s) and {adoptedBuckets} bucket id(s) by name.";
     }
 
     private static bool ShouldSkipTemplateDeploy(RailwayPlanManagedService managed, RailwayApplyResult result)

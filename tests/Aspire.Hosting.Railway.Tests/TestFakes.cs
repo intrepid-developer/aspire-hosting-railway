@@ -215,20 +215,28 @@ internal static class GraphQLFixtures
 
     public static string ProjectWithApi => ProjectQuery((ApiServiceId, "api"));
 
-    public static string ProjectQuery(params (string Id, string Name)[] services)
+    /// <summary>
+    /// Adopted canvas: a bucket named <c>Uploads</c> plus a same-name variable service.
+    /// The service id must not be used as <c>bucketId</c>.
+    /// </summary>
+    public static string ProjectWithExistingBucket => ProjectCanvas(
+        [(ApiServiceId, "api"), (UploadsServiceId, "uploads")],
+        [(BucketId, "Uploads")]);
+
+    /// <summary>Same-name service only — no <c>project.buckets</c> node named uploads.</summary>
+    public static string ProjectWithUploadsServiceOnly => ProjectQuery(
+        (ApiServiceId, "api"),
+        (UploadsServiceId, "uploads"));
+
+    public static string ProjectQuery(params (string Id, string Name)[] services) =>
+        ProjectCanvas(services, buckets: []);
+
+    public static string ProjectCanvas(
+        IReadOnlyList<(string Id, string Name)> services,
+        IReadOnlyList<(string Id, string Name)>? buckets = null)
     {
-        var serviceEdges = new JsonArray();
-        foreach (var (id, name) in services)
-        {
-            serviceEdges.Add(new JsonObject
-            {
-                ["node"] = new JsonObject
-                {
-                    ["id"] = id,
-                    ["name"] = name
-                }
-            });
-        }
+        var serviceEdges = NamedEdges(services);
+        var bucketEdges = NamedEdges(buckets);
 
         var payload = new JsonObject
         {
@@ -251,12 +259,36 @@ internal static class GraphQLFixtures
                                 }
                             }
                         }
-                    }
+                    },
+                    ["buckets"] = new JsonObject { ["edges"] = bucketEdges }
                 }
             }
         };
 
         return payload.ToJsonString();
+    }
+
+    private static JsonArray NamedEdges(IReadOnlyList<(string Id, string Name)>? items)
+    {
+        var edges = new JsonArray();
+        if (items is null)
+        {
+            return edges;
+        }
+
+        foreach (var (id, name) in items)
+        {
+            edges.Add(new JsonObject
+            {
+                ["node"] = new JsonObject
+                {
+                    ["id"] = id,
+                    ["name"] = name
+                }
+            });
+        }
+
+        return edges;
     }
 
     public static string ServiceDomainCreate =>
@@ -387,7 +419,9 @@ internal static class GraphQLFixtures
         return new RailwayGraphQLApplyService(client, new RailwayApplyOptions
         {
             WorkflowPollInterval = TimeSpan.Zero,
-            WorkflowTimeout = TimeSpan.FromSeconds(5)
+            WorkflowTimeout = TimeSpan.FromSeconds(5),
+            BucketCredentialsPollInterval = TimeSpan.Zero,
+            BucketCredentialsTimeout = TimeSpan.FromSeconds(5)
         });
     }
 }

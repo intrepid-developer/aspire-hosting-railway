@@ -156,7 +156,7 @@ public sealed class RailwayGraphQLClient
             _ => false
         };
 
-    /// <summary>Sends the documented <c>project(id)</c> query.</summary>
+    /// <summary>Sends the documented <c>project(id)</c> query (services, environments, and buckets).</summary>
     public Task<RailwayGraphQLResponse<ProjectData>> ProjectAsync(
         string id,
         string token,

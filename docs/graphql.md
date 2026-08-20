@@ -18,7 +18,7 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 
 | Operation | Role |
 | --- | --- |
-| `project` | Documented `project(id)` query. Lists `services` and `environments` so apply can adopt by name. |
+| `project` | Documented `project(id)` query. Lists `services`, `environments`, and `buckets` so apply can adopt by name. `buckets` is a field on the same confirmed query (Relay connection of `id` + `name`), not a new operation. |
 | `projectCreate` | Creates a Railway project. Requires an account or workspace token. |
 | `environmentCreate` | Creates an environment. Pass `sourceEnvironmentId` to duplicate production. `ephemeral` is reserved for later. |
 | `serviceCreate` | Creates a service. Always pass `environmentId`. |
@@ -35,3 +35,5 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 | `regions` | Lists Railway regions. |
 
 Documents are in `RailwayGraphQLOperations`. Confirmed operations do not include project or environment delete; `destroy-{name}` does not invent those mutations.
+
+`project.buckets` is a field on the documented `project(id)` query (Relay `edges { node { id name } }`, same shape as `services`). It was verified on Railway's GraphQL schema (`Project.buckets: ProjectBucketsConnection` of `Bucket { id name }`). There is no separate confirmed buckets-list query; apply does not invent one. `bucketInstanceDetails` is not a confirmed operation in this repo and is not used. After `bucketCreate`, apply retries the confirmed `bucketS3Credentials` query until a BucketInstance exists.
