@@ -266,6 +266,11 @@ public static class RailwayPlanBuilder
         {
             service.DrainingSeconds = drainingSeconds;
         }
+
+        if (railwayService.CronSchedule is not null)
+        {
+            service.CronSchedule = railwayService.CronSchedule;
+        }
     }
 
     private static RailwayServiceResource? GetConfiguredRailwayService(

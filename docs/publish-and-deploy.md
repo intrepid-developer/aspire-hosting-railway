@@ -89,13 +89,13 @@ Resolution order (`RailwayEnvironmentResource.ResolveDeployImageAsync`):
 
 `resolveContainerRegistry` uses `WithContainerRegistry` when present, otherwise the single `IContainerRegistry` in the model.
 
-## Compute settings (replicas, region, sleepApplication, CPU/RAM, healthcheck, restart policy, start / pre-deploy, overlap / drain)
+## Compute settings (replicas, region, sleepApplication, CPU/RAM, healthcheck, restart policy, start / pre-deploy, overlap / drain, cron)
 
 Replica count is Aspire-core. Call `WithReplicas` on a project (`ProjectResource`). Publish copies `resource.GetReplicaCount()` into `railway-plan.json` when a `ReplicaAnnotation` is present. Implicit compute on `AddRailwayEnvironment` is enough; you do not need `PublishAsRailwayService` just to set replicas.
 
 Deploy healthcheck path is also Aspire-core. Call `WithHttpHealthCheck("/health")`. Publish copies that HTTP path into `railway-plan.json`. Aspire stores the path in `HealthCheckAnnotation.Key` (`{resource}_{endpoint}_{path}_{statusCode}_check`); there is no separate path annotation in Aspire.Hosting 13.5.0. Railway always probes until HTTP 200 ([healthchecks](https://docs.railway.com/deployments/healthchecks)), so a non-200 Aspire `statusCode` is ignored. Custom `WithHealthCheck` keys that are not HTTP probes are not mapped. Implicit compute is enough; you do not need `PublishAsRailwayService` just to set the path.
 
-Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain annotation. Aspire `WithArgs` is not mapped to Railway start.
+Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron annotation. Aspire `WithArgs` is not mapped to Railway start.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -115,6 +115,12 @@ builder.AddProject<Projects.Api>("api")
         s.PreDeployCommand = "dotnet MyApp.dll --migrate"; // optional; omit = no pre-deploy step
         s.OverlapSeconds = 60; // optional; omit = do not send (in-deploy cutover, not aspire destroy)
         s.DrainingSeconds = 10; // optional; omit = do not send (0 = immediate kill)
+    });
+
+builder.AddProject<Projects.Worker>("nightly")
+    .PublishAsRailwayService(s =>
+    {
+        s.CronSchedule = "0 3 * * *"; // 03:00 UTC; omit = always-on
     });
 
 // Aspire has no core multi-region API
@@ -149,11 +155,12 @@ How apply maps plan fields onto GraphQL (`environmentId` is always passed):
 | `preDeployCommand` set | `serviceInstanceUpdate.preDeployCommand` (`[String!]`). From `PreDeployCommand` as a one-element array. Empty or whitespace fails. Empty array is omitted (unset). Do not send `null`. |
 | `overlapSeconds` set | `serviceInstanceUpdate.overlapSeconds` (Int). From `OverlapSeconds`. Must be greater than or equal to 0 (0 is no wait). Omitted when unset. Do not send `null`. In-deploy cutover, not `aspire destroy`. |
 | `drainingSeconds` set | `serviceInstanceUpdate.drainingSeconds` (Int). From `DrainingSeconds`. Must be greater than or equal to 0 (0 is immediate kill). Either field can be set alone. Omitted when unset. Do not send `null`. |
+| `cronSchedule` set | `serviceInstanceUpdate.cronSchedule` (String). From `CronSchedule`. Five-field crontab, UTC, minimum every 5 minutes. Empty or whitespace fails. Omitted when unset (always-on). Do not send `null`. |
 | none of the above | today's image-only `source.image` update |
 
 Config-as-code equivalent for CPU/RAM (mapping only, not the apply path): [`deploy.limitOverride.containers`](https://railway.com/railway.schema.json) with `cpu` and `memoryBytes`. GraphQL uses vCPU and GB floats, not bytes.
 
-Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends scale/region/sleep/healthcheck/restart-policy/start-command/pre-deploy/overlap/drain on `serviceInstanceUpdate` after the service id exists (create and later updates), then `serviceInstanceLimitsUpdate` when CPU and/or RAM were requested. Do not add `vCPUs` / `memoryGB` onto `ServiceInstanceUpdateInput`. Do not add healthcheck, restart-policy, start-command, pre-deploy, or teardown fields onto any other input. If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query. Related read queries (`serviceInstanceLimits`, `serviceInstanceLimitOverride`) exist but are not used.
+Never send `numReplicas` and `multiRegionConfig` on the same update. `serviceCreate` does not take these fields. Apply sends scale/region/sleep/healthcheck/restart-policy/start-command/pre-deploy/overlap/drain/cron on `serviceInstanceUpdate` after the service id exists (create and later updates), then `serviceInstanceLimitsUpdate` when CPU and/or RAM were requested. Do not add `vCPUs` / `memoryGB` onto `ServiceInstanceUpdateInput`. Do not add healthcheck, restart-policy, start-command, pre-deploy, teardown, or cron fields onto any other input. If the plan has region or a multi-region map, that update always includes `multiRegionConfig` so a later image-only update does not reset dashboard scale/region. `ServiceInstance` has no `multiRegionConfig` read field; apply does not invent a read-back query. Related read queries (`serviceInstanceLimits`, `serviceInstanceLimitOverride`) exist but are not used.
 
 `Cpu` / `MemoryGb` must be greater than 0 when set. Dashboard plan caps (for example 24 vCPU) are plan-specific and are not hardcoded; if Railway rejects an over-plan value, deploy surfaces the GraphQL error.
 
@@ -165,5 +172,7 @@ Start command and pre-deploy command are Railway-specific. Unset omits `startCom
 
 Deployment teardown (`OverlapSeconds` / `DrainingSeconds`) is Railway-specific **in-deploy lifecycle**, not `aspire destroy` / `destroy-{name}` (that stub is project/environment teardown and is a separate issue). After the new deploy is active, the previous replica stays up for `overlapSeconds`. Then Railway sends SIGTERM and waits `drainingSeconds` before SIGKILL. See [deployment teardown](https://docs.railway.com/guides/deployment-teardown) and [deployments teardown](https://docs.railway.com/deployments/deployment-teardown). Unset omits the fields. Either field can be set alone. Values must be greater than or equal to 0 when set (0 is no wait / immediate kill). These input fields were confirmed on the live schema 2026-08-20 as Int. Config-as-code mapping only: `deploy.overlapSeconds` / `deploy.drainingSeconds` in [railway.schema.json](https://railway.com/railway.schema.json) (examples type them as strings). GraphQL wants Int on `ServiceInstanceUpdateInput`. The documented variables `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` / `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` are not the apply path. Volume-backed services cannot do zero-downtime; overlap does not invent a second volume mount.
 
-Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` / `healthcheckPath` / `healthcheckTimeout` / `restartPolicyType` / `restartPolicyMaxRetries` / `startCommand` / `preDeployCommand` / `overlapSeconds` / `drainingSeconds` for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM, healthcheck, restart-policy, start-command, pre-deploy, or teardown fields. Volume-backed services still have a cutover gap even when a healthcheck is configured.
+Cron schedule (`CronSchedule`) is Railway-specific. Unset omits `cronSchedule` so the service stays always-on. Five-field crontab only (minute hour day month weekday), UTC. Railway's minimum frequency is every 5 minutes; `* * * * *` and minute-field `*/1` through `*/4` fail. Timezone names such as `Europe/London` are not converted to UTC. The service starts, runs the start command, and **must exit**. If it is still running at the next tick, Railway skips the new run and does not kill the previous one. There is no GraphQL for skip-if-still-running. Wrong fit for always-on HTTP APIs and bots; right fit for short tasks so you are not paying 24/7. HTTP healthchecks are a poor fit but are not auto-blocked. Combining cron with replicas greater than 1 or `Serverless = true` fails honestly. See [cron jobs](https://docs.railway.com/cron-jobs) and [cron workers and queues](https://docs.railway.com/guides/cron-workers-queues). This input field was confirmed on the live schema 2026-08-20. Config-as-code mapping only: `deploy.cronSchedule` in [railway.schema.json](https://railway.com/railway.schema.json). GraphQL uses the same field name on `ServiceInstanceUpdateInput`. Do not invent `cronCreate` / `scheduleCreate`. Do not use `environmentPatchCommit` / staged patches for this.
+
+Replicas and CPU/RAM limits cannot be used with [volumes](https://docs.railway.com/volumes/reference). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` are volume-backed templates: publish fails honestly if `WithReplicas` or `PublishAsRailwayService` scale/region/cpu/memory is set on them. Apply never sends `numReplicas` / `multiRegionConfig` / `serviceInstanceLimitsUpdate` / `healthcheckPath` / `healthcheckTimeout` / `restartPolicyType` / `restartPolicyMaxRetries` / `startCommand` / `preDeployCommand` / `overlapSeconds` / `drainingSeconds` / `cronSchedule` for those services. Buckets stay on the existing create/credentials path and do not get CPU/RAM, healthcheck, restart-policy, start-command, pre-deploy, teardown, or cron fields. Volume-backed services still have a cutover gap even when a healthcheck is configured.
 

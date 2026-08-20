@@ -76,7 +76,8 @@ public sealed class RailwayStartCommandTests
                 StartCommand = "/bin/sh -c \"exec ./api\"",
                 PreDeployCommand = ["dotnet MyApp.dll --migrate"],
                 OverlapSeconds = 60,
-                DrainingSeconds = 10
+                DrainingSeconds = 10,
+                CronSchedule = "0 3 * * *"
             },
             "nginx");
 
@@ -88,6 +89,7 @@ public sealed class RailwayStartCommandTests
         Assert.Equal(["dotnet MyApp.dll --migrate"], input.PreDeployCommand);
         Assert.Equal(60, input.OverlapSeconds);
         Assert.Equal(10, input.DrainingSeconds);
+        Assert.Equal("0 3 * * *", input.CronSchedule);
     }
 
     [Theory]

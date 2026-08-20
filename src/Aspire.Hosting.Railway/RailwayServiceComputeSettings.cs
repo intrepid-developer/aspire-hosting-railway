@@ -60,6 +60,13 @@ internal static class RailwayServiceComputeSettings
                     $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set overlapSeconds / drainingSeconds. " +
                     "Those fields are not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
             }
+
+            if (HasCronSchedule(service) && IsManagedService(plan, service.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Railway service '{service.Name}' is a managed Postgres, Redis, or bucket and cannot set cronSchedule. " +
+                    "That field is not sent for PublishAsRailwayPostgres / PublishAsRailwayRedis / buckets.");
+            }
         }
     }
 
@@ -134,6 +141,11 @@ internal static class RailwayServiceComputeSettings
             EnsureNonNegativeSeconds(service.Name, drainingSeconds, "drainingSeconds");
         }
 
+        if (service.CronSchedule is not null)
+        {
+            EnsureCronSchedule(service);
+        }
+
         if (service.ReplicaRegions is not { Count: > 0 } replicaRegions)
         {
             return;
@@ -157,7 +169,7 @@ internal static class RailwayServiceComputeSettings
     /// <summary>
     /// Builds <c>serviceInstanceUpdate</c> input: always <c>source.image</c>, plus
     /// confirmed scale/serverless/region/healthcheck/restart-policy/start-command
-    /// /overlap/drain fields when the plan requested them.
+    /// /overlap/drain/cron fields when the plan requested them.
     /// </summary>
     public static ServiceInstanceUpdateInput CreateUpdateInput(RailwayPlanService service, string image)
     {
@@ -189,6 +201,7 @@ internal static class RailwayServiceComputeSettings
         ApplyRestartPolicy(service, input);
         ApplyStartAndPreDeployCommand(service, input);
         ApplyDeploymentTeardown(service, input);
+        ApplyCronSchedule(service, input);
         return input;
     }
 
@@ -240,6 +253,9 @@ internal static class RailwayServiceComputeSettings
 
     internal static bool HasDeploymentTeardown(RailwayPlanService service) =>
         service.OverlapSeconds is not null || service.DrainingSeconds is not null;
+
+    internal static bool HasCronSchedule(RailwayPlanService service) =>
+        service.CronSchedule is not null;
 
     internal static bool IsVolumeBackedManagedService(RailwayPlan plan, string serviceName) =>
         plan.ManagedServices.Any(managed =>
@@ -326,6 +342,91 @@ internal static class RailwayServiceComputeSettings
         {
             input.DrainingSeconds = drainingSeconds;
         }
+    }
+
+    private static void ApplyCronSchedule(RailwayPlanService service, ServiceInstanceUpdateInput input)
+    {
+        if (!string.IsNullOrWhiteSpace(service.CronSchedule))
+        {
+            input.CronSchedule = service.CronSchedule;
+        }
+    }
+
+    private static void EnsureCronSchedule(RailwayPlanService service)
+    {
+        if (string.IsNullOrWhiteSpace(service.CronSchedule))
+        {
+            throw new InvalidOperationException(
+                $"Railway service '{service.Name}' cronSchedule must be a non-empty five-field crontab (UTC).");
+        }
+
+        var fields = service.CronSchedule.Split(
+            (char[]?)null,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (fields.Length != 5)
+        {
+            throw new InvalidOperationException(
+                $"Railway service '{service.Name}' cronSchedule must be a five-field crontab (minute hour day month weekday) in UTC. " +
+                "Timezone names are not converted. See https://docs.railway.com/cron-jobs.");
+        }
+
+        if (IsFasterThanEveryFiveMinutes(fields[0]))
+        {
+            throw new InvalidOperationException(
+                $"Railway service '{service.Name}' cronSchedule cannot run more often than every 5 minutes. " +
+                "Railway's minimum frequency is every 5 minutes (UTC). See https://docs.railway.com/cron-jobs.");
+        }
+
+        if (GetReplicaCountForCronConflict(service) > 1)
+        {
+            throw new InvalidOperationException(
+                $"Railway service '{service.Name}' cannot combine cronSchedule with replicas greater than 1. " +
+                "Cron services are must-exit jobs, not multi-replica always-on services.");
+        }
+
+        if (service.Serverless is true)
+        {
+            throw new InvalidOperationException(
+                $"Railway service '{service.Name}' cannot combine cronSchedule with serverless / sleepApplication. " +
+                "Cron services are must-exit jobs, not always-on sleep-when-idle services.");
+        }
+    }
+
+    /// <summary>
+    /// Rejects the obvious faster-than-every-5-minutes minute fields without a
+    /// cron parser: <c>*</c>, and <c>*/1</c> through <c>*/4</c>.
+    /// </summary>
+    private static bool IsFasterThanEveryFiveMinutes(string minuteField)
+    {
+        if (string.Equals(minuteField, "*", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (minuteField.StartsWith("*/", StringComparison.Ordinal) &&
+            int.TryParse(minuteField.AsSpan(2), out var step) &&
+            step is >= 1 and <= 4)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int GetReplicaCountForCronConflict(RailwayPlanService service)
+    {
+        if (service.ReplicaRegions is { Count: > 0 } replicaRegions)
+        {
+            var total = 0;
+            foreach (var count in replicaRegions.Values)
+            {
+                total = checked(total + count);
+            }
+
+            return total;
+        }
+
+        return service.Replicas ?? 1;
     }
 
     private static void EnsureNonNegativeSeconds(string serviceName, int seconds, string what)

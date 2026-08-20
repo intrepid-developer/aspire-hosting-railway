@@ -161,6 +161,15 @@ public sealed class ServiceInstanceUpdateInput
     /// </summary>
     [JsonPropertyName("drainingSeconds")]
     public int? DrainingSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets the cron schedule. Confirmed
+    /// <c>ServiceInstanceUpdateInput.cronSchedule</c> (String, live schema
+    /// 2026-08-20). Omitted when unset so the service stays always-on. Do
+    /// not send <c>null</c>. Five-field crontab, UTC.
+    /// </summary>
+    [JsonPropertyName("cronSchedule")]
+    public string? CronSchedule { get; set; }
 }
 
 /// <summary>
