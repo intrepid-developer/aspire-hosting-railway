@@ -224,6 +224,32 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     public int? DrainingSeconds { get; set; }
 
     /// <summary>
+    /// Gets or sets the Railway cron schedule. Maps to
+    /// <c>ServiceInstanceUpdateInput.cronSchedule</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent only when set. Empty or whitespace fails. Unset omits the field
+    /// so the service stays always-on. Five-field crontab only (minute hour
+    /// day month weekday), UTC. Railway's minimum frequency is every 5
+    /// minutes; <c>* * * * *</c> and minute-field <c>*/1</c> through
+    /// <c>*/4</c> fail. Timezone names are not converted to UTC. The
+    /// service starts, runs the start command, and must exit. If it is
+    /// still running at the next tick, Railway skips the new run and does
+    /// not kill the previous one. Wrong fit for always-on HTTP APIs and
+    /// bots; HTTP healthchecks are a poor fit but are not auto-blocked.
+    /// Cannot be combined with replicas greater than 1 or
+    /// <see cref="Serverless"/> <c>true</c>. There is no Aspire-core
+    /// annotation; configure this through <c>PublishAsRailwayService</c>.
+    /// Not sent for <c>PublishAsRailwayPostgres</c> /
+    /// <c>PublishAsRailwayRedis</c> / buckets. Config-as-code
+    /// <c>deploy.cronSchedule</c> is mapping only; the apply path is
+    /// <c>serviceInstanceUpdate</c>. See
+    /// <see href="https://docs.railway.com/cron-jobs"/> and
+    /// <see href="https://docs.railway.com/guides/cron-workers-queues"/>.
+    /// </remarks>
+    public string? CronSchedule { get; set; }
+
+    /// <summary>
     /// Gets or sets a multi-region replica map of <see cref="RailwayRegion"/> to replica
     /// count. Maps to <c>ServiceInstanceUpdateInput.multiRegionConfig</c>.
     /// </summary>

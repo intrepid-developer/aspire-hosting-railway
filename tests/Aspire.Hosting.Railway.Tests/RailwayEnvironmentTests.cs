@@ -545,6 +545,7 @@ public class RailwayEnvironmentTests
         Assert.Null(api.PreDeployCommand);
         Assert.Null(api.OverlapSeconds);
         Assert.Null(api.DrainingSeconds);
+        Assert.Null(api.CronSchedule);
         Assert.All(plan.ManagedServices, managed =>
         {
             Assert.Contains(managed.Kind, ["postgres", "redis"], StringComparer.Ordinal);
@@ -560,6 +561,7 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("preDeployCommand", json, StringComparison.Ordinal);
         Assert.DoesNotContain("overlapSeconds", json, StringComparison.Ordinal);
         Assert.DoesNotContain("drainingSeconds", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("cronSchedule", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1096,6 +1098,7 @@ public class RailwayEnvironmentTests
         Assert.Equal(["dotnet MyApp.dll --migrate"], service.PreDeployCommand);
         Assert.Equal(60, service.OverlapSeconds);
         Assert.Equal(10, service.DrainingSeconds);
+        Assert.Null(service.CronSchedule);
     }
 
     [Fact]
@@ -1338,6 +1341,185 @@ public class RailwayEnvironmentTests
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "drainingSeconds",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Plan_UnsetCronSchedule_OmitsField()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.CronSchedule);
+        Assert.DoesNotContain("cronSchedule", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("0 3 * * *")]
+    [InlineData("*/15 * * * *")]
+    public void Plan_PublishAsRailwayService_CopiesCronSchedule(string cronSchedule)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.CronSchedule = cronSchedule);
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(cronSchedule, service.CronSchedule);
+        using (var document = System.Text.Json.JsonDocument.Parse(json))
+        {
+            var planned = document.RootElement.GetProperty("services")[0];
+            Assert.Equal(cronSchedule, planned.GetProperty("cronSchedule").GetString());
+        }
+
+        Assert.Contains($"\"cronSchedule\": \"{cronSchedule}\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("CronSchedule", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Plan_EmptyCronSchedule_FailsBeforeGraphQL(string cronSchedule)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.CronSchedule = cronSchedule);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("non-empty", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("* * * * *")]
+    [InlineData("*/2 * * * *")]
+    public void Plan_FasterThanEveryFiveMinutes_FailsBeforeGraphQL(string cronSchedule)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.CronSchedule = cronSchedule);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("5 minutes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_CronScheduleWithReplicasGreaterThanOne_FailsBeforeGraphQL()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .PublishAsRailwayService(s => s.CronSchedule = "0 3 * * *");
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("replicas", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_CronScheduleWithServerless_FailsBeforeGraphQL()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.CronSchedule = "0 3 * * *";
+                s.Serverless = true;
+            });
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("serverless", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_HealthcheckRestartStartOverlapAndCronSurviveTogether()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .WithHttpEndpoint(targetPort: 80)
+            .WithHttpHealthCheck("/health")
+            .PublishAsRailwayService(s =>
+            {
+                s.HealthcheckTimeoutSeconds = 90;
+                s.RestartPolicy = RailwayRestartPolicy.Never;
+                s.RestartPolicyMaxRetries = 1;
+                s.StartCommand = "./api";
+                s.PreDeployCommand = "dotnet MyApp.dll --migrate";
+                s.OverlapSeconds = 60;
+                s.DrainingSeconds = 10;
+                s.CronSchedule = "0 3 * * *";
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+
+        Assert.Equal("/health", service.HealthcheckPath);
+        Assert.Equal(90, service.HealthcheckTimeout);
+        Assert.Equal("NEVER", service.RestartPolicyType);
+        Assert.Equal(1, service.RestartPolicyMaxRetries);
+        Assert.Equal("./api", service.StartCommand);
+        Assert.Equal(["dotnet MyApp.dll --migrate"], service.PreDeployCommand);
+        Assert.Equal(60, service.OverlapSeconds);
+        Assert.Equal(10, service.DrainingSeconds);
+        Assert.Equal("0 3 * * *", service.CronSchedule);
+    }
+
+    [Fact]
+    public void Plan_ManagedPostgresRedisAndBucket_DoNotGetCronScheduleField()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        builder.AddRedis("redis").PublishAsRailwayRedis();
+        builder.AddRailwayBucket("uploads");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.CronSchedule = "0 3 * * *");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+
+        Assert.Single(plan.Services);
+        var api = Assert.Single(plan.Services);
+        Assert.Equal("0 3 * * *", api.CronSchedule);
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "postgres");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "redis");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "bucket");
+        Assert.All(plan.ManagedServices, managed =>
+        {
+            Assert.DoesNotContain(
+                "cronSchedule",
                 System.Text.Json.JsonSerializer.Serialize(managed),
                 StringComparison.Ordinal);
         });

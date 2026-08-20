@@ -208,6 +208,15 @@ public sealed class RailwayPlanService
     /// </summary>
     [JsonPropertyName("drainingSeconds")]
     public int? DrainingSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Railway cron schedule from
+    /// <c>PublishAsRailwayService</c> <c>CronSchedule</c>. Omitted when
+    /// unset (always-on). GraphQL writes <c>cronSchedule</c> (String).
+    /// Five-field crontab, UTC, minimum every 5 minutes.
+    /// </summary>
+    [JsonPropertyName("cronSchedule")]
+    public string? CronSchedule { get; set; }
 }
 
 /// <summary>

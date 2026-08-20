@@ -94,11 +94,12 @@ public static class RailwayGraphQLOperations
     /// <c>restartPolicyType</c> (<c>RestartPolicyType</c>: <c>ALWAYS</c> |
     /// <c>NEVER</c> | <c>ON_FAILURE</c>), <c>restartPolicyMaxRetries</c>
     /// (Int), <c>startCommand</c> (String), <c>preDeployCommand</c>
-    /// (<c>[String!]</c>), <c>overlapSeconds</c> (Int), and
-    /// <c>drainingSeconds</c> (Int) verified on the live schema 2026-08-20.
-    /// Never send <c>numReplicas</c> and <c>multiRegionConfig</c> together.
-    /// Omit unset healthcheck, restart-policy, start-command, pre-deploy,
-    /// and teardown fields; do not send <c>null</c>. ServiceInstance has no
+    /// (<c>[String!]</c>), <c>overlapSeconds</c> (Int),
+    /// <c>drainingSeconds</c> (Int), and <c>cronSchedule</c> (String)
+    /// verified on the live schema 2026-08-20. Never send
+    /// <c>numReplicas</c> and <c>multiRegionConfig</c> together. Omit unset
+    /// healthcheck, restart-policy, start-command, pre-deploy, teardown,
+    /// and cron fields; do not send <c>null</c>. ServiceInstance has no
     /// <c>multiRegionConfig</c> read field.
     /// </summary>
     public const string ServiceInstanceUpdate = """

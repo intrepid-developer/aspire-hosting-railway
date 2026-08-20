@@ -384,6 +384,33 @@ public class RailwayGraphQLClientTests
     }
 
     [Fact]
+    public async Task ServiceInstanceUpdate_SerializesCronSchedule()
+    {
+        var handler = new RecordingHandler("""{"data":true}""");
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        await client.ServiceInstanceUpdateAsync(
+            "svc_placeholder",
+            "env_placeholder",
+            new ServiceInstanceUpdateInput
+            {
+                Source = new ServiceSourceInput { Image = "nginx" },
+                CronSchedule = "0 3 * * *"
+            },
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        Assert.Equal("0 3 * * *", input.GetProperty("cronSchedule").GetString());
+        Assert.False(input.TryGetProperty("startCommand", out _));
+        Assert.DoesNotContain("null", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("environmentId", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("cronCreate", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("scheduleCreate", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ServiceInstanceLimitsUpdate_SerializesConfirmedFieldNames()
     {
         var handler = new RecordingHandler("""{"data":true}""");

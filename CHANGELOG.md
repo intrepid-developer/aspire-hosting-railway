@@ -2,6 +2,17 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here.
 
+## 13.5.0-preview.9
+
+- `PublishAsRailwayService` can set `CronSchedule`. There is no Aspire-core annotation. Unset omits the field so the service stays always-on. Empty or whitespace fails honestly.
+- Five-field crontab only (minute hour day month weekday), UTC. Railway's minimum frequency is every 5 minutes. `* * * * *` and minute-field `*/1` through `*/4` fail. Timezone names such as `Europe/London` are not converted to UTC.
+- The service starts, runs the start command, and must exit. If it is still running at the next tick, Railway skips the new run and does not kill the previous one. Wrong fit for always-on HTTP APIs and bots. HTTP healthchecks are a poor fit but are not auto-blocked. There is no GraphQL for skip-if-still-running.
+- Combining cron with replicas greater than 1 or `Serverless = true` fails honestly (must-exit job vs always-on / multi-replica).
+- `aspire publish` writes `cronSchedule` into `railway-plan.json` as a string. Unset is omitted. Do not send `null`.
+- `aspire deploy` applies it on the existing `serviceInstanceUpdate` call (`ServiceInstanceUpdateInput.cronSchedule` String). Always pass `environmentId`. This field was confirmed on the live schema 2026-08-20. No new mutation (`cronCreate` / `scheduleCreate` are not used). Limits stay on `serviceInstanceLimitsUpdate`.
+- See [cron jobs](https://docs.railway.com/cron-jobs) and [cron workers and queues](https://docs.railway.com/guides/cron-workers-queues). Config-as-code `deploy.cronSchedule` is mapping only.
+- `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets do not get this field.
+
 ## 13.5.0-preview.8
 
 - `PublishAsRailwayService` can set `OverlapSeconds` and `DrainingSeconds`. There is no Aspire-core annotation. Unset omits the fields. Either field can be set alone. Values must be greater than or equal to 0 when set (0 is no wait / immediate kill). Negative fails honestly. Railway defaults are not hardcoded.

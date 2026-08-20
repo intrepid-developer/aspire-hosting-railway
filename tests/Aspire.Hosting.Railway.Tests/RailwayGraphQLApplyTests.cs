@@ -1896,6 +1896,7 @@ public class RailwayGraphQLApplyTests
         plan.Services[0].PreDeployCommand = ["dotnet MyApp.dll --migrate"];
         plan.Services[0].OverlapSeconds = 60;
         plan.Services[0].DrainingSeconds = 10;
+        plan.Services[0].CronSchedule = "0 3 * * *";
 
         var apply = GraphQLFixtures.CreateApplyService(handler);
         await apply.ApplyAsync(
@@ -1913,6 +1914,7 @@ public class RailwayGraphQLApplyTests
         Assert.Equal("dotnet MyApp.dll --migrate", input.GetProperty("preDeployCommand")[0].GetString());
         Assert.Equal(60, input.GetProperty("overlapSeconds").GetInt32());
         Assert.Equal(10, input.GetProperty("drainingSeconds").GetInt32());
+        Assert.Equal("0 3 * * *", input.GetProperty("cronSchedule").GetString());
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
     }
 
@@ -2334,6 +2336,234 @@ public class RailwayGraphQLApplyTests
             handler.Operations,
             name => (name.Contains("overlap", StringComparison.OrdinalIgnoreCase) ||
                      name.Contains("drain", StringComparison.OrdinalIgnoreCase)) &&
+                    !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Apply_CronSchedule_SendsStringOnServiceInstanceUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].CronSchedule = "0 3 * * *";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("0 3 * * *", input.GetProperty("cronSchedule").GetString());
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.DoesNotContain("cronCreate", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain("scheduleCreate", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Apply_EmptyCronSchedule_FailsBeforeGraphQL(string cronSchedule)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].CronSchedule = cronSchedule;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("non-empty", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Theory]
+    [InlineData("* * * * *")]
+    [InlineData("*/2 * * * *")]
+    public async Task Apply_FasterThanEveryFiveMinutes_FailsBeforeGraphQL(string cronSchedule)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].CronSchedule = cronSchedule;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("5 minutes", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_CronScheduleWithReplicasGreaterThanOne_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Replicas = 2;
+        plan.Services[0].CronSchedule = "0 3 * * *";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("replicas", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_CronScheduleWithServerless_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].Serverless = true;
+        plan.Services[0].CronSchedule = "0 3 * * *";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("serverless", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_ManagedServiceCronSchedule_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true);
+        plan.Services[0].Name = "postgres";
+        plan.Services[0].CronSchedule = "0 3 * * *";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("managed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cronSchedule", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_TemplatesAndBucket_DoNotSendCronScheduleOnManagedServices()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true, includeRedis: true, includeBucket: true);
+        plan.Services[0].CronSchedule = "0 3 * * *";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        var updateInput = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("0 3 * * *", updateInput.GetProperty("cronSchedule").GetString());
+
+        var managedBodies = handler.Bodies.Where(body =>
+            body.Contains("\"operationName\":\"templateDeployV2\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketCreate\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketS3Credentials\"", StringComparison.Ordinal));
+        Assert.All(managedBodies, body =>
+        {
+            Assert.DoesNotContain("cronSchedule", body, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task DeployAsync_CronSchedule_SendsFieldOnExistingMutation()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.CronSchedule = "0 3 * * *");
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("0 3 * * *", input.GetProperty("cronSchedule").GetString());
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            handler.Operations,
+            name => (name.Contains("cron", StringComparison.OrdinalIgnoreCase) ||
+                     name.Contains("schedule", StringComparison.OrdinalIgnoreCase)) &&
                     !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
     }
 
