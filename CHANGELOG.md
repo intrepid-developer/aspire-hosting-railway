@@ -8,6 +8,7 @@ Versions match `Directory.Build.props`. Preview packages are on GitHub Packages,
 - After a real `bucketCreate`, retry `bucketS3Credentials` until a BucketInstance exists instead of querying immediately.
 - A same-name service is never used as a `bucketId`.
 - Bucket secrets stay out of plan files and deployment state; only flatten-safe bucket ids are persisted.
+- Successful Pack jobs also publish a GitHub Release for the packed version.
 
 ## 0.1.0-preview.11
 
