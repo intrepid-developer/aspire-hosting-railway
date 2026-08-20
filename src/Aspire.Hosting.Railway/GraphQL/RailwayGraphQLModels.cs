@@ -125,6 +125,24 @@ public sealed class ServiceInstanceUpdateInput
     /// </summary>
     [JsonPropertyName("restartPolicyMaxRetries")]
     public int? RestartPolicyMaxRetries { get; set; }
+
+    /// <summary>
+    /// Gets or sets the start command. Confirmed
+    /// <c>ServiceInstanceUpdateInput.startCommand</c> (String, live schema
+    /// 2026-08-20). Omitted when unset so the image ENTRYPOINT/CMD applies.
+    /// Do not send <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("startCommand")]
+    public string? StartCommand { get; set; }
+
+    /// <summary>
+    /// Gets or sets pre-deploy command steps. Confirmed
+    /// <c>ServiceInstanceUpdateInput.preDeployCommand</c> (<c>[String!]</c>,
+    /// live schema 2026-08-20). Omitted when unset or empty. Do not send
+    /// <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("preDeployCommand")]
+    public List<string>? PreDeployCommand { get; set; }
 }
 
 /// <summary>

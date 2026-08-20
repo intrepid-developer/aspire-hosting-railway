@@ -1790,6 +1790,289 @@ public class RailwayGraphQLApplyTests
                     !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Apply_StartCommandOnly_SendsStringAndOmitsPreDeploy()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].StartCommand = "./api";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("./api", input.GetProperty("startCommand").GetString());
+        Assert.False(input.TryGetProperty("preDeployCommand", out _));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+    }
+
+    [Fact]
+    public async Task Apply_PreDeployCommand_SendsOneElementArrayOnServiceInstanceUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].PreDeployCommand = ["dotnet MyApp.dll --migrate"];
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.False(input.TryGetProperty("startCommand", out _));
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, input.GetProperty("preDeployCommand").ValueKind);
+        Assert.Equal(1, input.GetProperty("preDeployCommand").GetArrayLength());
+        Assert.Equal("dotnet MyApp.dll --migrate", input.GetProperty("preDeployCommand")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Apply_EmptyPreDeployArray_OmitsField()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].PreDeployCommand = [];
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.False(input.TryGetProperty("startCommand", out _));
+        Assert.False(input.TryGetProperty("preDeployCommand", out _));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Apply_HealthcheckRestartAndStart_DoesNotDropLaterFields()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].HealthcheckPath = "/health";
+        plan.Services[0].HealthcheckTimeout = 90;
+        plan.Services[0].RestartPolicyType = "NEVER";
+        plan.Services[0].RestartPolicyMaxRetries = 1;
+        plan.Services[0].StartCommand = "./api";
+        plan.Services[0].PreDeployCommand = ["dotnet MyApp.dll --migrate"];
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/health", input.GetProperty("healthcheckPath").GetString());
+        Assert.Equal(90, input.GetProperty("healthcheckTimeout").GetInt32());
+        Assert.Equal("NEVER", input.GetProperty("restartPolicyType").GetString());
+        Assert.Equal(1, input.GetProperty("restartPolicyMaxRetries").GetInt32());
+        Assert.Equal("./api", input.GetProperty("startCommand").GetString());
+        Assert.Equal("dotnet MyApp.dll --migrate", input.GetProperty("preDeployCommand")[0].GetString());
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Apply_InvalidStartCommand_FailsBeforeGraphQL(string startCommand)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].StartCommand = startCommand;
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("startCommand", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("non-empty", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Apply_InvalidPreDeployCommand_FailsBeforeGraphQL(string step)
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].PreDeployCommand = [step];
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("preDeployCommand", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("non-empty", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_ManagedServiceStartCommand_FailsBeforeGraphQL()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true);
+        plan.Services[0].Name = "postgres";
+        plan.Services[0].StartCommand = "./api";
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("managed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("startCommand", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Operations);
+        Assert.Equal(0, handler.Count("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_TemplatesAndBucket_DoNotSendStartOrPreDeployOnManagedServices()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
+        handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
+        handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(includePostgres: true, includeRedis: true, includeBucket: true);
+        plan.Services[0].StartCommand = "./api";
+        plan.Services[0].PreDeployCommand = ["dotnet MyApp.dll --migrate"];
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        await apply.ApplyAsync(
+            plan,
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        var updateInput = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("./api", updateInput.GetProperty("startCommand").GetString());
+        Assert.Equal("dotnet MyApp.dll --migrate", updateInput.GetProperty("preDeployCommand")[0].GetString());
+
+        var managedBodies = handler.Bodies.Where(body =>
+            body.Contains("\"operationName\":\"templateDeployV2\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketCreate\"", StringComparison.Ordinal) ||
+            body.Contains("\"operationName\":\"bucketS3Credentials\"", StringComparison.Ordinal));
+        Assert.All(managedBodies, body =>
+        {
+            Assert.DoesNotContain("startCommand", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("preDeployCommand", body, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task DeployAsync_StartAndPreDeployCommand_SendsFieldsOnExistingMutation()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var builder = TestAppBuilder.CreatePublish();
+        builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
+        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.StartCommand = "/bin/sh -c \"exec ./api\"";
+                s.PreDeployCommand = "dotnet MyApp.dll --migrate";
+            });
+
+        using var app = builder.Build();
+        await TestAppBuilder.ExecuteBeforeStartHooksAsync(app);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(app.Services.GetRequiredService<DistributedApplicationModel>());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
+        services.AddSingleton<IDeploymentStateManager>(new MemoryDeploymentStateManager());
+        services.AddSingleton(new RailwayGraphQLClient(new HttpClient(handler)));
+        var provider = services.BuildServiceProvider();
+
+        var context = CreatePipelineContext(TestAppBuilder.GetModel(app), provider);
+        await railway.Resource.DeployAsync(context);
+
+        var input = GraphQLFixtures.GetServiceInstanceUpdateInput(handler.Bodies);
+        Assert.Equal("/bin/sh -c \"exec ./api\"", input.GetProperty("startCommand").GetString());
+        Assert.Equal("dotnet MyApp.dll --migrate", input.GetProperty("preDeployCommand")[0].GetString());
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.DoesNotContain("null", handler.Bodies.Single(body =>
+            body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            handler.Operations,
+            name => (name.Contains("start", StringComparison.OrdinalIgnoreCase) ||
+                     name.Contains("preDeploy", StringComparison.OrdinalIgnoreCase)) &&
+                    !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
+    }
+
     private static void EnqueueProductionServiceTemplateAndBucket(ScriptedGraphQLHandler handler)
     {
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);

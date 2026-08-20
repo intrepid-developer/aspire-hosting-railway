@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.6** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
+Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.0-preview.7** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.0** / `net10.0`.
 
 ## Restore from nuget.org
 
@@ -51,10 +51,10 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using` fo
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Railway replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference), so those templates are not scaled. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.6" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.6" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.6" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.6" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.0-preview.7" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.0-preview.7" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.0-preview.7" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.0-preview.7" />
 ```
 
 ```csharp
@@ -96,7 +96,7 @@ builder.Build().Run();
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.6" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.0-preview.7" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.0" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.0" />
 ```
@@ -109,7 +109,7 @@ builder.AddRailwayBucketClient("uploads");
 
 Existing Aspire client packages keep working. `AddRailwayEnvironment` is the Railway **project** (compute environment). The Railway environment name is mapped from Aspire `--environment`: Production → `production`, Staging → `staging` (lowercase). Override with `WithRailwayEnvironmentName`.
 
-Replica count is Aspire-core `WithReplicas` (project resources). Implicit compute on the Railway environment picks it up and deploy sends `numReplicas`. Deploy healthcheck path is Aspire-core `WithHttpHealthCheck` — publish copies that path into `healthcheckPath` and deploy sends it on the existing `serviceInstanceUpdate`. Railway probes until HTTP 200, then flips traffic ([healthchecks](https://docs.railway.com/deployments/healthchecks)); it is not continuous monitoring. Region, `sleepApplication`, per-replica CPU/RAM, healthcheck timeout, and restart policy are Railway-specific and use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy annotation. There is no GraphQL field named `serverless`; sleep applies to all replicas. `Cpu` / `MemoryGb` map to GraphQL `vCPUs` / `memoryGB` (not config-as-code `memoryBytes`). `HealthcheckTimeoutSeconds` maps to GraphQL `healthcheckTimeout` (Int seconds); omit it to leave Railway's default (300). `RestartPolicy` (`RailwayRestartPolicy`) maps to GraphQL `restartPolicyType` (`ON_FAILURE` / `ALWAYS` / `NEVER`); `RestartPolicyMaxRetries` maps to `restartPolicyMaxRetries`. Either field can be set alone. Omit both to leave Railway's default (On Failure / 10 retries). See [restart policy](https://docs.railway.com/deployments/restart-policy). Replicas, CPU/RAM limits, healthcheck, and restart-policy fields cannot be used with Railway volumes — do not set them on `PublishAsRailwayPostgres` / `PublishAsRailwayRedis`. Allow `healthcheck.railway.app` if the app filters Host. The app must listen on `PORT`. Volume-backed services still have cutover downtime even with a healthcheck.
+Replica count is Aspire-core `WithReplicas` (project resources). Implicit compute on the Railway environment picks it up and deploy sends `numReplicas`. Deploy healthcheck path is Aspire-core `WithHttpHealthCheck` — publish copies that path into `healthcheckPath` and deploy sends it on the existing `serviceInstanceUpdate`. Railway probes until HTTP 200, then flips traffic ([healthchecks](https://docs.railway.com/deployments/healthchecks)); it is not continuous monitoring. Region, `sleepApplication`, per-replica CPU/RAM, healthcheck timeout, restart policy, start command, and pre-deploy command are Railway-specific and use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command annotation. Aspire `WithArgs` is not mapped to Railway start. There is no GraphQL field named `serverless`; sleep applies to all replicas. `Cpu` / `MemoryGb` map to GraphQL `vCPUs` / `memoryGB` (not config-as-code `memoryBytes`). `HealthcheckTimeoutSeconds` maps to GraphQL `healthcheckTimeout` (Int seconds); omit it to leave Railway's default (300). `RestartPolicy` (`RailwayRestartPolicy`) maps to GraphQL `restartPolicyType` (`ON_FAILURE` / `ALWAYS` / `NEVER`); `RestartPolicyMaxRetries` maps to `restartPolicyMaxRetries`. Either field can be set alone. Omit both to leave Railway's default (On Failure / 10 retries). See [restart policy](https://docs.railway.com/deployments/restart-policy). `StartCommand` maps to GraphQL `startCommand`; unset leaves the image ENTRYPOINT/CMD. Image/Dockerfile start is exec form — wrap `$PORT` as `/bin/sh -c "exec … $PORT"`. See [start command](https://docs.railway.com/guides/start-command). `PreDeployCommand` maps to GraphQL `preDeployCommand` as a one-element array. It runs between build and deploy (migrations) on the private network with the app environment; a non-zero exit is not retried and the deploy stops. The step is a separate container with no volume, so the filesystem does not persist. See [pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command). Either start or pre-deploy can be set alone. Empty or whitespace fails. These fields were confirmed on the live schema 2026-08-20. Config-as-code `deploy.startCommand` / `deploy.preDeployCommand` are mapping only. Replicas, CPU/RAM limits, healthcheck, restart-policy, start-command, and pre-deploy fields cannot be used with Railway volumes — do not set them on `PublishAsRailwayPostgres` / `PublishAsRailwayRedis`. Allow `healthcheck.railway.app` if the app filters Host. The app must listen on `PORT`. Volume-backed services still have cutover downtime even with a healthcheck.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -125,6 +125,8 @@ builder.AddProject<Projects.Api>("api")
         s.HealthcheckTimeoutSeconds = 120;
         s.RestartPolicy = RailwayRestartPolicy.OnFailure;
         s.RestartPolicyMaxRetries = 10;
+        s.StartCommand = "/bin/sh -c \"exec dotnet MyApp.dll --urls http://*:$PORT\"";
+        s.PreDeployCommand = "dotnet MyApp.dll --migrate";
     });
 ```
 

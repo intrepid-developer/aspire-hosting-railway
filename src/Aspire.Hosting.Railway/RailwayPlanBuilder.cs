@@ -246,6 +246,16 @@ public static class RailwayPlanBuilder
         {
             service.RestartPolicyMaxRetries = restartRetries;
         }
+
+        if (railwayService.StartCommand is not null)
+        {
+            service.StartCommand = railwayService.StartCommand;
+        }
+
+        if (railwayService.PreDeployCommand is not null)
+        {
+            service.PreDeployCommand = [railwayService.PreDeployCommand];
+        }
     }
 
     private static RailwayServiceResource? GetConfiguredRailwayService(

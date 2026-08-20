@@ -541,6 +541,8 @@ public class RailwayEnvironmentTests
         Assert.Null(api.HealthcheckTimeout);
         Assert.Null(api.RestartPolicyType);
         Assert.Null(api.RestartPolicyMaxRetries);
+        Assert.Null(api.StartCommand);
+        Assert.Null(api.PreDeployCommand);
         Assert.All(plan.ManagedServices, managed =>
         {
             Assert.Contains(managed.Kind, ["postgres", "redis"], StringComparer.Ordinal);
@@ -552,6 +554,8 @@ public class RailwayEnvironmentTests
         Assert.DoesNotContain("healthcheckTimeout", json, StringComparison.Ordinal);
         Assert.DoesNotContain("restartPolicyType", json, StringComparison.Ordinal);
         Assert.DoesNotContain("restartPolicyMaxRetries", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("startCommand", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("preDeployCommand", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -706,6 +710,14 @@ public class RailwayEnvironmentTests
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "restartPolicyMaxRetries",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "startCommand",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "preDeployCommand",
                 System.Text.Json.JsonSerializer.Serialize(managed),
                 StringComparison.Ordinal);
         });
@@ -886,6 +898,215 @@ public class RailwayEnvironmentTests
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "restartPolicyMaxRetries",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Plan_UnsetStartAndPreDeployCommand_OmitsBothFields()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.StartCommand);
+        Assert.Null(service.PreDeployCommand);
+        Assert.DoesNotContain("startCommand", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("preDeployCommand", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_PublishAsRailwayService_CopiesStartCommandAndPreDeployAsArray()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.StartCommand = "/bin/sh -c \"exec dotnet MyApp.dll --urls http://*:$PORT\"";
+                s.PreDeployCommand = "dotnet MyApp.dll --migrate";
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal(
+            "/bin/sh -c \"exec dotnet MyApp.dll --urls http://*:$PORT\"",
+            service.StartCommand);
+        Assert.Equal(["dotnet MyApp.dll --migrate"], service.PreDeployCommand);
+        Assert.Contains(
+            "\"startCommand\": \"/bin/sh -c \\\"exec dotnet MyApp.dll --urls http://*:$PORT\\\"\"",
+            json,
+            StringComparison.Ordinal);
+        Assert.Contains("\"preDeployCommand\": [", json, StringComparison.Ordinal);
+        Assert.Contains("\"dotnet MyApp.dll --migrate\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartCommand", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("PreDeployCommand", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_StartCommandOnly_OmitsPreDeploy()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.StartCommand = "./api");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Equal("./api", service.StartCommand);
+        Assert.Null(service.PreDeployCommand);
+        Assert.Contains("\"startCommand\": \"./api\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("preDeployCommand", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_PreDeployCommandOnly_OmitsStart()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.PreDeployCommand = "dotnet MyApp.dll --migrate");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.StartCommand);
+        Assert.Equal(["dotnet MyApp.dll --migrate"], service.PreDeployCommand);
+        Assert.DoesNotContain("startCommand", json, StringComparison.Ordinal);
+        Assert.Contains("\"preDeployCommand\": [", json, StringComparison.Ordinal);
+        Assert.Contains("\"dotnet MyApp.dll --migrate\"", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Plan_EmptyStartCommand_FailsBeforeGraphQL(string startCommand)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.StartCommand = startCommand);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("startCommand", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("non-empty", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Plan_EmptyPreDeployCommand_FailsBeforeGraphQL(string preDeployCommand)
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s => s.PreDeployCommand = preDeployCommand);
+
+        using var app = builder.Build();
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production"));
+
+        Assert.Contains("preDeployCommand", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("non-empty", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_WithArgs_DoesNotBecomeStartCommand()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx").WithArgs("--urls", "http://*:8080");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        Assert.Null(service.StartCommand);
+        Assert.Null(service.PreDeployCommand);
+        Assert.DoesNotContain("startCommand", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("--urls", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_HealthcheckRestartAndStartSurviveTogether()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddContainer("api", "nginx")
+            .WithHttpEndpoint(targetPort: 80)
+            .WithHttpHealthCheck("/health")
+            .PublishAsRailwayService(s =>
+            {
+                s.HealthcheckTimeoutSeconds = 90;
+                s.RestartPolicy = RailwayRestartPolicy.Never;
+                s.RestartPolicyMaxRetries = 1;
+                s.StartCommand = "./api";
+                s.PreDeployCommand = "dotnet MyApp.dll --migrate";
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var service = Assert.Single(plan.Services);
+
+        Assert.Equal("/health", service.HealthcheckPath);
+        Assert.Equal(90, service.HealthcheckTimeout);
+        Assert.Equal("NEVER", service.RestartPolicyType);
+        Assert.Equal(1, service.RestartPolicyMaxRetries);
+        Assert.Equal("./api", service.StartCommand);
+        Assert.Equal(["dotnet MyApp.dll --migrate"], service.PreDeployCommand);
+    }
+
+    [Fact]
+    public void Plan_ManagedPostgresRedisAndBucket_DoNotGetStartOrPreDeployFields()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        builder.AddPostgres("postgres").PublishAsRailwayPostgres();
+        builder.AddRedis("redis").PublishAsRailwayRedis();
+        builder.AddRailwayBucket("uploads");
+        builder.AddContainer("api", "nginx")
+            .PublishAsRailwayService(s =>
+            {
+                s.StartCommand = "./api";
+                s.PreDeployCommand = "dotnet MyApp.dll --migrate";
+            });
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+
+        Assert.Single(plan.Services);
+        var api = Assert.Single(plan.Services);
+        Assert.Equal("./api", api.StartCommand);
+        Assert.Equal(["dotnet MyApp.dll --migrate"], api.PreDeployCommand);
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "postgres");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "redis");
+        Assert.Contains(plan.ManagedServices, managed => managed.Kind == "bucket");
+        Assert.All(plan.ManagedServices, managed =>
+        {
+            Assert.DoesNotContain(
+                "startCommand",
+                System.Text.Json.JsonSerializer.Serialize(managed),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "preDeployCommand",
                 System.Text.Json.JsonSerializer.Serialize(managed),
                 StringComparison.Ordinal);
         });
