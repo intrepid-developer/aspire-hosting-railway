@@ -118,7 +118,7 @@ Replica count is Aspire-core `WithReplicas` on a project. Implicit compute on `A
 
 Healthcheck path is Aspire-core `WithHttpHealthCheck("/health")`. Railway always probes until HTTP 200, so a non-200 Aspire `statusCode` is ignored. Custom `WithHealthCheck` keys that are not HTTP probes are not mapped.
 
-Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron / custom-domain annotation. `WithArgs` is not mapped. Custom hostnames need `WithExternalHttpEndpoints()`.
+Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.1 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron / custom-domain annotation. `WithArgs` is not mapped. Custom hostnames need `WithExternalHttpEndpoints()`.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")

@@ -2,6 +2,12 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.1-preview.1
+
+- Retarget to Aspire.Hosting 13.5.1.
+- Package version now tracks 13.5.1. This release is `13.5.1-preview.1`.
+- This is a pin bump, not a Railway API change. `Microsoft.Extensions.*` stays on 10.0.11.
+
 ## 13.5.0-preview.12
 
 - `aspire destroy` / `destroy-{name}` tears down Railway resources this integration created. It is a new type (`RailwayGraphQLDestroyService`), not an overload of deploy. Aspire already prompts; `--yes` / `--non-interactive --yes` skip that prompt. This is not in-deploy overlap/drain.
