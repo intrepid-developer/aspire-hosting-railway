@@ -46,7 +46,11 @@ internal static class RailwayManagedRegion
     /// template when a compute region was requested. Sends the official
     /// <c>region</c> key and <c>numReplicas</c> 1. Does not send
     /// <c>multiRegionConfig</c>. Returns <see langword="null"/> when
-    /// unset so apply does not invent a region.
+    /// unset so apply does not invent a region. Apply sends this at most
+    /// once per managed service per <c>ApplyAsync</c> (first-time template
+    /// create). Subsequent applies do not re-send it as a standalone
+    /// update. Re-include only when already sending a
+    /// <c>serviceInstanceUpdate</c>.
     /// </summary>
     internal static ServiceInstanceUpdateInput? CreateTemplateRegionUpdate(RailwayPlanManagedService managed)
     {

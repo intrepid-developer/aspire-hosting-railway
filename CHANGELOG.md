@@ -2,6 +2,13 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.2-preview.2
+
+- One Railway canvas deployment per resource per `aspire deploy` after the unavoidable first template create. Overlapping deploys on the same service clash.
+- Official Postgres / Redis: `templateDeployV2` still has no region field, so first-time template create is one template deploy plus at most one `serviceInstanceUpdate` (`region` + `numReplicas` 1, never `multiRegionConfig`). Volume backup follow-up is `volumeInstanceBackupScheduleUpdate` only — apply no longer calls `ApplyManagedTemplateRegionAsync` a second time in the same `ApplyAsync`. Subsequent applies do not re-send region as its own update just to be safe. Re-include region only when already sending a `serviceInstanceUpdate` so omitting it cannot reset the template to US West.
+- Compute: settings and `source.image` stay on `serviceInstanceUpdate` (Boolean; settings only). `serviceInstanceDeployV2` runs once and is the canvas deploy. Official docs and Railway staff treat Deploy as a separate trigger; updating `source.image` does not start a deployment. Do not drop `DeployV2`. Registry credentials stay an `EnvironmentConfig` patch, not a deploy.
+- See [publish and deploy](docs/publish-and-deploy.md) and [GraphQL](docs/graphql.md).
+
 ## 13.5.2-preview.1
 
 - Retarget to Aspire.Hosting 13.5.2.

@@ -173,9 +173,28 @@ public sealed class RailwayGraphQLApplyService
 
         await PersistAsync().ConfigureAwait(false);
 
+        var knownManagedServiceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var managed in plan.ManagedServices)
+        {
+            if (WasManagedServicePresent(snapshot, managed))
+            {
+                knownManagedServiceNames.Add(managed.Name);
+            }
+        }
+
+        var regionUpdatedThisApply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         await ApplyManagedTemplatesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
             .ConfigureAwait(false);
-        await ApplyManagedTemplateRegionsAsync(plan, request, result, reportingStep, persistAsync: PersistAsync, cancellationToken)
+        await ApplyManagedTemplateRegionsAsync(
+            plan,
+            request,
+            result,
+            reportingStep,
+            persistAsync: PersistAsync,
+            knownManagedServiceNames,
+            regionUpdatedThisApply,
+            cancellationToken)
             .ConfigureAwait(false);
         await ApplyVolumeBackupSchedulesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
             .ConfigureAwait(false);
@@ -440,6 +459,8 @@ public sealed class RailwayGraphQLApplyService
         RailwayApplyResult result,
         IReportingStep reportingStep,
         Func<Task> persistAsync,
+        IReadOnlySet<string> knownManagedServiceNames,
+        HashSet<string> regionUpdatedThisApply,
         CancellationToken cancellationToken)
     {
         foreach (var managed in plan.ManagedServices)
@@ -451,6 +472,8 @@ public sealed class RailwayGraphQLApplyService
                 reportingStep,
                 persistAsync,
                 managed,
+                knownManagedServiceNames,
+                regionUpdatedThisApply,
                 cancellationToken).ConfigureAwait(false);
         }
     }
@@ -462,10 +485,25 @@ public sealed class RailwayGraphQLApplyService
         IReportingStep reportingStep,
         Func<Task> persistAsync,
         RailwayPlanManagedService managed,
+        IReadOnlySet<string> knownManagedServiceNames,
+        HashSet<string> regionUpdatedThisApply,
         CancellationToken cancellationToken)
     {
         var input = RailwayManagedRegion.CreateTemplateRegionUpdate(managed);
         if (input is null)
+        {
+            return;
+        }
+
+        // At most one standalone region serviceInstanceUpdate per managed
+        // service per ApplyAsync. templateDeployV2 has no region field, so
+        // first-time template create sends this once. Subsequent applies do
+        // not re-send region as its own update just to be safe. Re-include
+        // region only when already sending a serviceInstanceUpdate (omitting
+        // it can reset the template to US West). Volume backups use
+        // volumeInstanceBackupScheduleUpdate, not serviceInstanceUpdate.
+        if (regionUpdatedThisApply.Contains(managed.Name) ||
+            knownManagedServiceNames.Contains(managed.Name))
         {
             return;
         }
@@ -492,6 +530,7 @@ public sealed class RailwayGraphQLApplyService
                 request.Token,
                 cancellationToken).ConfigureAwait(false);
             RailwayGraphQLClient.ThrowIfFailed(update, "serviceInstanceUpdate");
+            regionUpdatedThisApply.Add(managed.Name);
             await persistAsync().ConfigureAwait(false);
             await task.CompleteAsync(
                 new MarkdownString(
@@ -720,16 +759,12 @@ public sealed class RailwayGraphQLApplyService
                 }
             }
 
-            // A later serviceInstanceUpdate that omits region can reset
-            // the template to US West. Re-send after volume work.
-            await ApplyManagedTemplateRegionAsync(
-                plan,
-                request,
-                result,
-                reportingStep,
-                persistAsync,
-                managed,
-                cancellationToken).ConfigureAwait(false);
+            // Volume backups are volumeInstanceBackupScheduleUpdate only.
+            // Do not call ApplyManagedTemplateRegionAsync again — that was a
+            // second serviceInstanceUpdate (a second Railway deploy) in the
+            // same ApplyAsync. Region was already sent once above when this
+            // apply created the template. Subsequent applies do not re-send
+            // a standalone region update just to be safe.
         }
     }
 
@@ -1110,6 +1145,15 @@ public sealed class RailwayGraphQLApplyService
                         cancellationToken).ConfigureAwait(false);
                 }
 
+                // serviceInstanceUpdate returns Boolean and is settings /
+                // source.image only. Official docs and Railway staff treat
+                // Deploy as a separate trigger; community confirmation
+                // (2026-02) is that updating source.image does not start a
+                // canvas deployment. Keep DeployV2 — dropping it would leave
+                // compute undeployed. One DeployV2 is the one compute deploy.
+                // Registry credentials stay an EnvironmentConfig patch, not
+                // a deploy. Do not invent a deployments query to second-guess
+                // a Boolean update.
                 var deploy = await _client.ServiceInstanceDeployV2Async(
                     serviceId,
                     result.EnvironmentId,
@@ -1546,6 +1590,25 @@ public sealed class RailwayGraphQLApplyService
     private static bool HasServiceId(RailwayApplyResult result, string? name) =>
         !string.IsNullOrWhiteSpace(name) &&
         result.ServiceIds.TryGetValue(name, out var serviceId) &&
+        !string.IsNullOrWhiteSpace(serviceId);
+
+    private static bool WasManagedServicePresent(
+        RailwayDeploymentSnapshot snapshot,
+        RailwayPlanManagedService managed)
+    {
+        if (!string.IsNullOrWhiteSpace(managed.TemplateCode) &&
+            snapshot.TemplateCodes.Contains(managed.TemplateCode))
+        {
+            return true;
+        }
+
+        return SnapshotHasServiceId(snapshot, managed.Name) ||
+               SnapshotHasServiceId(snapshot, managed.TemplateCode);
+    }
+
+    private static bool SnapshotHasServiceId(RailwayDeploymentSnapshot snapshot, string? name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        snapshot.ServiceIds.TryGetValue(name, out var serviceId) &&
         !string.IsNullOrWhiteSpace(serviceId);
 
     private static void SeedFromProduction(RailwayDeploymentSnapshot snapshot, RailwayApplyResult result)
