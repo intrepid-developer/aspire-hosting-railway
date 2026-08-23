@@ -467,13 +467,22 @@ public static class RailwayPlanBuilder
                 continue;
             }
 
+            if (managed is not null &&
+                string.Equals(managed.Kind, "bucket", StringComparison.OrdinalIgnoreCase))
+            {
+                service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] =
+                    RailwayReferenceExpressions.BucketConnectionPlaceholder(referenced.Name);
+                continue;
+            }
+
             if (referenced is not IResourceWithConnectionString withConnectionString)
             {
                 continue;
             }
 
             var expression = withConnectionString.ConnectionStringExpression.ValueExpression;
-            if (IsRailwayReferenceExpression(expression))
+            if (IsRailwayReferenceExpression(expression) ||
+                RailwayReferenceExpressions.IsBucketConnectionPlaceholder(expression))
             {
                 service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] = expression;
                 continue;

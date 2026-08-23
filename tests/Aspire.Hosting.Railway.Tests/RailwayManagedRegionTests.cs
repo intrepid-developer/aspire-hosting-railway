@@ -138,8 +138,6 @@ public sealed class RailwayManagedRegionTests
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
-        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
-        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
 
         var plan = GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true);
@@ -164,8 +162,6 @@ public sealed class RailwayManagedRegionTests
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
-        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
-        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
 
         var plan = GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true);
@@ -192,7 +188,6 @@ public sealed class RailwayManagedRegionTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingBucket);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
-        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
 
         var plan = GraphQLFixtures.CreatePlan(adoptExisting: true, includeApi: false, includeBucket: true);

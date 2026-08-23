@@ -178,7 +178,11 @@ public class RailwayGraphQLDestroyTests
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectCanvas(
-            [(GraphQLFixtures.ApiServiceId, "api"), (GraphQLFixtures.PostgresServiceId, "Postgres")],
+            [
+                (GraphQLFixtures.ApiServiceId, "api"),
+                (GraphQLFixtures.PostgresServiceId, "Postgres"),
+                (GraphQLFixtures.UploadsServiceId, "uploads")
+            ],
             [(GraphQLFixtures.BucketId, "uploads")]));
         handler.Enqueue("domains", GraphQLFixtures.DomainsWithCustom);
         handler.Enqueue("domains", GraphQLFixtures.DomainsEmpty);
@@ -229,6 +233,7 @@ public class RailwayGraphQLDestroyTests
         {
             Assert.Contains("environmentId", body, StringComparison.Ordinal);
             Assert.Contains(GraphQLFixtures.ProductionEnvironmentId, body, StringComparison.Ordinal);
+            Assert.DoesNotContain(GraphQLFixtures.UploadsServiceId, body, StringComparison.Ordinal);
         });
 
         Assert.Contains(result.Deleted, item => item.Contains("api", StringComparison.OrdinalIgnoreCase));
@@ -354,6 +359,11 @@ public class RailwayGraphQLDestroyTests
         if (includeBucket)
         {
             result.BucketIds["uploads"] = GraphQLFixtures.BucketId;
+            result.ServiceIds["uploads"] = GraphQLFixtures.UploadsServiceId;
+            if (createdServices)
+            {
+                result.CreatedServiceIds["uploads"] = GraphQLFixtures.UploadsServiceId;
+            }
         }
 
         if (includeDomains)

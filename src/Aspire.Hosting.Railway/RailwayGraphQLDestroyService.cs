@@ -561,6 +561,13 @@ public sealed class RailwayGraphQLDestroyService
                 continue;
             }
 
+            // Leftover image-less services from earlier previews share the
+            // bucket name. v1 does not adopt or serviceDelete them.
+            if (plan.IsBucketOnlyName(pair.Key))
+            {
+                continue;
+            }
+
             inventory.Services.Add(new DestroyService(pair.Key, pair.Value, DestroyServiceKind.App));
         }
 

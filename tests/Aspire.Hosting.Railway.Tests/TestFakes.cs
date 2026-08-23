@@ -286,8 +286,9 @@ internal static class GraphQLFixtures
     public static string ProjectWithApi => ProjectQuery((ApiServiceId, "api"));
 
     /// <summary>
-    /// Adopted canvas: a bucket named <c>Uploads</c> plus a same-name variable service.
-    /// The service id must not be used as <c>bucketId</c>.
+    /// Adopted canvas: a bucket named <c>Uploads</c> plus a leftover same-name
+    /// image-less service from earlier previews. The service id must not be
+    /// used as <c>bucketId</c> and must not be adopted into <c>ServiceIds</c>.
     /// </summary>
     public static string ProjectWithExistingBucket => ProjectCanvas(
         [(ApiServiceId, "api"), (UploadsServiceId, "uploads")],
@@ -611,6 +612,12 @@ internal static class GraphQLFixtures
                 Name = "uploads",
                 Kind = "bucket"
             });
+
+            if (includeApi)
+            {
+                plan.Services[0].Environment["ConnectionStrings__uploads"] =
+                    RailwayReferenceExpressions.BucketConnectionPlaceholder("uploads");
+            }
         }
 
         return plan;

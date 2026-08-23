@@ -23,9 +23,9 @@ On deploy of an adopted project, apply lists `project.buckets` from the document
 
 `bucketCreate` only creates the project record. Apply then stages and commits an `EnvironmentConfig` patch that attaches the bucket instance (`buckets.{id}.region` + `isCreated`). Unset AppHosts keep `iad`. A requested Tigris code is sent on that patch. After that provision, apply retries `bucketS3Credentials` with backoff until keys exist. Canvas-created buckets already have an instance — create on the canvas, then deploy, and we adopt by name. Adopted instances are not re-patched (region is immutable). Credentials are used in memory only.
 
-Apply also creates an image-less Railway service with the bucket resource name so `${{uploads.ENDPOINT}}` (and related) variables exist for `WithReference`. That service is not a compute target and is not deployed with `serviceInstanceDeployV2`.
+Apply does **not** create an image-less Railway service to hold `${{uploads.ENDPOINT}}` variables. Earlier previews did, which left an Offline compute card next to each bucket. `AddRailwayBucketClient` reads `ConnectionStrings:{name}` only; apply stamps the resolved connection string onto compute services that `WithReference` the bucket. Existing Offline leftovers from those previews can be deleted in the Railway dashboard. v1 does not adopt them as compute or as the bucket, and does not `serviceDelete` them automatically (destroy still skips buckets; there is no `bucketDelete`).
 
-Bucket **secrets** are never written to `railway-plan.json` or `IDeploymentStateManager`. Flatten-safe bucket **ids** are persisted as JSON objects (not arrays) so a local retry can skip create; CI / a new machine without that file adopts by name from `project.buckets`.
+Bucket **secrets** are never written to `railway-plan.json` or `IDeploymentStateManager`. The plan stores a non-secret placeholder (`railway-bucket://uploads`) on referencing services. Flatten-safe bucket **ids** are persisted as JSON objects (not arrays) so a local retry can skip create; CI / a new machine without that file adopts by name from `project.buckets`.
 
 ## Client
 
@@ -53,6 +53,6 @@ Railway buckets are private. There is no public HTTP object URL from this integr
 
 ## `WithReference` vs apply
 
-Publish (`RailwayPlanBuilder`) only writes `ConnectionStrings__{name}` onto compute services that actually `WithReference` the bucket. The plan stores Railway expressions such as `${{uploads.ENDPOINT}}`, never resolved keys.
+Publish (`RailwayPlanBuilder`) only writes `ConnectionStrings__{name}` onto compute services that actually `WithReference` the bucket. The plan stores a placeholder (`railway-bucket://uploads`), never `${{uploads.ENDPOINT}}` service-variable refs and never resolved keys.
 
-Deploy apply currently copies every resolved bucket connection string onto **every** compute service (`RailwayGraphQLApplyService` merges `BucketConnectionStrings` in `ResolveServiceEnvironment`). That is broader than the plan. Do not treat the extra copies as the public contract; the intended surface is still `WithReference` on the services that need the bucket.
+Deploy apply replaces that placeholder with the in-memory connection string on those same services only (`RailwayGraphQLApplyService` in `ResolveServiceEnvironment`). Services that do not `WithReference` the bucket do not receive `ConnectionStrings__{name}`.

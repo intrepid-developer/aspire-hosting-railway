@@ -607,7 +607,8 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         Dictionary<string, string>? resolved = null;
         foreach (var pair in service.Environment)
         {
-            if (RailwayPlanBuilder.IsRailwayReferenceExpression(pair.Value))
+            if (RailwayPlanBuilder.IsRailwayReferenceExpression(pair.Value) ||
+                RailwayReferenceExpressions.IsBucketConnectionPlaceholder(pair.Value))
             {
                 continue;
             }

@@ -369,8 +369,6 @@ public sealed class RailwayCustomDomainTests
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
         GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
-        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
-        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
         GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);

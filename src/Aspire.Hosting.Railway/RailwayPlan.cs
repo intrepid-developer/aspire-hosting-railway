@@ -67,6 +67,31 @@ public sealed class RailwayPlan
     /// </summary>
     [JsonPropertyName("managedServices")]
     public List<RailwayPlanManagedService> ManagedServices { get; set; } = [];
+
+    /// <summary>
+    /// Returns whether <paramref name="name"/> is a planned bucket that is
+    /// not also a compute service. Leftover image-less Railway services
+    /// from earlier previews share this name and must not be adopted or
+    /// destroyed as compute.
+    /// </summary>
+    internal bool IsBucketOnlyName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var isBucket = ManagedServices.Exists(managed =>
+            string.Equals(managed.Kind, "bucket", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(managed.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (!isBucket)
+        {
+            return false;
+        }
+
+        return !Services.Exists(service =>
+            string.Equals(service.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>

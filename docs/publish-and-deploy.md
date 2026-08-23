@@ -42,7 +42,7 @@ builder.AddRailwayEnvironment("railway").AsExisting();
 
 On adopt, and on later applies against an existing project id, apply lists project services and buckets by name (case-insensitive: `Postgres` / `postgres`, `api`). Matching services skip template deploy and service create; apply continues with instance update, variable upsert, and deploy.
 
-Planned buckets match `project.buckets` by display name. A match records the bucket id and skips create. A same-name service is not a bucket. After a real create, apply stages and commits the environment patch that provisions the instance (Tigris `RailwayBucketRegion`; unset keeps `iad`), then retries credentials until keys exist. Canvas-created buckets already have an instance and are not re-patched (region is immutable). Local state stores bucket **ids** (not S3 secrets); CI without that file adopts by name.
+Planned buckets match `project.buckets` by display name. A match records the bucket id and skips create. A same-name service is not a bucket and is not adopted into `ServiceIds` (earlier previews created an image-less holder service for `${{uploads.ENDPOINT}}`; that path is gone). After a real create, apply stages and commits the environment patch that provisions the instance (Tigris `RailwayBucketRegion`; unset keeps `iad`), then retries credentials until keys exist. Canvas-created buckets already have an instance and are not re-patched (region is immutable). Apply stamps the resolved `ConnectionStrings__{name}` onto compute services that `WithReference` the bucket; the plan keeps a `railway-bucket://{name}` placeholder and never writes S3 keys. Local state stores bucket **ids** (not S3 secrets); CI without that file adopts by name.
 
 Re-deploy does not create a second project.
 
@@ -77,6 +77,7 @@ What is skipped, with a printed reason:
 - **Adopted** project / environment / service / domain / bucket (`AsExisting()`, `railway-project-id` / `railway-environment-id`, or a live name match on a project we did not create). Adopted is someone else's production.
 - **`serviceDelete` when another Railway environment remains.** The live schema deletes a non-fork service in every non-fork environment. Staging-only destroy therefore does not call `serviceDelete` (that would wipe production). It deletes the staging environment when we created it.
 - **Buckets.** Public GraphQL has no `bucketDelete` (only `bucketCreate` / `bucketUpdate` / `bucketCredentialsReset`). Destroy does not call `bucketCredentialsReset` as a fake delete and does not treat the bucket as gone.
+- **Leftover Offline bucket holder services** from earlier previews (image-less compute next to the bucket). They are not adopted as compute and are not `serviceDelete`d in v1. Delete them in the Railway dashboard if you still see them.
 - **The Railway project.** v1 never calls `projectDelete`. Blast radius is the mapped environment, not Azure-style "delete the resource group."
 - **Volumes / backups.** This slice does not call `volumeDelete` or `volumeInstanceBackupDelete`. Cascade from `serviceDelete` is not proven.
 

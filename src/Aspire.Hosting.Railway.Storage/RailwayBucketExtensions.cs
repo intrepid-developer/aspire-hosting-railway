@@ -25,6 +25,7 @@ public static class RailwayBucketExtensions
     /// Railway environment creates the bucket record via <c>bucketCreate</c>, provisions
     /// the instance with an environment patch, then reads <c>bucketS3Credentials</c>.
     /// Region is a Tigris airport code (default <c>iad</c>) and buckets are not on private DNS.
+    /// Apply does not create an image-less Railway service to hold bucket variables.
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">Aspire resource name, for example <c>uploads</c>.</param>
