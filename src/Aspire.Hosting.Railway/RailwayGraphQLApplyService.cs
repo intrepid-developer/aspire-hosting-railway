@@ -429,15 +429,42 @@ public sealed class RailwayGraphQLApplyService
         }
     }
 
+    private async Task ProvisionBucketInstanceAsync(
+        string bucketId,
+        string bucketName,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        CancellationToken cancellationToken)
+    {
+        var patch = RailwayBucketRegion.CreateInstancePatch(bucketId);
+        var stage = await _client.EnvironmentStageChangesAsync(
+            result.EnvironmentId,
+            patch,
+            merge: true,
+            request.Token,
+            cancellationToken).ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(stage, "environmentStageChanges");
+
+        var commit = await _client.EnvironmentPatchCommitAsync(
+            result.EnvironmentId,
+            patch,
+            commitMessage: $"Provision Railway bucket instance for {bucketName}",
+            request.Token,
+            cancellationToken).ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(commit, "environmentPatchCommit");
+    }
+
     private async Task<BucketS3Credentials> WaitForBucketS3CredentialsAsync(
         string bucketId,
         string bucketName,
         RailwayApplyRequest request,
         RailwayApplyResult result,
         bool retryWhileInstanceMissing,
+        bool provisionIfInstanceMissing,
         CancellationToken cancellationToken)
     {
         var deadline = _options.TimeProvider.GetUtcNow() + _options.BucketCredentialsTimeout;
+        var provisionedDuringWait = false;
         while (true)
         {
             var credentialsResponse = await _client.BucketS3CredentialsAsync(
@@ -446,6 +473,21 @@ public sealed class RailwayGraphQLApplyService
                 result.ProjectId,
                 request.Token,
                 cancellationToken).ConfigureAwait(false);
+
+            if (IsBucketInstanceNotFound(credentialsResponse) &&
+                provisionIfInstanceMissing &&
+                !provisionedDuringWait)
+            {
+                await ProvisionBucketInstanceAsync(
+                    bucketId,
+                    bucketName,
+                    request,
+                    result,
+                    cancellationToken).ConfigureAwait(false);
+                provisionedDuringWait = true;
+                retryWhileInstanceMissing = true;
+                continue;
+            }
 
             if (retryWhileInstanceMissing &&
                 IsBucketInstanceNotFound(credentialsResponse) &&
@@ -762,15 +804,32 @@ public sealed class RailwayGraphQLApplyService
                     await persistAsync().ConfigureAwait(false);
                 }
 
-                // After a real bucketCreate, Railway may not have a BucketInstance yet.
-                // Retry credentials with backoff instead of querying immediately.
-                // Adopted / persisted ids are queried once; they already have an instance.
+                // bucketCreate is the project record only. The instance (and
+                // S3 credentials) come from EnvironmentConfig.buckets via
+                // environmentStageChanges + environmentPatchCommit.
+                // Adopted canvas buckets already have an instance.
+                if (createdThisApply)
+                {
+                    await ProvisionBucketInstanceAsync(
+                        bucketId,
+                        managed.Name,
+                        request,
+                        result,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                // After a real provision, Railway may not have credentials yet.
+                // Retry with backoff instead of querying immediately.
+                // Canvas-adopted ids already have an instance. A leftover
+                // API-only record (bucketCreate without a patch) still needs
+                // the same stage + commit, then the same retry.
                 var credentials = await WaitForBucketS3CredentialsAsync(
                     bucketId,
                     managed.Name,
                     request,
                     result,
                     retryWhileInstanceMissing: createdThisApply,
+                    provisionIfInstanceMissing: !createdThisApply,
                     cancellationToken).ConfigureAwait(false);
 
                 // Image-less service that holds ${{uploads.ENDPOINT}} (and related) variables

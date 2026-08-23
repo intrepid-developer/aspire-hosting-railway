@@ -52,6 +52,19 @@ public static class RailwayConstants
     public const string BucketS3Endpoint = "https://storage.railway.app";
 
     /// <summary>
+    /// Default Tigris bucket region when AppHost has no mapped bucket region.
+    /// Airport codes only (<c>iad</c> / <c>sjc</c> / <c>ams</c> / <c>sin</c>),
+    /// not compute <c>Region.region</c> strings.
+    /// </summary>
+    public const string DefaultBucketRegion = "iad";
+
+    /// <summary>
+    /// Official Tigris bucket region codes documented by Railway
+    /// (<see href="https://docs.railway.com/cli/bucket"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<string> OfficialBucketRegionIds = RailwayBucketRegion.OfficialIds;
+
+    /// <summary>
     /// Railway private DNS suffix. Host addresses are <c>{service}.railway.internal</c>.
     /// </summary>
     public const string PrivateDnsSuffix = "railway.internal";

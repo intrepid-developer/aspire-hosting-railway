@@ -22,8 +22,9 @@ public static class RailwayBucketExtensions
 
     /// <summary>
     /// Adds a bucket resource. Locally this starts an S3-compatible container; on deploy the
-    /// Railway environment creates a bucket via <c>bucketCreate</c> and
-    /// <c>bucketS3Credentials</c>. Region is immutable and buckets are not on private DNS.
+    /// Railway environment creates the bucket record via <c>bucketCreate</c>, provisions
+    /// the instance with an environment patch, then reads <c>bucketS3Credentials</c>.
+    /// Region is a Tigris airport code (default <c>iad</c>) and buckets are not on private DNS.
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">Aspire resource name, for example <c>uploads</c>.</param>

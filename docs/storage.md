@@ -6,16 +6,16 @@
 
 | | Local `aspire run` | Deploy |
 | --- | --- | --- |
-| Backing | [Adobe S3Mock](https://github.com/adobe/S3Mock) (`adobe/s3mock:4.9.1`) | `bucketCreate` + `bucketS3Credentials` |
+| Backing | [Adobe S3Mock](https://github.com/adobe/S3Mock) (`adobe/s3mock:4.9.1`) | `bucketCreate` (record) + environment patch (instance) + `bucketS3Credentials` |
 | Endpoint | The emulator HTTP endpoint | `https://storage.railway.app` |
 | Addressing | Path-style (`ForcePathStyle=true`) | Virtual-hosted (`ForcePathStyle=false`) |
 | Credentials | Placeholder `s3mock` / `s3mock` | Fresh S3 keys from `bucketS3Credentials` (in memory only) |
 
-The hosting package is `IntrepidDeveloper.Aspire.Hosting.Railway.Storage`. It is not the deprecated CommunityToolkit MinIO package. Region is immutable after `bucketCreate`. Railway buckets are **not** on private DNS.
+The hosting package is `IntrepidDeveloper.Aspire.Hosting.Railway.Storage`. It is not the deprecated CommunityToolkit MinIO package. Bucket region is a Tigris airport code (`iad` default) and is immutable after the instance is provisioned. Railway buckets are **not** on private DNS.
 
 On deploy of an adopted project, apply lists `project.buckets` from the documented `project(id)` query (same operation that lists services). If a planned bucket matches a display name (case-insensitive), that id is recorded and `bucketCreate` is skipped. `bucketCreate` runs only when no matching bucket exists. A same-name **service** is unrelated and is never passed to `bucketS3Credentials`.
 
-After a real `bucketCreate`, apply retries `bucketS3Credentials` with backoff until a `BucketInstance` exists in the target environment (or the wait times out). Credentials are then used in memory only.
+`bucketCreate` only creates the project record. Apply then stages and commits an `EnvironmentConfig` patch that attaches the bucket instance (Tigris region `iad` unless a mapped bucket region already exists). After that provision, apply retries `bucketS3Credentials` with backoff until keys exist. Canvas-created buckets already have an instance — create on the canvas, then deploy, and we adopt by name. Credentials are used in memory only.
 
 Apply also creates an image-less Railway service with the bucket resource name so `${{uploads.ENDPOINT}}` (and related) variables exist for `WithReference`. That service is not a compute target and is not deployed with `serviceInstanceDeployV2`.
 

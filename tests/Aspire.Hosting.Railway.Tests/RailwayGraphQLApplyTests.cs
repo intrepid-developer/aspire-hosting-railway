@@ -284,6 +284,8 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(GraphQLFixtures.UploadsServiceId, result.ServiceIds["uploads"]);
         Assert.NotEqual(result.ServiceIds["uploads"], result.BucketIds["uploads"]);
         Assert.Equal(0, handler.Count("bucketCreate"));
+        Assert.Equal(0, handler.Count("environmentStageChanges"));
+        Assert.Equal(0, handler.Count("environmentPatchCommit"));
         Assert.Equal(1, handler.Count("bucketS3Credentials"));
         Assert.Equal(0, handler.Count("serviceCreate"));
         var credentialsBody = handler.Bodies.Single(body => body.Contains("bucketS3Credentials", StringComparison.Ordinal));
@@ -306,7 +308,7 @@ public class RailwayGraphQLApplyTests
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectWithApi);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -326,11 +328,81 @@ public class RailwayGraphQLApplyTests
 
         Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
         Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("environmentStageChanges"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
         Assert.Equal(1, handler.Count("bucketS3Credentials"));
         Assert.Equal(1, handler.Count("serviceCreate"));
         var createBody = handler.Bodies.Single(body => body.Contains("bucketCreate", StringComparison.Ordinal));
         Assert.Contains("uploads", createBody, StringComparison.Ordinal);
         Assert.Contains(GraphQLFixtures.ProductionEnvironmentId, createBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"region\"", createBody, StringComparison.Ordinal);
+        AssertBucketInstancePatch(handler);
+    }
+
+    [Fact]
+    public async Task Apply_BucketCreate_StagesAndCommitsConfirmedEnvironmentConfigPatch()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("environmentStageChanges"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
+        Assert.Equal(1, handler.Count("environmentPatchCommitStaged"));
+        Assert.Equal(
+            new[]
+            {
+                "projectCreate",
+                "bucketCreate",
+                "environmentStageChanges",
+                "environmentPatchCommit",
+                "bucketS3Credentials",
+                "serviceCreate",
+                "variableCollectionUpsert",
+                "environmentPatchCommitStaged"
+            },
+            handler.Operations);
+        AssertBucketInstancePatch(handler);
+        var createBody = handler.Bodies.Single(body =>
+            body.Contains("\"operationName\":\"bucketCreate\"", StringComparison.Ordinal));
+        Assert.DoesNotContain("us-east4-eqdc4a", createBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("us-west2", createBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_BucketCreate_MissingStageResponse_DoesNotInventSuccess()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager()));
+
+        Assert.Contains("environmentStageChanges", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("environmentStageChanges"));
+        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.Equal(0, handler.Count("bucketS3Credentials"));
     }
 
     [Fact]
@@ -338,7 +410,7 @@ public class RailwayGraphQLApplyTests
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectWithUploadsServiceOnly);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
@@ -370,7 +442,7 @@ public class RailwayGraphQLApplyTests
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.GraphQLError("BucketInstance not found"));
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
@@ -386,7 +458,41 @@ public class RailwayGraphQLApplyTests
 
         Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
         Assert.Equal(1, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("environmentStageChanges"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
         Assert.Equal(2, handler.Count("bucketS3Credentials"));
+        AssertBucketInstancePatch(handler);
+    }
+
+    [Fact]
+    public async Task Apply_AdoptedBucketWithoutInstance_StagesAndCommitsThenRetriesCredentials()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingBucket);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.GraphQLError("BucketInstance not found"));
+        GraphQLFixtures.EnqueueBucketInstanceProvision(handler);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(adoptExisting: true, includeBucket: true),
+            GraphQLFixtures.CreateRequest(
+                adoptedProjectId: GraphQLFixtures.ProjectId,
+                adoptedEnvironmentId: GraphQLFixtures.ProductionEnvironmentId),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
+        Assert.Equal(0, handler.Count("bucketCreate"));
+        Assert.Equal(1, handler.Count("environmentStageChanges"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
+        Assert.Equal(2, handler.Count("bucketS3Credentials"));
+        AssertBucketInstancePatch(handler);
     }
 
     [Fact]
@@ -394,7 +500,7 @@ public class RailwayGraphQLApplyTests
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -446,7 +552,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -1103,7 +1209,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -1442,7 +1548,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -1706,7 +1812,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -1994,7 +2100,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -2248,7 +2354,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -2490,7 +2596,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("template", GraphQLFixtures.TemplateRedis);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -2567,13 +2673,43 @@ public class RailwayGraphQLApplyTests
                     !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
     }
 
+    private static void AssertBucketInstancePatch(ScriptedGraphQLHandler handler)
+    {
+        var stage = GraphQLFixtures.GetEnvironmentStageChangesVariables(handler.Bodies);
+        Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, stage.GetProperty("environmentId").GetString());
+        Assert.True(stage.GetProperty("merge").GetBoolean());
+        var stagedBucket = stage.GetProperty("input").GetProperty("buckets").GetProperty(GraphQLFixtures.BucketId);
+        Assert.Equal(RailwayConstants.DefaultBucketRegion, stagedBucket.GetProperty("region").GetString());
+        Assert.True(stagedBucket.GetProperty("isCreated").GetBoolean());
+        Assert.False(stagedBucket.TryGetProperty("isDeleted", out _));
+        Assert.False(stage.GetProperty("input").TryGetProperty("services", out _));
+
+        var commit = GraphQLFixtures.GetEnvironmentPatchCommitVariables(handler.Bodies);
+        Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, commit.GetProperty("environmentId").GetString());
+        var committedBucket = commit.GetProperty("patch").GetProperty("buckets").GetProperty(GraphQLFixtures.BucketId);
+        Assert.Equal(RailwayConstants.DefaultBucketRegion, committedBucket.GetProperty("region").GetString());
+        Assert.True(committedBucket.GetProperty("isCreated").GetBoolean());
+        var stageBody = handler.Bodies.Single(body =>
+            body.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal));
+        var commitBody = handler.Bodies.Single(body =>
+            body.Contains("\"operationName\":\"environmentPatchCommit\"", StringComparison.Ordinal));
+        Assert.DoesNotContain("us-east4-eqdc4a", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("us-west2", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-access-key", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-access-key", commitBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", commitBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.Token, stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.Token, commitBody, StringComparison.Ordinal);
+    }
+
     private static void EnqueueProductionServiceTemplateAndBucket(ScriptedGraphQLHandler handler)
     {
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("template", GraphQLFixtures.TemplatePostgres);
         handler.Enqueue("templateDeployV2", GraphQLFixtures.TemplateDeployV2);
         handler.Enqueue("workflowStatus", GraphQLFixtures.WorkflowComplete);
-        handler.Enqueue("bucketCreate", GraphQLFixtures.BucketCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);

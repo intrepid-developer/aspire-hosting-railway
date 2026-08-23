@@ -226,6 +226,45 @@ internal static class GraphQLFixtures
     public static string BucketCreate =>
         """{"data":{"bucketCreate":{"id":"bucket_placeholder","name":"uploads"}}}""";
 
+    public static string EnvironmentStageChanges =>
+        """{"data":{"environmentStageChanges":{"id":"patch_placeholder","status":"STAGED"}}}""";
+
+    public static string EnvironmentPatchCommit =>
+        """{"data":{"environmentPatchCommit":"patch_commit_placeholder"}}""";
+
+    /// <summary>
+    /// Enqueues <c>bucketCreate</c> plus the confirmed instance-provision
+    /// pair. Tests that omit these extra responses fail when apply calls
+    /// the new operations (the fake handler does not invent success).
+    /// </summary>
+    public static void EnqueueBucketCreateAndProvision(ScriptedGraphQLHandler handler)
+    {
+        handler.Enqueue("bucketCreate", BucketCreate);
+        EnqueueBucketInstanceProvision(handler);
+    }
+
+    public static void EnqueueBucketInstanceProvision(ScriptedGraphQLHandler handler)
+    {
+        handler.Enqueue("environmentStageChanges", EnvironmentStageChanges);
+        handler.Enqueue("environmentPatchCommit", EnvironmentPatchCommit);
+    }
+
+    public static JsonElement GetEnvironmentStageChangesVariables(IEnumerable<string> bodies)
+    {
+        var body = bodies.Single(item =>
+            item.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("variables").Clone();
+    }
+
+    public static JsonElement GetEnvironmentPatchCommitVariables(IEnumerable<string> bodies)
+    {
+        var body = bodies.Single(item =>
+            item.Contains("\"operationName\":\"environmentPatchCommit\"", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("variables").Clone();
+    }
+
     public static string BucketCredentials =>
         """{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucketName":"uploads"}}}""";
 

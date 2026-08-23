@@ -35,9 +35,11 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 | `template` | Fetches a template by code. Use returned `id` as `templateId` and returned `serializedConfig`. Never invent template UUIDs. |
 | `templateDeployV2` | Deploys that fetched template. |
 | `workflowStatus` | Polls a workflow started by template deploy. Apply fails if `workflowId` is missing. |
-| `bucketCreate` | Creates a Railway storage bucket. Region is immutable after create. After create, retry `bucketS3Credentials` until a `BucketInstance` exists. |
-| `bucketS3Credentials` | Reads S3 credentials. `projectId` required. Select `bucketName` (not `bucket`). Never pass a service id. Do not persist the secret. |
-| `environmentPatchCommitStaged` | Commits staged environment patches. |
+| `bucketCreate` | Creates the project-level bucket **record**. Confirmed `BucketCreateInput` (live schema 2026-08-23): `projectId` required, optional `environmentId` and `name`. **No `region` field.** `environmentId` is unimplemented for deploying instances. |
+| `environmentStageChanges` | Stages an `EnvironmentConfig` patch. Confirmed `environmentStageChanges(environmentId: String!, input: EnvironmentConfig!, merge: Boolean) → EnvironmentPatch!` (live schema 2026-08-23). Send `input` as a JSON object, not a string. |
+| `environmentPatchCommit` | Commits the provided `EnvironmentConfig` patch. Confirmed `environmentPatchCommit(commitMessage: String, environmentId: String!, patch: EnvironmentConfig) → String!` (live schema 2026-08-23). Official CLI apply-now path after `bucketCreate`. |
+| `bucketS3Credentials` | Reads S3 credentials after the instance exists. `projectId` required. Select `bucketName` (not `bucket`). Never pass a service id. Do not persist the secret. |
+| `environmentPatchCommitStaged` | Commits whatever is already staged. End-of-apply catch-all; not the bucket-instance provision. |
 | `regions` | Lists Railway regions. |
 | `environment` | `environment(id: String!, projectId: String)`. Selects `volumeInstances` (`edges { node { id serviceId } }`). Match `node.serviceId` to the official Postgres template service id. Retry if not visible yet. Do not use `adminVolumeInstancesForVolume` or `volumeInstance(id)` unless the id is already known. Service has no `volumes` field. |
 | `volumeInstanceBackupScheduleList` | `volumeInstanceBackupScheduleList(volumeInstanceId)` → list of `VolumeInstanceBackupSchedule` (not a connection). |
@@ -60,5 +62,6 @@ Custom hostnames: after `serviceDomainCreate`, list `domains`, adopt case-insens
 - PITR enable is HA-only. Non-HA PITR enable is not a confirmed public mutation.
 - Do not send scale / limits / healthcheck / restart / start / pre-deploy / teardown / cron / custom domains for `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` / buckets.
 - Do not use `environmentPatchCommit` / staged patches for those compute settings.
+- Bucket **instance** provision is the exception: after `bucketCreate`, apply stages then commits the confirmed `EnvironmentConfig.buckets` object (`buckets.{bucketId}.region` + `isCreated`). Region is a Tigris airport code (`iad` / `sjc` / `ams` / `sin`); default `iad`. Do not send compute `Region.region` strings. Canvas-created buckets already have an instance — adopt by name from `project.buckets` and skip the patch.
 - `bucketInstanceDetails` is not used. Adopt buckets from `project.buckets`.
 - Persist flatten-safe **ids** only. Tokens, bucket secrets, custom-domain verification tokens, and backup payloads stay out of plan and state.

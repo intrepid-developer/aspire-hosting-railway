@@ -42,7 +42,7 @@ builder.AddRailwayEnvironment("railway").AsExisting();
 
 On adopt, and on later applies against an existing project id, apply lists project services and buckets by name (case-insensitive: `Postgres` / `postgres`, `api`). Matching services skip template deploy and service create; apply continues with instance update, variable upsert, and deploy.
 
-Planned buckets match `project.buckets` by display name. A match records the bucket id and skips create. A same-name service is not a bucket. After a real create, apply retries credentials until a `BucketInstance` exists. Local state stores bucket **ids** (not S3 secrets); CI without that file adopts by name.
+Planned buckets match `project.buckets` by display name. A match records the bucket id and skips create. A same-name service is not a bucket. After a real create, apply stages and commits the environment patch that provisions the instance (Tigris region `iad` by default), then retries credentials until keys exist. Canvas-created buckets already have an instance. Local state stores bucket **ids** (not S3 secrets); CI without that file adopts by name.
 
 Re-deploy does not create a second project.
 
