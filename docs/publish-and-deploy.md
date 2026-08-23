@@ -196,7 +196,8 @@ How apply maps plan fields onto GraphQL (`environmentId` is always passed):
 | `overlapSeconds` set | `serviceInstanceUpdate.overlapSeconds` (Int). From `OverlapSeconds`. Must be ≥ 0 (0 is no wait). In-deploy cutover, not `aspire destroy`. |
 | `drainingSeconds` set | `serviceInstanceUpdate.drainingSeconds` (Int). From `DrainingSeconds`. Must be ≥ 0 (0 is immediate kill). Either field can be set alone. |
 | `cronSchedule` set | `serviceInstanceUpdate.cronSchedule` (String). From `CronSchedule`. Five-field crontab, UTC, minimum every 5 minutes. Omitted when unset (always-on). |
-| `customDomains` set | After the service id exists and `serviceDomainCreate` (when `WithExternalHttpEndpoints()`): list, adopt existing hostnames (case-insensitive), else create. Optional `targetPort` from the Aspire HTTP endpoint. Hostnames only in the plan — no verification tokens. |
+| `WithExternalHttpEndpoints()` | After the service id exists: list `domains`. If `serviceDomains` already has an id, adopt it and skip `serviceDomainCreate`. State `CreatedServiceDomainIds` also skips create. Else `serviceDomainCreate` with optional `targetPort`. Generated `*.up.railway.app` hostnames are created once. Deploy does not delete leftover extras from earlier previews — remove those in the Railway dashboard (Networking). |
+| `customDomains` set | After the generated service domain is ensured (when `WithExternalHttpEndpoints()`): list, adopt existing hostnames (case-insensitive), else create. Optional `targetPort` from the Aspire HTTP endpoint. Hostnames only in the plan — no verification tokens. |
 | `targetPort` set | Optional Int on `serviceDomainCreate` and `customDomainCreate`. From the Aspire HTTP endpoint. Omitted when unset. |
 | none of the above | image-only `source.image` update |
 
@@ -209,7 +210,7 @@ Gotchas:
 - Start is exec form; wrap `$PORT` as `/bin/sh -c "exec … $PORT"`. Pre-deploy is a separate container, no volume; a non-zero exit stops the deploy. `WithArgs` is not mapped. See [start command](https://docs.railway.com/guides/start-command) and [pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command).
 - Overlap/drain is in-deploy cutover, not `aspire destroy`. See [deployment teardown](https://docs.railway.com/guides/deployment-teardown).
 - Cron: five-field UTC, 5-minute floor, service must exit. No replicas greater than 1 or `Serverless`. See [cron jobs](https://docs.railway.com/cron-jobs).
-- Custom domains need `WithExternalHttpEndpoints()`. Deploy prints DNS + TXT. Missing TXT is 404 even if CNAME resolves. This integration does not talk to your DNS provider. See [working with domains](https://docs.railway.com/networking/domains/working-with-domains).
+- Custom domains need `WithExternalHttpEndpoints()`. Deploy prints DNS + TXT. Missing TXT is 404 even if CNAME resolves. This integration does not talk to your DNS provider. The Railway-generated `*.up.railway.app` hostname is created once; leftover extras from earlier previews can be deleted in the Railway dashboard (Networking). See [working with domains](https://docs.railway.com/networking/domains/working-with-domains).
 - Postgres / Redis / buckets do not get service knobs except official compute `Region` on the template settings callback (see below). Replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference).
 
 ## Managed regions

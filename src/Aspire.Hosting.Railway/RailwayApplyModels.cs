@@ -85,7 +85,9 @@ public sealed class RailwayApplyResult
     public Dictionary<string, string> CustomDomainIds { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Gets Railway-provided domain ids this apply created, keyed by service name.
+    /// Gets Railway-provided <c>*.up.railway.app</c> domain ids keyed by
+    /// service name. Includes ids this apply created and ids adopted from
+    /// <c>domains.serviceDomains</c>. Flatten-safe objects only — never tokens.
     /// </summary>
     public Dictionary<string, string> CreatedServiceDomainIds { get; init; } =
         new(StringComparer.OrdinalIgnoreCase);

@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Railway;
@@ -167,7 +169,8 @@ public sealed class RailwayCustomDomainTests
             state);
 
         Assert.Equal(1, handler.Count("serviceDomainCreate"));
-        Assert.Equal(1, handler.Count("domains"));
+        Assert.Equal(2, handler.Count("domains"));
+        Assert.Equal(GraphQLFixtures.ServiceDomainId, result.CreatedServiceDomainIds["api"]);
         Assert.Equal(1, handler.Count("customDomainAvailable"));
         Assert.Equal(1, handler.Count("customDomainCreate"));
         Assert.Equal(0, handler.Count("customDomain"));
@@ -218,6 +221,190 @@ public sealed class RailwayCustomDomainTests
     }
 
     [Fact]
+    public async Task Apply_ExternalHttp_EmptyServiceDomains_CreatesServiceDomain()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueGeneratedServiceDomainCreate(handler);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var request = GraphQLFixtures.CreateRequest();
+        request.ExternalHttpServices.Add("api");
+        var plan = GraphQLFixtures.CreatePlan();
+        plan.Services[0].TargetPort = 8080;
+        var state = new MemoryDeploymentStateManager();
+
+        var result = await GraphQLFixtures.CreateApplyService(handler).ApplyAsync(
+            plan,
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(1, handler.Count("domains"));
+        Assert.Equal(1, handler.Count("serviceDomainCreate"));
+        Assert.Equal(0, handler.Count("serviceDomainDelete"));
+        Assert.Equal(GraphQLFixtures.ServiceDomainId, result.CreatedServiceDomainIds["api"]);
+
+        var serviceDomain = GraphQLFixtures.GetServiceDomainCreateInput(handler.Bodies);
+        Assert.Equal(GraphQLFixtures.ApiServiceId, serviceDomain.GetProperty("serviceId").GetString());
+        Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, serviceDomain.GetProperty("environmentId").GetString());
+        Assert.Equal(8080, serviceDomain.GetProperty("targetPort").GetInt32());
+        Assert.False(serviceDomain.TryGetProperty("domain", out _));
+
+        var domainsBody = handler.Bodies.Single(body =>
+            body.Contains("\"operationName\":\"domains\"", StringComparison.Ordinal));
+        Assert.Contains(GraphQLFixtures.ProductionEnvironmentId, domainsBody, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.ProjectId, domainsBody, StringComparison.Ordinal);
+        Assert.Contains(GraphQLFixtures.ApiServiceId, domainsBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("null", domainsBody, StringComparison.Ordinal);
+
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.Equal(GraphQLFixtures.ServiceDomainId, snapshot.CreatedServiceDomainIds["api"]);
+        Assert.DoesNotContain(GraphQLFixtures.Token, snapshot.CreatedServiceDomainIds.Values);
+        var section = await state.AcquireSectionAsync("Railway:railway");
+        Assert.DoesNotContain(GraphQLFixtures.Token, section.Data.ToJsonString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("verify-", section.Data.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_ExternalHttp_ExistingServiceDomain_AdoptsAndSkipsCreate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("domains", GraphQLFixtures.DomainsWithService);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var request = GraphQLFixtures.CreateRequest();
+        request.ExternalHttpServices.Add("api");
+        var state = new MemoryDeploymentStateManager();
+
+        var result = await GraphQLFixtures.CreateApplyService(handler).ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(1, handler.Count("domains"));
+        Assert.Equal(0, handler.Count("serviceDomainCreate"));
+        Assert.Equal(0, handler.Count("serviceDomainDelete"));
+        Assert.Equal(GraphQLFixtures.ServiceDomainId, result.CreatedServiceDomainIds["api"]);
+
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.Equal(GraphQLFixtures.ServiceDomainId, snapshot.CreatedServiceDomainIds["api"]);
+        Assert.DoesNotContain(GraphQLFixtures.Token, snapshot.CreatedServiceDomainIds.Values);
+        var section = await state.AcquireSectionAsync("Railway:railway");
+        Assert.DoesNotContain(GraphQLFixtures.Token, section.Data.ToJsonString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("verify-", section.Data.ToJsonString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            handler.Operations,
+            name => name.Contains("Delete", StringComparison.Ordinal) ||
+                    name.Contains("pluginCreate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Apply_ExternalHttp_PersistedServiceDomain_SkipsCreate()
+    {
+        var firstHandler = new ScriptedGraphQLHandler();
+        firstHandler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        firstHandler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(firstHandler);
+        firstHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        firstHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueGeneratedServiceDomainCreate(firstHandler);
+        firstHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        firstHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var state = new MemoryDeploymentStateManager();
+        var request = GraphQLFixtures.CreateRequest();
+        request.ExternalHttpServices.Add("api");
+        await GraphQLFixtures.CreateApplyService(firstHandler).ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        var secondHandler = new ScriptedGraphQLHandler();
+        secondHandler.Enqueue("project", GraphQLFixtures.ProjectWithApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(secondHandler);
+        secondHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        secondHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        secondHandler.Enqueue("domains", GraphQLFixtures.DomainsWithService);
+        secondHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        secondHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var secondRequest = GraphQLFixtures.CreateRequest();
+        secondRequest.ExternalHttpServices.Add("api");
+        var result = await GraphQLFixtures.CreateApplyService(secondHandler).ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            secondRequest,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(1, secondHandler.Count("domains"));
+        Assert.Equal(0, secondHandler.Count("serviceDomainCreate"));
+        Assert.Equal(0, secondHandler.Count("serviceDomainDelete"));
+        Assert.Equal(GraphQLFixtures.ServiceDomainId, result.CreatedServiceDomainIds["api"]);
+
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(state, "railway", "production", CancellationToken.None);
+        Assert.Equal(GraphQLFixtures.ServiceDomainId, snapshot.CreatedServiceDomainIds["api"]);
+        Assert.DoesNotContain(GraphQLFixtures.Token, snapshot.CreatedServiceDomainIds.Values);
+    }
+
+    [Fact]
+    public async Task Apply_ExternalHttp_PersistedServiceDomain_EmptyList_SkipsCreate()
+    {
+        var firstHandler = new ScriptedGraphQLHandler();
+        firstHandler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        firstHandler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(firstHandler);
+        firstHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        firstHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueGeneratedServiceDomainCreate(firstHandler);
+        firstHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        firstHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var state = new MemoryDeploymentStateManager();
+        var request = GraphQLFixtures.CreateRequest();
+        request.ExternalHttpServices.Add("api");
+        await GraphQLFixtures.CreateApplyService(firstHandler).ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        var secondHandler = new ScriptedGraphQLHandler();
+        secondHandler.Enqueue("project", GraphQLFixtures.ProjectWithApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(secondHandler);
+        secondHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        secondHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        secondHandler.Enqueue("domains", GraphQLFixtures.DomainsEmpty);
+        secondHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        secondHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var secondRequest = GraphQLFixtures.CreateRequest();
+        secondRequest.ExternalHttpServices.Add("api");
+        await GraphQLFixtures.CreateApplyService(secondHandler).ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            secondRequest,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(1, secondHandler.Count("domains"));
+        Assert.Equal(0, secondHandler.Count("serviceDomainCreate"));
+        Assert.Equal(0, secondHandler.Count("serviceDomainDelete"));
+    }
+
+    [Fact]
     public async Task Apply_ExistingCustomDomain_AdoptsAndSkipsCreate()
     {
         var handler = new ScriptedGraphQLHandler();
@@ -226,7 +413,7 @@ public sealed class RailwayCustomDomainTests
         GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
-        handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);
+        GraphQLFixtures.EnqueueGeneratedServiceDomainCreate(handler);
         handler.Enqueue("domains", GraphQLFixtures.DomainsWithCustom);
         handler.Enqueue("customDomain", GraphQLFixtures.CustomDomainQuery);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -244,7 +431,7 @@ public sealed class RailwayCustomDomainTests
             new RecordingReportingStep(),
             new MemoryDeploymentStateManager());
 
-        Assert.Equal(1, handler.Count("domains"));
+        Assert.Equal(2, handler.Count("domains"));
         Assert.Equal(1, handler.Count("customDomain"));
         Assert.Equal(0, handler.Count("customDomainAvailable"));
         Assert.Equal(0, handler.Count("customDomainCreate"));
@@ -268,7 +455,7 @@ public sealed class RailwayCustomDomainTests
         GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
-        handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);
+        GraphQLFixtures.EnqueueGeneratedServiceDomainCreate(handler);
         handler.Enqueue("domains", GraphQLFixtures.DomainsWithCustom);
         handler.Enqueue("customDomainUpdate", GraphQLFixtures.CustomDomainUpdate);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -333,7 +520,7 @@ public sealed class RailwayCustomDomainTests
         GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
-        handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);
+        GraphQLFixtures.EnqueueGeneratedServiceDomainCreate(handler);
         handler.Enqueue("domains", GraphQLFixtures.DomainsEmpty);
         handler.Enqueue("customDomainAvailable", GraphQLFixtures.CustomDomainAvailableFalse);
 
@@ -518,7 +705,7 @@ public sealed class RailwayCustomDomainTests
         GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
-        handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);
+        GraphQLFixtures.EnqueueGeneratedServiceDomainCreate(handler);
         if (includeCustomDomain)
         {
             handler.Enqueue("domains", GraphQLFixtures.DomainsEmpty);
