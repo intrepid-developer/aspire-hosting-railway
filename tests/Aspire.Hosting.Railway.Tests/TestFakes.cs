@@ -164,6 +164,7 @@ internal static class GraphQLFixtures
     public const string StagingEnvironmentId = "env_staging_placeholder";
     public const string ApiServiceId = "svc_api_placeholder";
     public const string PostgresServiceId = "svc_postgres_placeholder";
+    public const string RedisServiceId = "svc_redis_placeholder";
     public const string UploadsServiceId = "svc_uploads_placeholder";
     public const string BucketId = "bucket_placeholder";
     public const string VolumeInstanceId = "volinst_placeholder";
@@ -285,8 +286,9 @@ internal static class GraphQLFixtures
     public static string ProjectWithApi => ProjectQuery((ApiServiceId, "api"));
 
     /// <summary>
-    /// Adopted canvas: a bucket named <c>Uploads</c> plus a same-name variable service.
-    /// The service id must not be used as <c>bucketId</c>.
+    /// Adopted canvas: a bucket named <c>Uploads</c> plus a leftover same-name
+    /// image-less service from earlier previews. The service id must not be
+    /// used as <c>bucketId</c> and must not be adopted into <c>ServiceIds</c>.
     /// </summary>
     public static string ProjectWithExistingBucket => ProjectCanvas(
         [(ApiServiceId, "api"), (UploadsServiceId, "uploads")],
@@ -506,6 +508,23 @@ internal static class GraphQLFixtures
         return document.RootElement.GetProperty("variables").GetProperty("input").Clone();
     }
 
+    public static IReadOnlyList<JsonElement> GetServiceInstanceUpdateVariables(IEnumerable<string> bodies)
+    {
+        var updates = new List<JsonElement>();
+        foreach (var body in bodies)
+        {
+            if (!body.Contains("\"operationName\":\"serviceInstanceUpdate\"", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            using var document = JsonDocument.Parse(body);
+            updates.Add(document.RootElement.GetProperty("variables").Clone());
+        }
+
+        return updates;
+    }
+
     public static JsonElement GetServiceInstanceLimitsUpdateInput(IEnumerable<string> bodies)
     {
         var body = bodies.Single(item => item.Contains("\"operationName\":\"serviceInstanceLimitsUpdate\"", StringComparison.Ordinal));
@@ -593,6 +612,12 @@ internal static class GraphQLFixtures
                 Name = "uploads",
                 Kind = "bucket"
             });
+
+            if (includeApi)
+            {
+                plan.Services[0].Environment["ConnectionStrings__uploads"] =
+                    RailwayReferenceExpressions.BucketConnectionPlaceholder("uploads");
+            }
         }
 
         return plan;

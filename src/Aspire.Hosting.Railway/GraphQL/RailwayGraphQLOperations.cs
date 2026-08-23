@@ -97,7 +97,10 @@ public static class RailwayGraphQLOperations
     /// (<c>[String!]</c>), <c>overlapSeconds</c> (Int),
     /// <c>drainingSeconds</c> (Int), and <c>cronSchedule</c> (String)
     /// verified on the live schema 2026-08-20. Never send
-    /// <c>numReplicas</c> and <c>multiRegionConfig</c> together. Omit unset
+    /// <c>numReplicas</c> and <c>multiRegionConfig</c> together. Official
+    /// Postgres / Redis templates send <c>region</c> plus
+    /// <c>numReplicas</c> 1 when a compute region is set; they do not
+    /// send <c>multiRegionConfig</c>. Omit unset
     /// healthcheck, restart-policy, start-command, pre-deploy, teardown,
     /// and cron fields; do not send <c>null</c>. ServiceInstance has no
     /// <c>multiRegionConfig</c> read field. Do not send

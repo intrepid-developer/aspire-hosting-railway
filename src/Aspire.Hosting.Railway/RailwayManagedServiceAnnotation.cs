@@ -16,12 +16,17 @@ public sealed class RailwayManagedServiceAnnotation : IRailwayManagedServiceAnno
     /// Optional GraphQL <c>VolumeInstanceBackupScheduleKind</c> strings
     /// (<c>DAILY</c>, <c>WEEKLY</c>, <c>MONTHLY</c>). Omit when empty.
     /// </param>
+    /// <param name="region">
+    /// Optional plan / GraphQL region string. Buckets: Tigris airport
+    /// codes. Templates: official <c>Region.region</c> ids. Omit when unset.
+    /// </param>
     public RailwayManagedServiceAnnotation(
         string kind,
         string serviceName,
         string? templateCode = null,
         string? privateReferenceVariable = null,
-        IReadOnlyList<string>? volumeBackupScheduleKinds = null)
+        IReadOnlyList<string>? volumeBackupScheduleKinds = null,
+        string? region = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(kind);
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
@@ -33,6 +38,7 @@ public sealed class RailwayManagedServiceAnnotation : IRailwayManagedServiceAnno
         VolumeBackupScheduleKinds = volumeBackupScheduleKinds is { Count: > 0 }
             ? volumeBackupScheduleKinds
             : null;
+        Region = string.IsNullOrWhiteSpace(region) ? null : region;
     }
 
     /// <inheritdoc />
@@ -49,4 +55,7 @@ public sealed class RailwayManagedServiceAnnotation : IRailwayManagedServiceAnno
 
     /// <inheritdoc />
     public IReadOnlyList<string>? VolumeBackupScheduleKinds { get; }
+
+    /// <inheritdoc />
+    public string? Region { get; }
 }

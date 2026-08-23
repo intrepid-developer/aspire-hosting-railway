@@ -71,7 +71,8 @@ public static class RailwayPlanBuilder
                     Kind = managed.Kind,
                     TemplateCode = managed.TemplateCode,
                     PrivateReferenceVariable = managed.PrivateReferenceVariable,
-                    VolumeBackupScheduleKinds = CopyVolumeBackupScheduleKinds(managed)
+                    VolumeBackupScheduleKinds = CopyVolumeBackupScheduleKinds(managed),
+                    Region = string.IsNullOrWhiteSpace(managed.Region) ? null : managed.Region
                 });
             }
         }
@@ -112,6 +113,7 @@ public static class RailwayPlanBuilder
 
         RailwayServiceComputeSettings.ValidatePlanServices(plan);
         RailwayVolumeBackupSchedule.ValidatePlan(plan);
+        RailwayManagedRegion.ValidatePlan(plan);
         return plan;
     }
 
@@ -465,13 +467,22 @@ public static class RailwayPlanBuilder
                 continue;
             }
 
+            if (managed is not null &&
+                string.Equals(managed.Kind, "bucket", StringComparison.OrdinalIgnoreCase))
+            {
+                service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] =
+                    RailwayReferenceExpressions.BucketConnectionPlaceholder(referenced.Name);
+                continue;
+            }
+
             if (referenced is not IResourceWithConnectionString withConnectionString)
             {
                 continue;
             }
 
             var expression = withConnectionString.ConnectionStringExpression.ValueExpression;
-            if (IsRailwayReferenceExpression(expression))
+            if (IsRailwayReferenceExpression(expression) ||
+                RailwayReferenceExpressions.IsBucketConnectionPlaceholder(expression))
             {
                 service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] = expression;
                 continue;

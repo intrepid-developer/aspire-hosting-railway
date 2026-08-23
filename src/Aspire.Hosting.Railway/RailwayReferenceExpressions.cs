@@ -55,4 +55,29 @@ public static class RailwayReferenceExpressions
 
         return PrivateServiceVariable(match, variableName);
     }
+
+    /// <summary>
+    /// Plan-safe marker written for <c>AddRailwayBucket</c> references.
+    /// Apply replaces it with the resolved connection string at deploy
+    /// time only. Never a Railway <c>${{service.VAR}}</c> (those services
+    /// are no longer created) and never a secret value.
+    /// </summary>
+    internal const string BucketConnectionPlaceholderPrefix = "railway-bucket://";
+
+    /// <summary>
+    /// Returns a non-secret plan placeholder such as <c>railway-bucket://uploads</c>.
+    /// </summary>
+    internal static string BucketConnectionPlaceholder(string resourceName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
+        return BucketConnectionPlaceholderPrefix + resourceName;
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="value"/> is a bucket connection
+    /// placeholder that deploy must not resolve as a parameter.
+    /// </summary>
+    internal static bool IsBucketConnectionPlaceholder(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.StartsWith(BucketConnectionPlaceholderPrefix, StringComparison.Ordinal);
 }

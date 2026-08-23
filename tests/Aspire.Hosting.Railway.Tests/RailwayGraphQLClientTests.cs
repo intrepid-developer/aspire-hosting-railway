@@ -91,7 +91,7 @@ public class RailwayGraphQLClientTests
     {
         var handler = new RecordingHandler(GraphQLFixtures.EnvironmentStageChanges);
         var client = new RailwayGraphQLClient(new HttpClient(handler));
-        var patch = RailwayBucketRegion.CreateInstancePatch("bucket_placeholder");
+        var patch = RailwayBucketRegionMapper.CreateInstancePatch("bucket_placeholder");
 
         var response = await client.EnvironmentStageChangesAsync(
             "env_placeholder",
@@ -121,7 +121,7 @@ public class RailwayGraphQLClientTests
     {
         var handler = new RecordingHandler(GraphQLFixtures.EnvironmentPatchCommit);
         var client = new RailwayGraphQLClient(new HttpClient(handler));
-        var patch = RailwayBucketRegion.CreateInstancePatch("bucket_placeholder");
+        var patch = RailwayBucketRegionMapper.CreateInstancePatch("bucket_placeholder");
 
         await client.EnvironmentPatchCommitAsync(
             "env_placeholder",

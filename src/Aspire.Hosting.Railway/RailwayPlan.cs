@@ -67,6 +67,31 @@ public sealed class RailwayPlan
     /// </summary>
     [JsonPropertyName("managedServices")]
     public List<RailwayPlanManagedService> ManagedServices { get; set; } = [];
+
+    /// <summary>
+    /// Returns whether <paramref name="name"/> is a planned bucket that is
+    /// not also a compute service. Leftover image-less Railway services
+    /// from earlier previews share this name and must not be adopted or
+    /// destroyed as compute.
+    /// </summary>
+    internal bool IsBucketOnlyName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var isBucket = ManagedServices.Exists(managed =>
+            string.Equals(managed.Kind, "bucket", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(managed.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (!isBucket)
+        {
+            return false;
+        }
+
+        return !Services.Exists(service =>
+            string.Equals(service.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>
@@ -274,4 +299,13 @@ public sealed class RailwayPlanManagedService
     /// </summary>
     [JsonPropertyName("volumeBackupScheduleKinds")]
     public List<string>? VolumeBackupScheduleKinds { get; set; }
+
+    /// <summary>
+    /// Gets or sets the managed-service region. Buckets store Tigris
+    /// airport codes (<c>iad</c> / <c>sjc</c> / <c>ams</c> / <c>sin</c>).
+    /// Official Postgres / Redis store compute <c>Region.region</c> ids.
+    /// Omitted when unset. Tokens are never involved.
+    /// </summary>
+    [JsonPropertyName("region")]
+    public string? Region { get; set; }
 }

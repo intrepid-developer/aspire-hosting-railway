@@ -26,6 +26,15 @@ public sealed class RailwayBucketResource : Resource, IResourceWithConnectionStr
     public string BucketName { get; }
 
     /// <summary>
+    /// Gets or sets the Tigris bucket region. Unset keeps today's default
+    /// (<see cref="RailwayBucketRegion.Iad"/>) so existing AppHosts do
+    /// not silently move. Region is immutable after the instance is
+    /// provisioned; changing it means drop + recreate the bucket.
+    /// Compute <see cref="RailwayRegion"/> ids are not valid here.
+    /// </summary>
+    public RailwayBucketRegion? Region { get; set; }
+
+    /// <summary>
     /// Gets or sets the local emulator container, when running locally.
     /// </summary>
     public ContainerResource? Emulator { get; internal set; }
@@ -55,20 +64,20 @@ public sealed class RailwayBucketResource : Resource, IResourceWithConnectionStr
             yield break;
         }
 
-        yield return new("Endpoint", ReferenceExpression.Create($"{RailwayReferenceExpressions.PrivateServiceVariable(Name, "ENDPOINT")}"));
-        yield return new("AccessKeyId", ReferenceExpression.Create($"{RailwayReferenceExpressions.PrivateServiceVariable(Name, "ACCESS_KEY_ID")}"));
-        yield return new("SecretAccessKey", ReferenceExpression.Create($"{RailwayReferenceExpressions.PrivateServiceVariable(Name, "SECRET_ACCESS_KEY")}"));
-        yield return new("Bucket", ReferenceExpression.Create($"{RailwayReferenceExpressions.PrivateServiceVariable(Name, "BUCKET")}"));
-        yield return new("Region", ReferenceExpression.Create($"{RailwayReferenceExpressions.PrivateServiceVariable(Name, "REGION")}"));
+        // Publish mode no longer creates an image-less Railway service to
+        // host ${{uploads.ENDPOINT}} (and related) variables. Individual
+        // credential properties are not expressible without that service
+        // or writing secrets into the plan. Apply stamps the resolved
+        // ConnectionStrings__{name} string at deploy time only.
+        yield return new("Bucket", ReferenceExpression.Create($"{BucketName}"));
+        if (Region is { } region)
+        {
+            yield return new("Region", ReferenceExpression.Create($"{RailwayBucketRegionMapper.ToRegionId(region)}"));
+        }
+
         yield return new("ForcePathStyle", ReferenceExpression.Create($"false"));
     }
 
     private string BuildPublishConnectionString() =>
-        string.Join(';',
-            $"Endpoint={RailwayReferenceExpressions.PrivateServiceVariable(Name, "ENDPOINT")}",
-            $"AccessKeyId={RailwayReferenceExpressions.PrivateServiceVariable(Name, "ACCESS_KEY_ID")}",
-            $"SecretAccessKey={RailwayReferenceExpressions.PrivateServiceVariable(Name, "SECRET_ACCESS_KEY")}",
-            $"Bucket={RailwayReferenceExpressions.PrivateServiceVariable(Name, "BUCKET")}",
-            $"Region={RailwayReferenceExpressions.PrivateServiceVariable(Name, "REGION")}",
-            "ForcePathStyle=false");
+        RailwayReferenceExpressions.BucketConnectionPlaceholder(Name);
 }

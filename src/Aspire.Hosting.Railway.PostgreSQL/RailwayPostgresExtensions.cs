@@ -37,7 +37,9 @@ public static class RailwayPostgresExtensions
     /// </summary>
     /// <param name="builder">The official Postgres server resource.</param>
     /// <param name="configure">
-    /// Optional Railway-specific settings. At least one
+    /// Optional Railway-specific settings. Set
+    /// <see cref="RailwayPostgresSettings.Region"/> for a compute
+    /// <see cref="RailwayRegion"/>. At least one
     /// <c>VolumeBackup*</c> boolean must be true to write schedule kinds
     /// into the plan. All false / no callback omits the field so deploy
     /// leaves the dashboard as-is.
@@ -59,7 +61,10 @@ public static class RailwayPostgresExtensions
             serviceName: builder.Resource.Name,
             templateCode: TemplateCode,
             privateReferenceVariable: PrivateReferenceVariable,
-            volumeBackupScheduleKinds: ToVolumeBackupScheduleKinds(settings)));
+            volumeBackupScheduleKinds: ToVolumeBackupScheduleKinds(settings),
+            region: settings.Region is { } region
+                ? RailwayRegionMapper.ToRegionId(region)
+                : null));
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {

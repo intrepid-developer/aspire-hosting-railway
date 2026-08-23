@@ -193,6 +193,35 @@ public class RailwayEnvironmentTests
     }
 
     [Fact]
+    public void Plan_BucketWithReference_WritesPlaceholderNotSecretsOrServiceVariables()
+    {
+        var builder = TestAppBuilder.CreatePublish();
+        var railway = builder.AddRailwayEnvironment("railway");
+        var uploads = builder.AddRailwayBucket("uploads");
+        builder.AddContainer("api", "nginx").WithReference(uploads);
+        builder.AddContainer("marketing", "nginx");
+
+        using var app = builder.Build();
+        var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
+        var json = RailwayPlanBuilder.ToJson(plan);
+
+        var api = Assert.Single(plan.Services, service => service.Name == "api");
+        var marketing = Assert.Single(plan.Services, service => service.Name == "marketing");
+        Assert.Equal(
+            RailwayReferenceExpressions.BucketConnectionPlaceholder("uploads"),
+            api.Environment["ConnectionStrings__uploads"]);
+        Assert.False(marketing.Environment.ContainsKey("ConnectionStrings__uploads"));
+        Assert.DoesNotContain("${{uploads.", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("ENDPOINT", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("ACCESS_KEY_ID", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("SECRET_ACCESS_KEY", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-access-key", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("SecretAccessKey", json, StringComparison.Ordinal);
+        Assert.Contains("railway-bucket://uploads", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Plan_CapturesNonRailwayConnectionStringAsParameterName()
     {
         var builder = TestAppBuilder.CreatePublish();
