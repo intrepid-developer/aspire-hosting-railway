@@ -2,12 +2,15 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.1-preview.2
+
+- `AddRailwayBucket` create path provisions the bucket **instance** after `bucketCreate`. Railway staff and the live schema: `bucketCreate` is the project record only. Apply stages `environmentStageChanges` then commits `environmentPatchCommit` with the confirmed `EnvironmentConfig.buckets.{id}` object (`region` + `isCreated`). Default Tigris region is `iad`. Do not send compute region ids. Then poll `bucketS3Credentials` as before. Canvas buckets still adopt by name. See [#41](https://github.com/intrepid-developer/aspire-hosting-railway/issues/41).
+
 ## 13.5.1-preview.1
 
 - Retarget to Aspire.Hosting 13.5.1.
 - Package version now tracks 13.5.1. This release is `13.5.1-preview.1`.
 - This is a pin bump, not a Railway API change. `Microsoft.Extensions.*` stays on 10.0.11.
-- `AddRailwayBucket` create path provisions the bucket **instance** after `bucketCreate`. Railway staff and the live schema: `bucketCreate` is the project record only. Apply stages `environmentStageChanges` then commits `environmentPatchCommit` with the confirmed `EnvironmentConfig.buckets.{id}` object (`region` + `isCreated`). Default Tigris region is `iad`. Do not send compute region ids. Then poll `bucketS3Credentials` as before. Canvas buckets still adopt by name. See [#41](https://github.com/intrepid-developer/aspire-hosting-railway/issues/41).
 
 ## 13.5.0-preview.12
 
