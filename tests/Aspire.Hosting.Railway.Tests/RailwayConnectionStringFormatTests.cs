@@ -122,10 +122,9 @@ public class RailwayConnectionStringFormatTests
         var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
         builder.AddTestProject("api")
             .WithReference(db)
-            .WithEnvironment(context =>
-            {
-                context.EnvironmentVariables["DATABASE_URL"] = db.Resource.ConnectionStringExpression;
-            });
+            .WithEnvironment(
+                "DATABASE_URL",
+                RailwayReferenceExpressions.PrivateServiceVariable("postgres", "DATABASE_URL"));
 
         using var app = builder.Build();
         var plan = RailwayPlanBuilder.Create(TestAppBuilder.GetModel(app), railway.Resource, "Production");
