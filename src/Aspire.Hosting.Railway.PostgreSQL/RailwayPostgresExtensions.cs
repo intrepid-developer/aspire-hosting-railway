@@ -22,7 +22,9 @@ public static class RailwayPostgresExtensions
     /// <summary>
     /// Marks a Postgres server so deploy uses the Railway Postgres template instead of the
     /// local container image. Local <c>aspire run</c> is unchanged. In publish mode,
-    /// <c>WithReference</c> emits <c>${{postgres.DATABASE_URL}}</c> rather than a Docker connection string.
+    /// <c>WithReference</c> from an <c>AddProject</c> consumer emits an Npgsql keyword
+    /// expression composed from Railway <c>PG*</c> variables; containers and other
+    /// <c>DATABASE_URL</c> consumers keep <c>${{postgres.DATABASE_URL}}</c>.
     /// </summary>
     /// <param name="builder">The official Postgres server resource.</param>
     /// <returns>The same resource builder.</returns>

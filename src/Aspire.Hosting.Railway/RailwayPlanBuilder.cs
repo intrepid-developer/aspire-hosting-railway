@@ -461,9 +461,7 @@ public static class RailwayPlanBuilder
             if (managed is not null && !string.IsNullOrWhiteSpace(managed.PrivateReferenceVariable))
             {
                 service.Environment[$"{ConnectionStringPrefix}{referenced.Name}"] =
-                    RailwayReferenceExpressions.PrivateServiceVariable(
-                        managed.ServiceName,
-                        managed.PrivateReferenceVariable);
+                    RailwayConnectionStringConsumer.PrivateReferenceExpression(managed, resource);
                 continue;
             }
 
