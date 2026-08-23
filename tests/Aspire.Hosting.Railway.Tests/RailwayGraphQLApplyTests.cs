@@ -568,7 +568,6 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", """{"data":{"serviceCreate":{"id":"svc_marketing_placeholder","name":"marketing"}}}""");
         GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
-        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
 
@@ -591,25 +590,22 @@ public class RailwayGraphQLApplyTests
 
         Assert.False(result.ServiceIds.ContainsKey("uploads"));
         Assert.Equal(2, handler.Count("serviceCreate"));
-        Assert.Equal(2, handler.Count("variableCollectionUpsert"));
+        Assert.Equal(1, handler.Count("variableCollectionUpsert"));
         Assert.DoesNotContain(
             handler.Bodies,
             body => body.Contains("\"operationName\":\"serviceCreate\"", StringComparison.Ordinal) &&
                     body.Contains("uploads", StringComparison.Ordinal));
 
-        var upserts = handler.Bodies
-            .Where(body => body.Contains("\"operationName\":\"variableCollectionUpsert\"", StringComparison.Ordinal))
-            .ToArray();
-        Assert.Equal(2, upserts.Length);
-        var apiUpsert = Assert.Single(upserts, body => body.Contains(GraphQLFixtures.ApiServiceId, StringComparison.Ordinal));
-        var marketingUpsert = Assert.Single(upserts, body => body.Contains("svc_marketing_placeholder", StringComparison.Ordinal));
+        var apiUpsert = Assert.Single(
+            handler.Bodies,
+            body => body.Contains("\"operationName\":\"variableCollectionUpsert\"", StringComparison.Ordinal));
+        Assert.Contains(GraphQLFixtures.ApiServiceId, apiUpsert, StringComparison.Ordinal);
         Assert.Contains("ConnectionStrings__uploads", apiUpsert, StringComparison.Ordinal);
         Assert.Contains("placeholder-secret-key", apiUpsert, StringComparison.Ordinal);
         Assert.Contains("placeholder-access-key", apiUpsert, StringComparison.Ordinal);
         Assert.DoesNotContain("ACCESS_KEY_ID", apiUpsert, StringComparison.Ordinal);
         Assert.DoesNotContain("railway-bucket://", apiUpsert, StringComparison.Ordinal);
-        Assert.DoesNotContain("ConnectionStrings__uploads", marketingUpsert, StringComparison.Ordinal);
-        Assert.DoesNotContain("placeholder-secret-key", marketingUpsert, StringComparison.Ordinal);
+        Assert.DoesNotContain("svc_marketing_placeholder", apiUpsert, StringComparison.Ordinal);
         Assert.DoesNotContain(GraphQLFixtures.Token, string.Join('\n', handler.Bodies), StringComparison.Ordinal);
     }
 
