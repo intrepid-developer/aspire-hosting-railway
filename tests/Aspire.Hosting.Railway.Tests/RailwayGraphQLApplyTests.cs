@@ -2689,10 +2689,18 @@ public class RailwayGraphQLApplyTests
         var committedBucket = commit.GetProperty("patch").GetProperty("buckets").GetProperty(GraphQLFixtures.BucketId);
         Assert.Equal(RailwayConstants.DefaultBucketRegion, committedBucket.GetProperty("region").GetString());
         Assert.True(committedBucket.GetProperty("isCreated").GetBoolean());
-        Assert.DoesNotContain("us-east4-eqdc4a", handler.Bodies.Single(body =>
-            body.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal)), StringComparison.Ordinal);
-        Assert.DoesNotContain("placeholder-access-key", string.Join('\n', handler.Bodies), StringComparison.Ordinal);
-        Assert.DoesNotContain(GraphQLFixtures.Token, string.Join('\n', handler.Bodies), StringComparison.Ordinal);
+        var stageBody = handler.Bodies.Single(body =>
+            body.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal));
+        var commitBody = handler.Bodies.Single(body =>
+            body.Contains("\"operationName\":\"environmentPatchCommit\"", StringComparison.Ordinal));
+        Assert.DoesNotContain("us-east4-eqdc4a", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("us-west2", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-access-key", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-access-key", commitBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-secret-key", commitBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.Token, stageBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(GraphQLFixtures.Token, commitBody, StringComparison.Ordinal);
     }
 
     private static void EnqueueProductionServiceTemplateAndBucket(ScriptedGraphQLHandler handler)
