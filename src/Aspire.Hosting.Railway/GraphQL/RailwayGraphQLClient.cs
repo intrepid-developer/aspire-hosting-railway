@@ -515,6 +515,58 @@ public sealed class RailwayGraphQLClient
             token,
             cancellationToken);
 
+    /// <summary>
+    /// Sends <c>environmentStageChanges</c>. <paramref name="environmentId"/>
+    /// and <paramref name="input"/> are required. <paramref name="merge"/>
+    /// is optional on the live schema; this integration always passes it.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<EnvironmentStageChangesData>> EnvironmentStageChangesAsync(
+        string environmentId,
+        EnvironmentConfigInput input,
+        bool merge,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentNullException.ThrowIfNull(input);
+        return SendAsync<EnvironmentStageChangesData>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.EnvironmentStageChanges,
+                OperationName = "environmentStageChanges",
+                Variables = new { environmentId, input, merge }
+            },
+            token,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends <c>environmentPatchCommit</c>. Always pass
+    /// <paramref name="environmentId"/> and <paramref name="patch"/>.
+    /// <paramref name="commitMessage"/> is optional.
+    /// </summary>
+    public Task<RailwayGraphQLResponse<JsonElement>> EnvironmentPatchCommitAsync(
+        string environmentId,
+        EnvironmentConfigInput patch,
+        string? commitMessage,
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentNullException.ThrowIfNull(patch);
+        return SendAsync<JsonElement>(
+            new RailwayGraphQLRequest
+            {
+                Query = RailwayGraphQLOperations.EnvironmentPatchCommit,
+                OperationName = "environmentPatchCommit",
+                Variables = string.IsNullOrWhiteSpace(commitMessage)
+                    ? new { environmentId, patch }
+                    : new { environmentId, patch, commitMessage }
+            },
+            token,
+            cancellationToken);
+    }
+
     /// <summary>Sends <c>environmentPatchCommitStaged</c>.</summary>
     public Task<RailwayGraphQLResponse<JsonElement>> EnvironmentPatchCommitStagedAsync(
         string environmentId,

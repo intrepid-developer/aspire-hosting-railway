@@ -314,24 +314,87 @@ public sealed class TemplateDeployV2Input
     public JsonElement SerializedConfig { get; set; }
 }
 
-/// <summary>Input for <c>bucketCreate</c>.</summary>
+/// <summary>
+/// Input for <c>bucketCreate</c>. Confirmed <c>BucketCreateInput</c>
+/// (live schema 2026-08-23): <see cref="ProjectId"/> required;
+/// <see cref="EnvironmentId"/> and <see cref="Name"/> optional. There is
+/// no <c>region</c> field — Tigris region travels on the
+/// <c>EnvironmentConfig.buckets</c> patch.
+/// </summary>
 public sealed class BucketCreateInput
 {
     /// <summary>Gets or sets the project id.</summary>
     [JsonPropertyName("projectId")]
     public required string ProjectId { get; set; }
 
-    /// <summary>Gets or sets the environment id.</summary>
+    /// <summary>
+    /// Gets or sets the environment id. Optional. Live schema marks
+    /// deploying instances from this field as unimplemented.
+    /// </summary>
     [JsonPropertyName("environmentId")]
     public required string EnvironmentId { get; set; }
 
     /// <summary>Gets or sets the bucket display name.</summary>
     [JsonPropertyName("name")]
     public string? Name { get; set; }
+}
 
-    /// <summary>Gets or sets the region. Immutable after create.</summary>
+/// <summary>
+/// Confirmed <c>EnvironmentConfig</c> patch used to provision a bucket
+/// instance (JSON Schema
+/// <c>https://backboard.railway.com/schema/environment.schema.json</c>,
+/// live 2026-08-23). Only <c>buckets</c> is sent on this path.
+/// </summary>
+public sealed class EnvironmentConfigInput
+{
+    /// <summary>
+    /// Gets or sets bucket-instance entries keyed by the project bucket id
+    /// returned from <c>bucketCreate</c>.
+    /// </summary>
+    [JsonPropertyName("buckets")]
+    public Dictionary<string, EnvironmentConfigBucket>? Buckets { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>EnvironmentConfig.buckets</c> additionalProperties object:
+/// <c>region</c>, <c>isCreated</c>, <c>isDeleted</c>. No other fields.
+/// </summary>
+public sealed class EnvironmentConfigBucket
+{
+    /// <summary>
+    /// Gets or sets the Tigris airport code (<c>iad</c>, <c>sjc</c>,
+    /// <c>ams</c>, <c>sin</c>). Not a compute <c>Region.region</c> id.
+    /// </summary>
     [JsonPropertyName("region")]
     public string? Region { get; set; }
+
+    /// <summary>Gets or sets whether this patch creates the instance.</summary>
+    [JsonPropertyName("isCreated")]
+    public bool? IsCreated { get; set; }
+
+    /// <summary>Gets or sets whether this patch deletes the instance. Unused on create.</summary>
+    [JsonPropertyName("isDeleted")]
+    public bool? IsDeleted { get; set; }
+}
+
+/// <summary>Data wrapper for <c>environmentStageChanges</c>.</summary>
+public sealed class EnvironmentStageChangesData
+{
+    /// <summary>Gets or sets the staged patch.</summary>
+    [JsonPropertyName("environmentStageChanges")]
+    public RailwayEnvironmentPatch? EnvironmentStageChanges { get; set; }
+}
+
+/// <summary>Confirmed <c>EnvironmentPatch</c> fields selected after stage.</summary>
+public sealed class RailwayEnvironmentPatch
+{
+    /// <summary>Gets or sets the patch id.</summary>
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    /// <summary>Gets or sets the patch status.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
 }
 
 /// <summary>Payload for id/name resources.</summary>

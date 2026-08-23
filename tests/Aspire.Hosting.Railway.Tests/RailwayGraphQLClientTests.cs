@@ -62,11 +62,13 @@ public class RailwayGraphQLClientTests
             {
                 ProjectId = "proj_placeholder",
                 EnvironmentId = "env_placeholder",
-                Name = "uploads",
-                Region = "us-west2"
+                Name = "uploads"
             },
             "placeholder-token");
         Assert.Contains("bucketCreate", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("BucketCreateInput", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"region\"", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("us-west2", handler.Body, StringComparison.Ordinal);
 
         await client.EnvironmentCreateAsync(
             new EnvironmentCreateInput
@@ -82,6 +84,61 @@ public class RailwayGraphQLClientTests
         await client.WorkflowStatusAsync("wf_placeholder", "placeholder-token");
         Assert.Contains("workflowStatus", handler.Body, StringComparison.Ordinal);
         Assert.Contains("error", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EnvironmentStageChanges_PostsConfirmedEnvironmentConfigBucketPatch()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.EnvironmentStageChanges);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+        var patch = RailwayBucketRegion.CreateInstancePatch("bucket_placeholder");
+
+        var response = await client.EnvironmentStageChangesAsync(
+            "env_placeholder",
+            patch,
+            merge: true,
+            "placeholder-token");
+
+        Assert.Equal("patch_placeholder", response.Data?.EnvironmentStageChanges?.Id);
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var variables = document.RootElement.GetProperty("variables");
+        Assert.Equal("env_placeholder", variables.GetProperty("environmentId").GetString());
+        Assert.True(variables.GetProperty("merge").GetBoolean());
+        var bucket = variables.GetProperty("input").GetProperty("buckets").GetProperty("bucket_placeholder");
+        Assert.Equal("iad", bucket.GetProperty("region").GetString());
+        Assert.True(bucket.GetProperty("isCreated").GetBoolean());
+        Assert.False(bucket.TryGetProperty("isDeleted", out _));
+        Assert.Contains("EnvironmentConfig!", RailwayGraphQLOperations.EnvironmentStageChanges, StringComparison.Ordinal);
+        Assert.Contains("$merge: Boolean", RailwayGraphQLOperations.EnvironmentStageChanges, StringComparison.Ordinal);
+        Assert.DoesNotContain("us-east4-eqdc4a", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("pluginCreate", handler.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EnvironmentPatchCommit_PostsConfirmedEnvironmentConfigBucketPatch()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.EnvironmentPatchCommit);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+        var patch = RailwayBucketRegion.CreateInstancePatch("bucket_placeholder");
+
+        await client.EnvironmentPatchCommitAsync(
+            "env_placeholder",
+            patch,
+            "Provision Railway bucket instance for uploads",
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var variables = document.RootElement.GetProperty("variables");
+        Assert.Equal("env_placeholder", variables.GetProperty("environmentId").GetString());
+        Assert.Equal("Provision Railway bucket instance for uploads", variables.GetProperty("commitMessage").GetString());
+        var bucket = variables.GetProperty("patch").GetProperty("buckets").GetProperty("bucket_placeholder");
+        Assert.Equal("iad", bucket.GetProperty("region").GetString());
+        Assert.True(bucket.GetProperty("isCreated").GetBoolean());
+        Assert.Contains("$patch: EnvironmentConfig", RailwayGraphQLOperations.EnvironmentPatchCommit, StringComparison.Ordinal);
+        Assert.Contains("$environmentId: String!", RailwayGraphQLOperations.EnvironmentPatchCommit, StringComparison.Ordinal);
+        Assert.DoesNotContain("us-east4-eqdc4a", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
     }
 
     [Fact]

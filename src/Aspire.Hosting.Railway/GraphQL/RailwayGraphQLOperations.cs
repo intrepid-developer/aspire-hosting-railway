@@ -322,7 +322,15 @@ public static class RailwayGraphQLOperations
         }
         """;
 
-    /// <summary>Creates a Railway storage bucket. Region is immutable after create.</summary>
+    /// <summary>
+    /// Creates the project-level bucket record. Confirmed
+    /// <c>BucketCreateInput</c> (live schema 2026-08-23): <c>projectId</c>
+    /// (String!), optional <c>environmentId</c> and <c>name</c>. There is no
+    /// <c>region</c> field. <c>environmentId</c> is documented as
+    /// unimplemented for deploying instances. The instance is provisioned
+    /// with <see cref="EnvironmentStageChanges"/> then
+    /// <see cref="EnvironmentPatchCommit"/>.
+    /// </summary>
     public const string BucketCreate = """
         mutation bucketCreate($input: BucketCreateInput!) {
           bucketCreate(input: $input) {
@@ -346,6 +354,37 @@ public static class RailwayGraphQLOperations
             region
             bucketName
           }
+        }
+        """;
+
+    /// <summary>
+    /// Stages an <c>EnvironmentConfig</c> patch. Confirmed
+    /// <c>environmentStageChanges(environmentId: String!, input: EnvironmentConfig!, merge: Boolean) → EnvironmentPatch!</c>
+    /// (live schema 2026-08-23). <c>EnvironmentConfig</c> is a scalar whose
+    /// JSON Schema is <c>https://backboard.railway.com/schema/environment.schema.json</c>.
+    /// Bucket instance fields on that schema: <c>buckets.{id}.region</c>,
+    /// <c>isCreated</c>, <c>isDeleted</c>. Send a JSON object, not a string.
+    /// Merge when adding onto an existing staged patch.
+    /// </summary>
+    public const string EnvironmentStageChanges = """
+        mutation environmentStageChanges($environmentId: String!, $input: EnvironmentConfig!, $merge: Boolean) {
+          environmentStageChanges(environmentId: $environmentId, input: $input, merge: $merge) {
+            id
+            status
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Commits the provided <c>EnvironmentConfig</c> patch. Confirmed
+    /// <c>environmentPatchCommit(commitMessage: String, environmentId: String!, patch: EnvironmentConfig) → String!</c>
+    /// (live schema 2026-08-23). This is the apply-now path the official
+    /// CLI uses after <c>bucketCreate</c>. Always pass <c>environmentId</c>
+    /// and the patch object. Omit unset; do not send <c>null</c>.
+    /// </summary>
+    public const string EnvironmentPatchCommit = """
+        mutation environmentPatchCommit($environmentId: String!, $patch: EnvironmentConfig, $commitMessage: String) {
+          environmentPatchCommit(environmentId: $environmentId, patch: $patch, commitMessage: $commitMessage)
         }
         """;
 

@@ -69,4 +69,26 @@ public sealed class RailwayRegionTests
         Assert.Contains("us-west2", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("deprecat", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void BucketRegion_DefaultsToIadAndRejectsComputeRegions()
+    {
+        Assert.Equal(["iad", "sjc", "ams", "sin"], RailwayConstants.OfficialBucketRegionIds);
+        Assert.Equal("iad", RailwayBucketRegion.Resolve(null));
+        Assert.Equal("iad", RailwayBucketRegion.Resolve(""));
+        Assert.Equal("sjc", RailwayBucketRegion.Resolve("sjc"));
+
+        var patch = RailwayBucketRegion.CreateInstancePatch("bucket_placeholder");
+        var bucket = Assert.Single(patch.Buckets!);
+        Assert.Equal("bucket_placeholder", bucket.Key);
+        Assert.Equal("iad", bucket.Value.Region);
+        Assert.True(bucket.Value.IsCreated);
+        Assert.Null(bucket.Value.IsDeleted);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => RailwayBucketRegion.Resolve("us-east4-eqdc4a"));
+        Assert.Contains("us-east4-eqdc4a", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("iad", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("deprecat", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }
