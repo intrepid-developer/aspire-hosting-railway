@@ -2,6 +2,12 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.2-preview.1
+
+- Retarget to Aspire.Hosting 13.5.2.
+- Package version now tracks 13.5.2. This release is `13.5.2-preview.1`.
+- This is a pin bump, not a Railway API change. `Microsoft.Extensions.*` stays on 10.0.11.
+
 ## 13.5.1-preview.4
 
 - Public AppHost region APIs for buckets and official templates. `AddRailwayBucket` can set `RailwayBucketRegion` (`configure: b => b.Region = …` or `WithRegion`). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` can set `RailwayRegion` on their settings callbacks.
