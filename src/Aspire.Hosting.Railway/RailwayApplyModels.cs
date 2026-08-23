@@ -28,6 +28,12 @@ public sealed class RailwayApplyRequest
     /// <summary>Gets or sets resolved container image references keyed by Railway service name.</summary>
     public Dictionary<string, string> ServiceImages { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Gets or sets resolved registry username and password. Deploy-time
+    /// only — never written to plan files or deployment state.
+    /// </summary>
+    public RailwayRegistryCredentials? RegistryCredentials { get; init; }
+
     /// <summary>Gets or sets Railway service names that should receive a public HTTP domain.</summary>
     public HashSet<string> ExternalHttpServices { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 

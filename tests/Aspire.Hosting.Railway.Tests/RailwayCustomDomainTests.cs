@@ -223,6 +223,7 @@ public sealed class RailwayCustomDomainTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);
@@ -264,6 +265,7 @@ public sealed class RailwayCustomDomainTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);
@@ -300,6 +302,7 @@ public sealed class RailwayCustomDomainTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -327,6 +330,7 @@ public sealed class RailwayCustomDomainTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);
@@ -368,6 +372,7 @@ public sealed class RailwayCustomDomainTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -396,7 +401,7 @@ public sealed class RailwayCustomDomainTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .WithHttpEndpoint(targetPort: 8080)
@@ -440,6 +445,7 @@ public sealed class RailwayCustomDomainTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -447,7 +453,7 @@ public sealed class RailwayCustomDomainTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .PublishAsRailwayService(s => s.CustomDomains.Add("api.example.com"));
@@ -511,6 +517,7 @@ public sealed class RailwayCustomDomainTests
     {
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceDomainCreate", GraphQLFixtures.ServiceDomainCreate);

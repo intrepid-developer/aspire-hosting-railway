@@ -454,6 +454,33 @@ public sealed class RailwayGraphQLApplyService
         RailwayGraphQLClient.ThrowIfFailed(commit, "environmentPatchCommit");
     }
 
+    private async Task ApplyRegistryCredentialsAsync(
+        string serviceId,
+        string serviceName,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request.RegistryCredentials);
+
+        var patch = RailwayImageRegistry.CreateCredentialsPatch(serviceId, request.RegistryCredentials);
+        var stage = await _client.EnvironmentStageChangesAsync(
+            result.EnvironmentId,
+            patch,
+            merge: true,
+            request.Token,
+            cancellationToken).ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(stage, "environmentStageChanges");
+
+        var commit = await _client.EnvironmentPatchCommitAsync(
+            result.EnvironmentId,
+            patch,
+            commitMessage: $"Set private registry credentials for {serviceName}",
+            request.Token,
+            cancellationToken).ConfigureAwait(false);
+        RailwayGraphQLClient.ThrowIfFailed(commit, "environmentPatchCommit");
+    }
+
     private async Task<BucketS3Credentials> WaitForBucketS3CredentialsAsync(
         string bucketId,
         string bucketName,
@@ -927,6 +954,8 @@ public sealed class RailwayGraphQLApplyService
                         "Do not use `railway up`.");
                 }
 
+                RailwayImageRegistry.EnsureCanPull(service.Name, image, request.RegistryCredentials);
+
                 if (!result.ServiceIds.TryGetValue(service.Name, out var serviceId) ||
                     string.IsNullOrWhiteSpace(serviceId))
                 {
@@ -950,6 +979,16 @@ public sealed class RailwayGraphQLApplyService
                     result.CreatedServiceIds[service.Name] = serviceId;
                     result.AdoptedRailwayServiceNames.Add(service.Name);
                     await persistAsync().ConfigureAwait(false);
+                }
+
+                if (request.RegistryCredentials is not null)
+                {
+                    await ApplyRegistryCredentialsAsync(
+                        serviceId,
+                        service.Name,
+                        request,
+                        result,
+                        cancellationToken).ConfigureAwait(false);
                 }
 
                 var update = await _client.ServiceInstanceUpdateAsync(

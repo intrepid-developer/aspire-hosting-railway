@@ -95,12 +95,18 @@ A legacy `AppliedTemplateCodes` key that stored a JSON array string such as `["p
 Railway has **no image registry**. Deploy of image-based services requires `IContainerRegistry` on the model:
 
 ```csharp
-var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
+var ghcrUsername = builder.AddParameter("ghcr-username");
+var ghcrPassword = builder.AddParameter("ghcr-password", secret: true);
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground")
+    .WithUsername(ghcrUsername)
+    .WithPassword(ghcrPassword);
 var railway = builder.AddRailwayEnvironment("railway")
     .WithContainerRegistry(ghcr);
 ```
 
 Pass the GHCR namespace as the third argument (`<owner>/<repository>`). The two-argument form has no owner/repo, so Aspire would push `ghcr.io/api` and GHCR rejects it.
+
+Private GHCR (and similar) images need those `WithUsername` / `WithPassword` parameter refs. Railway [private registries](https://docs.railway.com/builds/private-registries) require a **Pro plan**. CI can bind `GITHUB_TOKEN` to the password parameter. Deploy resolves the values in memory and stages `EnvironmentConfig.services.{serviceId}.deploy.registryCredentials` (`username` + `password` only). They never land in `railway-plan.json` or deployment state. If the image host is private and no credentials resolve, deploy fails instead of pushing an unpullable `source.image`.
 
 If the registry is missing, deploy throws and tells you to add GHCR or Docker Hub. This integration does not shell out to `railway up`. Railpack has no .NET support; use an image or a Dockerfile.
 
