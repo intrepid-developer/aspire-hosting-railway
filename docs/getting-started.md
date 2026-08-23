@@ -1,6 +1,6 @@
 # Getting started
 
-Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.2-preview.1** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.2** / `net10.0`.
+Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.2-preview.2** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.2** / `net10.0`.
 
 ## Restore from nuget.org
 
@@ -51,10 +51,10 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using` fo
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Railway replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference), so those templates are not scaled. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.2-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.2-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.2-preview.1" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.2-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.2-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.2-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.2-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.2-preview.2" />
 ```
 
 ```csharp
@@ -104,14 +104,14 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-Bucket `RailwayBucketRegion` codes (`iad` / `sjc` / `ams` / `sin`) are not compute `RailwayRegion` ids. Unset buckets stay `iad`. EU AppHosts must set `ams`. Bucket region cannot be changed after create (drop + recreate). Official Postgres / Redis `Region` is applied after the template service exists via `serviceInstanceUpdate`. Apply does not create an image-less Railway service per bucket; credentials reach `WithReference` consumers as `ConnectionStrings__{name}` at deploy time. Offline leftovers from earlier previews can be deleted in the Railway dashboard — v1 does not adopt or destroy them automatically.
+Bucket `RailwayBucketRegion` codes (`iad` / `sjc` / `ams` / `sin`) are not compute `RailwayRegion` ids. Unset buckets stay `iad`. EU AppHosts must set `ams`. Bucket region cannot be changed after create (drop + recreate). Official Postgres / Redis `Region` is applied after first-time template create via one `serviceInstanceUpdate` (`region` + `numReplicas` 1). Volume backups do not send a second region update. Apply does not create an image-less Railway service per bucket; credentials reach `WithReference` consumers as `ConnectionStrings__{name}` at deploy time. Offline leftovers from earlier previews can be deleted in the Railway dashboard — v1 does not adopt or destroy them automatically.
 
 `AddContainerRegistry` is required for image deploy. Pass owner/repo as the third argument (`<owner>/<repository>`). The two-argument form has no owner/repo, so Aspire would push `ghcr.io/api` and GHCR rejects it. Railway has no image registry. Private GHCR (and similar) images also need `WithUsername` / `WithPassword` parameter references so Railway can pull them — that is a **Pro plan** feature. Bind the password parameter from `GITHUB_TOKEN` in CI; do not paste a PAT into chat or commit it. Username and password are resolved at `aspire deploy` only and never written to `railway-plan.json`. Missing credentials for a private image host fail the deploy. Aspire marks those APIs experimental (`ASPIRECOMPUTE003`); the playground AppHost suppresses that diagnostic so the sample still compiles with warnings-as-errors. Local `aspire run` still works without talking to Railway.
 
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.2-preview.1" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.2-preview.2" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.2" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.2" />
 ```

@@ -29,7 +29,7 @@ The plan is not unconditionally secret-safe. `WithEnvironment("API_KEY", value)`
 
 Host addresses are host-only: `{service}.railway.internal` (lowercase). Endpoints and secrets are never concatenated into strings before Aspire resolves them.
 
-Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `templateId` and `serializedConfig` (never empty, never invented template UUIDs). Apply polls `workflowStatus` and fails if `workflowId` is missing. `TemplateDeployV2Input` has no confirmed region field. After the template service id exists, a requested `RailwayRegion` is applied with `serviceInstanceUpdate` (`region` + `numReplicas` 1). Volume-backed services cannot use replicas / `multiRegionConfig`. Later updates (volume backup schedules) re-send that region so an omitted field does not reset the service to US West.
+Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `templateId` and `serializedConfig` (never empty, never invented template UUIDs). Apply polls `workflowStatus` and fails if `workflowId` is missing. `TemplateDeployV2Input` has no confirmed region field. After the first-time template create, a requested `RailwayRegion` is applied with at most one `serviceInstanceUpdate` (`region` + `numReplicas` 1). Volume-backed services cannot use replicas / `multiRegionConfig`. Volume backup schedules use `volumeInstanceBackupScheduleUpdate` only — they do not send a second region update. Subsequent applies do not re-send region as its own update just to be safe. Re-include region only when already sending a `serviceInstanceUpdate` so omitting it cannot reset the service to US West.
 
 ## Adopt existing
 
@@ -118,6 +118,8 @@ Resolution order (`RailwayEnvironmentResource.ResolveDeployImageAsync`):
 3. The plan image, if it is already resolved.
 
 `resolveContainerRegistry` uses `WithContainerRegistry` when present, otherwise the single `IContainerRegistry` in the model.
+
+Compute apply is one canvas deployment per service: `serviceInstanceUpdate` writes `source.image` and settings (Boolean; not a deploy), then `serviceInstanceDeployV2` once. Registry credentials stay an `EnvironmentConfig` patch, not a deploy. Do not drop `DeployV2` — Update does not start a Railway deployment.
 
 ## Compute settings
 
@@ -219,7 +221,7 @@ builder.AddRailwayBucket("uploads").WithRegion(RailwayBucketRegion.Ams);
 
 | AppHost | Plan | Apply |
 | --- | --- | --- |
-| `PublishAsRailwayPostgres` / `Redis` `Region` | Official `Region.region` string | `serviceInstanceUpdate.region` + `numReplicas` 1 after the template service id exists. Re-sent after volume backup updates. Unset = project default (often US). |
+| `PublishAsRailwayPostgres` / `Redis` `Region` | Official `Region.region` string | `serviceInstanceUpdate.region` + `numReplicas` 1 after first-time template create (at most one update per apply). Not re-sent after volume backup schedules or on later applies as a standalone update. Unset = project default (often US). |
 | `AddRailwayBucket` `Region` / `WithRegion` | Tigris airport code | `EnvironmentConfig.buckets.{id}.region` after `bucketCreate`. Unset = `iad`. Adopted canvas instances are not re-patched. |
 
 Airport codes on Postgres / Redis and compute ids on buckets fail before GraphQL. Bucket region cannot be changed after create (drop + recreate).

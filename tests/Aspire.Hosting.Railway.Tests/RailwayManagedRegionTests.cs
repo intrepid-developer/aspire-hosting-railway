@@ -277,7 +277,7 @@ public sealed class RailwayManagedRegionTests
     }
 
     [Fact]
-    public async Task Apply_PostgresRegion_IsResentAfterVolumeBackupUpdate()
+    public async Task Apply_PostgresRegion_AndVolumeBackup_SendsOneRegionUpdate()
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
@@ -294,7 +294,6 @@ public sealed class RailwayManagedRegionTests
             GraphQLFixtures.VolumeInstanceBackupScheduleList(
                 (GraphQLFixtures.DailyScheduleId, "DAILY"),
                 (GraphQLFixtures.WeeklyScheduleId, "WEEKLY")));
-        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
 
         var plan = GraphQLFixtures.CreatePlan(adoptExisting: true, includeApi: false, includePostgres: true);
@@ -311,22 +310,55 @@ public sealed class RailwayManagedRegionTests
             new MemoryDeploymentStateManager());
 
         Assert.Equal(1, handler.Count("volumeInstanceBackupScheduleUpdate"));
-        Assert.Equal(2, handler.Count("serviceInstanceUpdate"));
-        var updates = GraphQLFixtures.GetServiceInstanceUpdateVariables(handler.Bodies);
-        Assert.Equal(2, updates.Count);
-        foreach (var update in updates)
-        {
-            Assert.Equal(GraphQLFixtures.PostgresServiceId, update.GetProperty("serviceId").GetString());
-            Assert.Equal("europe-west4-drams3a", update.GetProperty("input").GetProperty("region").GetString());
-            Assert.Equal(1, update.GetProperty("input").GetProperty("numReplicas").GetInt32());
-            Assert.False(update.GetProperty("input").TryGetProperty("multiRegionConfig", out _));
-        }
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        var update = Assert.Single(GraphQLFixtures.GetServiceInstanceUpdateVariables(handler.Bodies));
+        Assert.Equal(GraphQLFixtures.PostgresServiceId, update.GetProperty("serviceId").GetString());
+        Assert.Equal("europe-west4-drams3a", update.GetProperty("input").GetProperty("region").GetString());
+        Assert.Equal(1, update.GetProperty("input").GetProperty("numReplicas").GetInt32());
+        Assert.False(update.GetProperty("input").TryGetProperty("multiRegionConfig", out _));
 
         var regionIndex = handler.Operations.IndexOf("serviceInstanceUpdate");
         var backupIndex = handler.Operations.IndexOf("volumeInstanceBackupScheduleUpdate");
-        var resentIndex = handler.Operations.LastIndexOf("serviceInstanceUpdate");
         Assert.True(regionIndex < backupIndex);
-        Assert.True(backupIndex < resentIndex);
+        Assert.Equal(regionIndex, handler.Operations.LastIndexOf("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_PostgresRegion_SubsequentApply_DoesNotSendStandaloneRegionUpdate()
+    {
+        var firstHandler = new ScriptedGraphQLHandler();
+        firstHandler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
+        firstHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        firstHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(adoptExisting: true, includeApi: false, includePostgres: true);
+        plan.ManagedServices[0].Region = "europe-west4-drams3a";
+        var state = new MemoryDeploymentStateManager();
+        var request = GraphQLFixtures.CreateRequest(
+            includeApiImage: false,
+            adoptedProjectId: GraphQLFixtures.ProjectId,
+            adoptedEnvironmentId: GraphQLFixtures.ProductionEnvironmentId);
+
+        await GraphQLFixtures.CreateApplyService(firstHandler).ApplyAsync(
+            plan,
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(1, firstHandler.Count("serviceInstanceUpdate"));
+
+        var secondHandler = new ScriptedGraphQLHandler();
+        secondHandler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
+        secondHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        await GraphQLFixtures.CreateApplyService(secondHandler).ApplyAsync(
+            plan,
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(0, secondHandler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, secondHandler.Count("templateDeployV2"));
     }
 
     [Fact]
