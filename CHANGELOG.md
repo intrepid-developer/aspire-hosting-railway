@@ -2,6 +2,13 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.2-preview.3
+
+- `WithReference` on official Railway Postgres / Redis now follows the consumer, the same way local `AddPostgres` / `AddRedis` already do. `AddProject` / `IProjectMetadata` (.NET, Aspire.Npgsql, Aspire.StackExchange.Redis, EF `UseNpgsql`) get a keyword connection string on `ConnectionStrings__{name}`. Containers and other `DATABASE_URL` / `REDIS_URL` processes keep the Railway URI.
+- Keyword form is a Railway expression composed from official template variables ([Postgres](https://docs.railway.com/databases/postgresql): `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`; [Redis](https://docs.railway.com/databases/redis): `REDISHOST` / `REDISPORT` / `REDISPASSWORD`). The plan stores `${{postgres.PGHOST}}` (and siblings), never resolved passwords. Apply upserts those expressions; Railway interpolates them. Tokens stay out of `railway-plan.json` and deployment state.
+- `ConnectionStrings__{name}` is what `WithReference` writes (Aspire convention). `DATABASE_URL` / `REDIS_URL` stay `postgresql://` / `redis://` when the AppHost also sets them (`WithEnvironment`). A .NET project can have both: keyword on `ConnectionStrings__postgres`, URI on `DATABASE_URL`.
+- No new GraphQL operations. No Redis-only mutations. See [getting started](docs/getting-started.md) and [publish and deploy](docs/publish-and-deploy.md). Fixes [#48](https://github.com/intrepid-developer/aspire-hosting-railway/issues/48).
+
 ## 13.5.2-preview.2
 
 - One Railway canvas deployment per resource per `aspire deploy` after the unavoidable first template create. Overlapping deploys on the same service clash.

@@ -22,7 +22,10 @@ public static class RailwayRedisExtensions
     /// <summary>
     /// Marks a Redis resource so deploy uses the Railway Redis template instead of the
     /// local container image. Local <c>aspire run</c> is unchanged. In publish mode,
-    /// <c>WithReference</c> emits <c>${{redis.REDIS_URL}}</c> rather than a Docker connection string.
+    /// <c>WithReference</c> from an <c>AddProject</c> consumer emits a
+    /// StackExchange.Redis <c>host:port,password=</c> expression composed from
+    /// Railway <c>REDIS*</c> variables; containers and other <c>REDIS_URL</c>
+    /// consumers keep <c>${{redis.REDIS_URL}}</c>.
     /// </summary>
     /// <param name="builder">The official Redis resource.</param>
     /// <returns>The same resource builder.</returns>

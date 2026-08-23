@@ -62,4 +62,28 @@ internal static class TestAppBuilder
             .WithUsername(username)
             .WithPassword(password);
     }
+
+    /// <summary>
+    /// Adds a real <c>AddProject</c> consumer against a throwaway csproj so
+    /// plan tests can distinguish .NET projects from containers.
+    /// </summary>
+    public static IResourceBuilder<ProjectResource> AddTestProject(
+        this IDistributedApplicationBuilder builder,
+        string name = "api")
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "aspire-railway-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var projectPath = Path.Combine(directory, $"{name}.csproj");
+        File.WriteAllText(
+            projectPath,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <OutputType>Exe</OutputType>
+              </PropertyGroup>
+            </Project>
+            """);
+        return builder.AddProject(name, projectPath);
+    }
 }

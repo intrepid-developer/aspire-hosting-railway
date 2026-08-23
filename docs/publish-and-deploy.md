@@ -25,7 +25,14 @@ A `validate-railway` step (registered once) fails publish-mode apps that call `P
 
 The plan is not unconditionally secret-safe. `WithEnvironment("API_KEY", value)` literals land in `railway-plan.json`. Use `AddParameter(secret: true)` for secrets (stored as names). Railway `${{service.VAR}}` expressions, the deploy token, and bucket credentials stay out. An empty optional captured parameter is omitted; a missing required parameter still fails.
 
-`WithReference` on official Railway databases emits expressions such as `${{postgres.DATABASE_URL}}` (private) onto services that actually referenced the database — never the local Docker connection string. Non-Railway connection strings are captured as secret parameter **names** in the plan and resolved on deploy.
+`WithReference` on official Railway databases emits secret-safe Railway expressions onto services that actually referenced the database — never the local Docker connection string. The format follows the consumer (the same split local `AddPostgres` / `AddRedis` already use):
+
+- **.NET `AddProject` / `IProjectMetadata`:** `ConnectionStrings__{name}` is Npgsql keyword form (`Host=;Port=;Username=;Password=;Database=`) or StackExchange.Redis `host:port,password=`. Those strings are composed from official template variables ([Postgres](https://docs.railway.com/databases/postgresql) `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`, [Redis](https://docs.railway.com/databases/redis) `REDISHOST` / `REDISPORT` / `REDISPASSWORD`). Example: `Host=${{postgres.PGHOST}};…;Password=${{postgres.PGPASSWORD}};…`. Apply upserts the expressions; Railway interpolates them. Passwords are never written into `railway-plan.json` or deployment state.
+- **Containers / Node / other `DATABASE_URL` consumers:** `ConnectionStrings__{name}` stays `${{postgres.DATABASE_URL}}` / `${{redis.REDIS_URL}}` (`postgresql://` / `redis://` after interpolation).
+
+`WithReference` always writes `ConnectionStrings__{name}`. It does not invent `DATABASE_URL` / `REDIS_URL`. If the AppHost also sets those names (`WithEnvironment`), they stay the URI even on an `AddProject` — so a service can have keyword `ConnectionStrings__postgres` and URI `DATABASE_URL` at the same time. Aspire.Npgsql / EF `UseNpgsql` read `ConnectionStrings__{name}`; Node `pg` and similar read `DATABASE_URL`.
+
+Non-Railway connection strings are captured as secret parameter **names** in the plan and resolved on deploy.
 
 Host addresses are host-only: `{service}.railway.internal` (lowercase). Endpoints and secrets are never concatenated into strings before Aspire resolves them.
 
