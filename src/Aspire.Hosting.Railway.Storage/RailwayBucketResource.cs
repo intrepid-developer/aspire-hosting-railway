@@ -26,6 +26,15 @@ public sealed class RailwayBucketResource : Resource, IResourceWithConnectionStr
     public string BucketName { get; }
 
     /// <summary>
+    /// Gets or sets the Tigris bucket region. Unset keeps today's default
+    /// (<see cref="RailwayBucketRegion.Iad"/>) so existing AppHosts do
+    /// not silently move. Region is immutable after the instance is
+    /// provisioned; changing it means drop + recreate the bucket.
+    /// Compute <see cref="RailwayRegion"/> ids are not valid here.
+    /// </summary>
+    public RailwayBucketRegion? Region { get; set; }
+
+    /// <summary>
     /// Gets or sets the local emulator container, when running locally.
     /// </summary>
     public ContainerResource? Emulator { get; internal set; }

@@ -29,11 +29,17 @@ public static class RailwayBucketExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">Aspire resource name, for example <c>uploads</c>.</param>
     /// <param name="bucketName">Optional bucket name. Defaults to <paramref name="name"/>.</param>
+    /// <param name="configure">
+    /// Optional callback. Set <see cref="RailwayBucketResource.Region"/>
+    /// to a Tigris <see cref="RailwayBucketRegion"/>. Unset keeps
+    /// <c>iad</c>. Region cannot be changed after create.
+    /// </param>
     /// <returns>The bucket resource builder.</returns>
     public static IResourceBuilder<RailwayBucketResource> AddRailwayBucket(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
-        string? bucketName = null)
+        string? bucketName = null,
+        Action<RailwayBucketResource>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -42,11 +48,8 @@ public static class RailwayBucketExtensions
 
         var resolvedBucketName = string.IsNullOrWhiteSpace(bucketName) ? name : bucketName;
         var resource = new RailwayBucketResource(name, resolvedBucketName);
-        resource.Annotations.Add(new RailwayManagedServiceAnnotation(
-            kind: "bucket",
-            serviceName: name,
-            templateCode: null,
-            privateReferenceVariable: null));
+        configure?.Invoke(resource);
+        resource.Annotations.Add(CreateManagedAnnotation(resource));
 
         var resourceBuilder = builder.AddResource(resource);
 
@@ -64,4 +67,43 @@ public static class RailwayBucketExtensions
 
         return resourceBuilder;
     }
+
+    /// <summary>
+    /// Sets the Tigris region used when apply provisions the bucket
+    /// instance. Unset keeps <c>iad</c>. Region is immutable after
+    /// create; changing it means drop + recreate.
+    /// </summary>
+    /// <param name="builder">The bucket resource builder.</param>
+    /// <param name="region">Official Tigris airport code.</param>
+    /// <returns>The same resource builder.</returns>
+    public static IResourceBuilder<RailwayBucketResource> WithRegion(
+        this IResourceBuilder<RailwayBucketResource> builder,
+        RailwayBucketRegion region)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.Region = region;
+        ReplaceManagedAnnotation(builder.Resource);
+        return builder;
+    }
+
+    private static void ReplaceManagedAnnotation(RailwayBucketResource resource)
+    {
+        foreach (var existing in resource.Annotations.OfType<RailwayManagedServiceAnnotation>().ToList())
+        {
+            resource.Annotations.Remove(existing);
+        }
+
+        resource.Annotations.Add(CreateManagedAnnotation(resource));
+    }
+
+    private static RailwayManagedServiceAnnotation CreateManagedAnnotation(RailwayBucketResource resource) =>
+        new(
+            kind: "bucket",
+            serviceName: resource.Name,
+            templateCode: null,
+            privateReferenceVariable: null,
+            region: resource.Region is { } region
+                ? RailwayBucketRegionMapper.ToRegionId(region)
+                : null);
 }

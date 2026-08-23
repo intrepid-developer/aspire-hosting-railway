@@ -11,11 +11,17 @@
 | Addressing | Path-style (`ForcePathStyle=true`) | Virtual-hosted (`ForcePathStyle=false`) |
 | Credentials | Placeholder `s3mock` / `s3mock` | Fresh S3 keys from `bucketS3Credentials` (in memory only) |
 
-The hosting package is `IntrepidDeveloper.Aspire.Hosting.Railway.Storage`. It is not the deprecated CommunityToolkit MinIO package. Bucket region is a Tigris airport code (`iad` default) and is immutable after the instance is provisioned. Railway buckets are **not** on private DNS.
+The hosting package is `IntrepidDeveloper.Aspire.Hosting.Railway.Storage`. It is not the deprecated CommunityToolkit MinIO package. Bucket region is a Tigris airport code (`iad` / `sjc` / `ams` / `sin`) and is immutable after the instance is provisioned. Unset keeps `iad` so existing AppHosts do not silently move. EU AppHosts must set `ams`. Changing region after create means drop + recreate the bucket. These codes are not compute `RailwayRegion` ids. Railway buckets are **not** on private DNS.
+
+```csharp
+builder.AddRailwayBucket("uploads", configure: b => b.Region = RailwayBucketRegion.Ams);
+// or
+builder.AddRailwayBucket("uploads").WithRegion(RailwayBucketRegion.Ams);
+```
 
 On deploy of an adopted project, apply lists `project.buckets` from the documented `project(id)` query (same operation that lists services). If a planned bucket matches a display name (case-insensitive), that id is recorded and `bucketCreate` is skipped. `bucketCreate` runs only when no matching bucket exists. A same-name **service** is unrelated and is never passed to `bucketS3Credentials`.
 
-`bucketCreate` only creates the project record. Apply then stages and commits an `EnvironmentConfig` patch that attaches the bucket instance (Tigris region `iad` unless a mapped bucket region already exists). After that provision, apply retries `bucketS3Credentials` with backoff until keys exist. Canvas-created buckets already have an instance — create on the canvas, then deploy, and we adopt by name. Credentials are used in memory only.
+`bucketCreate` only creates the project record. Apply then stages and commits an `EnvironmentConfig` patch that attaches the bucket instance (`buckets.{id}.region` + `isCreated`). Unset AppHosts keep `iad`. A requested Tigris code is sent on that patch. After that provision, apply retries `bucketS3Credentials` with backoff until keys exist. Canvas-created buckets already have an instance — create on the canvas, then deploy, and we adopt by name. Adopted instances are not re-patched (region is immutable). Credentials are used in memory only.
 
 Apply also creates an image-less Railway service with the bucket resource name so `${{uploads.ENDPOINT}}` (and related) variables exist for `WithReference`. That service is not a compute target and is not deployed with `serviceInstanceDeployV2`.
 

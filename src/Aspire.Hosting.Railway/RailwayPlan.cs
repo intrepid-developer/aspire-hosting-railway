@@ -274,4 +274,13 @@ public sealed class RailwayPlanManagedService
     /// </summary>
     [JsonPropertyName("volumeBackupScheduleKinds")]
     public List<string>? VolumeBackupScheduleKinds { get; set; }
+
+    /// <summary>
+    /// Gets or sets the managed-service region. Buckets store Tigris
+    /// airport codes (<c>iad</c> / <c>sjc</c> / <c>ams</c> / <c>sin</c>).
+    /// Official Postgres / Redis store compute <c>Region.region</c> ids.
+    /// Omitted when unset. Tokens are never involved.
+    /// </summary>
+    [JsonPropertyName("region")]
+    public string? Region { get; set; }
 }

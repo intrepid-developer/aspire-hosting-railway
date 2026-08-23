@@ -71,7 +71,8 @@ public static class RailwayPlanBuilder
                     Kind = managed.Kind,
                     TemplateCode = managed.TemplateCode,
                     PrivateReferenceVariable = managed.PrivateReferenceVariable,
-                    VolumeBackupScheduleKinds = CopyVolumeBackupScheduleKinds(managed)
+                    VolumeBackupScheduleKinds = CopyVolumeBackupScheduleKinds(managed),
+                    Region = string.IsNullOrWhiteSpace(managed.Region) ? null : managed.Region
                 });
             }
         }
@@ -112,6 +113,7 @@ public static class RailwayPlanBuilder
 
         RailwayServiceComputeSettings.ValidatePlanServices(plan);
         RailwayVolumeBackupSchedule.ValidatePlan(plan);
+        RailwayManagedRegion.ValidatePlan(plan);
         return plan;
     }
 

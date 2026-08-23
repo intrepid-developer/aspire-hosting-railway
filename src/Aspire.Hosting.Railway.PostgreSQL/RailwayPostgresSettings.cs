@@ -28,4 +28,14 @@ public sealed class RailwayPostgresSettings
     /// 3 months.
     /// </summary>
     public bool VolumeBackupMonthly { get; set; }
+
+    /// <summary>
+    /// Gets or sets the official Railway compute region for the Postgres
+    /// template service. Unset omits the field so the template follows
+    /// the project default. Apply sends
+    /// <c>serviceInstanceUpdate.region</c> (not a
+    /// <c>templateDeployV2</c> field). Volume-backed services cannot use
+    /// replicas. Airport / Tigris codes are not compute ids.
+    /// </summary>
+    public RailwayRegion? Region { get; set; }
 }

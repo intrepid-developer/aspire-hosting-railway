@@ -2725,13 +2725,13 @@ public class RailwayGraphQLApplyTests
                     !string.Equals(name, "serviceInstanceUpdate", StringComparison.Ordinal));
     }
 
-    private static void AssertBucketInstancePatch(ScriptedGraphQLHandler handler)
+    private static void AssertBucketInstancePatch(ScriptedGraphQLHandler handler, string expectedRegion = RailwayConstants.DefaultBucketRegion)
     {
         var stage = GraphQLFixtures.GetEnvironmentStageChangesVariables(handler.Bodies);
         Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, stage.GetProperty("environmentId").GetString());
         Assert.True(stage.GetProperty("merge").GetBoolean());
         var stagedBucket = stage.GetProperty("input").GetProperty("buckets").GetProperty(GraphQLFixtures.BucketId);
-        Assert.Equal(RailwayConstants.DefaultBucketRegion, stagedBucket.GetProperty("region").GetString());
+        Assert.Equal(expectedRegion, stagedBucket.GetProperty("region").GetString());
         Assert.True(stagedBucket.GetProperty("isCreated").GetBoolean());
         Assert.False(stagedBucket.TryGetProperty("isDeleted", out _));
         Assert.False(stage.GetProperty("input").TryGetProperty("services", out _));
@@ -2739,7 +2739,7 @@ public class RailwayGraphQLApplyTests
         var commit = GraphQLFixtures.GetEnvironmentPatchCommitVariables(handler.Bodies);
         Assert.Equal(GraphQLFixtures.ProductionEnvironmentId, commit.GetProperty("environmentId").GetString());
         var committedBucket = commit.GetProperty("patch").GetProperty("buckets").GetProperty(GraphQLFixtures.BucketId);
-        Assert.Equal(RailwayConstants.DefaultBucketRegion, committedBucket.GetProperty("region").GetString());
+        Assert.Equal(expectedRegion, committedBucket.GetProperty("region").GetString());
         Assert.True(committedBucket.GetProperty("isCreated").GetBoolean());
         var stageBody = handler.Bodies.Single(body =>
             body.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal) &&

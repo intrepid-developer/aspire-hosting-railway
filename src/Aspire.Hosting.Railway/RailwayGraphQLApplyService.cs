@@ -50,6 +50,7 @@ public sealed class RailwayGraphQLApplyService
 
         RailwayServiceComputeSettings.ValidatePlanServices(plan);
         RailwayVolumeBackupSchedule.ValidatePlan(plan);
+        RailwayManagedRegion.ValidatePlan(plan);
 
         var snapshot = stateManager is not null
             ? await RailwayDeploymentStateStore.LoadAsync(
@@ -171,6 +172,8 @@ public sealed class RailwayGraphQLApplyService
         await PersistAsync().ConfigureAwait(false);
 
         await ApplyManagedTemplatesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
+            .ConfigureAwait(false);
+        await ApplyManagedTemplateRegionsAsync(plan, request, result, reportingStep, persistAsync: PersistAsync, cancellationToken)
             .ConfigureAwait(false);
         await ApplyVolumeBackupSchedulesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
             .ConfigureAwait(false);
@@ -429,14 +432,83 @@ public sealed class RailwayGraphQLApplyService
         }
     }
 
+    private async Task ApplyManagedTemplateRegionsAsync(
+        RailwayPlan plan,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        IReportingStep reportingStep,
+        Func<Task> persistAsync,
+        CancellationToken cancellationToken)
+    {
+        foreach (var managed in plan.ManagedServices)
+        {
+            await ApplyManagedTemplateRegionAsync(
+                plan,
+                request,
+                result,
+                reportingStep,
+                persistAsync,
+                managed,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task ApplyManagedTemplateRegionAsync(
+        RailwayPlan plan,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        IReportingStep reportingStep,
+        Func<Task> persistAsync,
+        RailwayPlanManagedService managed,
+        CancellationToken cancellationToken)
+    {
+        var input = RailwayManagedRegion.CreateTemplateRegionUpdate(managed);
+        if (input is null)
+        {
+            return;
+        }
+
+        var task = await reportingStep.CreateTaskAsync(
+            new MarkdownString($"Set Railway region `{managed.Region}` for **{managed.Name}**"),
+            cancellationToken).ConfigureAwait(false);
+        await using (task.ConfigureAwait(false))
+        {
+            await EnsureManagedServiceIdAsync(plan, request, result, managed, cancellationToken)
+                .ConfigureAwait(false);
+            if (!TryGetManagedServiceId(result, managed, out var serviceId))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot set region '{managed.Region}' for '{managed.Name}': " +
+                    "the official template service id is unknown after template deploy. " +
+                    "project(id) did not list a matching service.");
+            }
+
+            var update = await _client.ServiceInstanceUpdateAsync(
+                serviceId,
+                result.EnvironmentId,
+                input,
+                request.Token,
+                cancellationToken).ConfigureAwait(false);
+            RailwayGraphQLClient.ThrowIfFailed(update, "serviceInstanceUpdate");
+            await persistAsync().ConfigureAwait(false);
+            await task.CompleteAsync(
+                new MarkdownString(
+                    $"Applied `serviceInstanceUpdate.region` `{managed.Region}` for `{managed.Name}` " +
+                    $"(numReplicas 1). Volume-backed templates do not send multiRegionConfig."),
+                CompletionState.Completed,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private async Task ProvisionBucketInstanceAsync(
         string bucketId,
         string bucketName,
+        string? region,
         RailwayApplyRequest request,
         RailwayApplyResult result,
         CancellationToken cancellationToken)
     {
-        var patch = RailwayBucketRegion.CreateInstancePatch(bucketId);
+        var patch = RailwayBucketRegionMapper.CreateInstancePatch(bucketId, region);
         var stage = await _client.EnvironmentStageChangesAsync(
             result.EnvironmentId,
             patch,
@@ -484,6 +556,7 @@ public sealed class RailwayGraphQLApplyService
     private async Task<BucketS3Credentials> WaitForBucketS3CredentialsAsync(
         string bucketId,
         string bucketName,
+        string? region,
         RailwayApplyRequest request,
         RailwayApplyResult result,
         bool retryWhileInstanceMissing,
@@ -508,6 +581,7 @@ public sealed class RailwayGraphQLApplyService
                 await ProvisionBucketInstanceAsync(
                     bucketId,
                     bucketName,
+                    region,
                     request,
                     result,
                     cancellationToken).ConfigureAwait(false);
@@ -614,34 +688,46 @@ public sealed class RailwayGraphQLApplyService
                             $"`{string.Join("`, `", union)}`. Mutation skipped."),
                         CompletionState.Completed,
                         cancellationToken).ConfigureAwait(false);
-                    continue;
                 }
+                else
+                {
+                    var update = await _client.VolumeInstanceBackupScheduleUpdateAsync(
+                        union,
+                        volumeInstanceId,
+                        request.Token,
+                        cancellationToken).ConfigureAwait(false);
+                    RailwayGraphQLClient.ThrowIfFailed(update, "volumeInstanceBackupScheduleUpdate");
 
-                var update = await _client.VolumeInstanceBackupScheduleUpdateAsync(
-                    union,
-                    volumeInstanceId,
-                    request.Token,
-                    cancellationToken).ConfigureAwait(false);
-                RailwayGraphQLClient.ThrowIfFailed(update, "volumeInstanceBackupScheduleUpdate");
+                    var refreshed = await _client.VolumeInstanceBackupScheduleListAsync(
+                        volumeInstanceId,
+                        request.Token,
+                        cancellationToken).ConfigureAwait(false);
+                    RailwayGraphQLClient.ThrowIfFailed(refreshed, "volumeInstanceBackupScheduleList");
+                    PersistScheduleIds(
+                        result,
+                        managed.Name,
+                        refreshed.Data?.VolumeInstanceBackupScheduleList ?? existingSchedules);
+                    await persistAsync().ConfigureAwait(false);
 
-                var refreshed = await _client.VolumeInstanceBackupScheduleListAsync(
-                    volumeInstanceId,
-                    request.Token,
-                    cancellationToken).ConfigureAwait(false);
-                RailwayGraphQLClient.ThrowIfFailed(refreshed, "volumeInstanceBackupScheduleList");
-                PersistScheduleIds(
-                    result,
-                    managed.Name,
-                    refreshed.Data?.VolumeInstanceBackupScheduleList ?? existingSchedules);
-                await persistAsync().ConfigureAwait(false);
-
-                await task.CompleteAsync(
-                    new MarkdownString(
-                        $"Applied volume backup schedule kinds for `{managed.Name}`: " +
-                        $"`{string.Join("`, `", union)}`. Deploy does not wait for a backup to complete."),
-                    CompletionState.Completed,
-                    cancellationToken).ConfigureAwait(false);
+                    await task.CompleteAsync(
+                        new MarkdownString(
+                            $"Applied volume backup schedule kinds for `{managed.Name}`: " +
+                            $"`{string.Join("`, `", union)}`. Deploy does not wait for a backup to complete."),
+                        CompletionState.Completed,
+                        cancellationToken).ConfigureAwait(false);
+                }
             }
+
+            // A later serviceInstanceUpdate that omits region can reset
+            // the template to US West. Re-send after volume work.
+            await ApplyManagedTemplateRegionAsync(
+                plan,
+                request,
+                result,
+                reportingStep,
+                persistAsync,
+                managed,
+                cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -840,6 +926,7 @@ public sealed class RailwayGraphQLApplyService
                     await ProvisionBucketInstanceAsync(
                         bucketId,
                         managed.Name,
+                        managed.Region,
                         request,
                         result,
                         cancellationToken).ConfigureAwait(false);
@@ -853,6 +940,7 @@ public sealed class RailwayGraphQLApplyService
                 var credentials = await WaitForBucketS3CredentialsAsync(
                     bucketId,
                     managed.Name,
+                    managed.Region,
                     request,
                     result,
                     retryWhileInstanceMissing: createdThisApply,

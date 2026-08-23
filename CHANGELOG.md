@@ -2,6 +2,14 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.1-preview.4
+
+- Public AppHost region APIs for buckets and official templates. `AddRailwayBucket` can set `RailwayBucketRegion` (`configure: b => b.Region = …` or `WithRegion`). `PublishAsRailwayPostgres` / `PublishAsRailwayRedis` can set `RailwayRegion` on their settings callbacks.
+- Tigris bucket codes are `iad` / `sjc` / `ams` / `sin` ([CLI bucket](https://docs.railway.com/cli/bucket), 2026-08-23). They are not compute `RailwayRegion` ids. Unset keeps today's default `iad` so existing AppHosts do not silently move. EU AppHosts must set `ams`. Region is immutable after the instance is provisioned (drop + recreate). Adopt-by-name canvas buckets are not re-patched.
+- Official Postgres / Redis still have no confirmed `templateDeployV2` region field. After the template service id exists, apply sends the already-confirmed `serviceInstanceUpdate` with the official compute key (`us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`) and `numReplicas` 1. Volume-backed services do not send `multiRegionConfig`. A later `serviceInstanceUpdate` that omits region can reset the service to US West — volume backup follow-up updates re-send the requested region when one is set.
+- `aspire publish` writes `region` onto the managed-service plan object. Unset is omitted. Tokens stay out. Compute ids on buckets and Tigris codes on Postgres / Redis fail honestly before GraphQL.
+- See [getting started](docs/getting-started.md), [publish and deploy](docs/publish-and-deploy.md), [storage](docs/storage.md), and [GraphQL](docs/graphql.md). Fixes [#45](https://github.com/intrepid-developer/aspire-hosting-railway/issues/45).
+
 ## 13.5.1-preview.3
 
 - `aspire deploy` applies private registry credentials so Railway can pull GHCR (and similar) images. Preview.2 only set `source.image`.

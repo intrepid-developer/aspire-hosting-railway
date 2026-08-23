@@ -164,6 +164,7 @@ internal static class GraphQLFixtures
     public const string StagingEnvironmentId = "env_staging_placeholder";
     public const string ApiServiceId = "svc_api_placeholder";
     public const string PostgresServiceId = "svc_postgres_placeholder";
+    public const string RedisServiceId = "svc_redis_placeholder";
     public const string UploadsServiceId = "svc_uploads_placeholder";
     public const string BucketId = "bucket_placeholder";
     public const string VolumeInstanceId = "volinst_placeholder";
@@ -504,6 +505,23 @@ internal static class GraphQLFixtures
         var body = bodies.Single(item => item.Contains("\"operationName\":\"serviceInstanceUpdate\"", StringComparison.Ordinal));
         using var document = JsonDocument.Parse(body);
         return document.RootElement.GetProperty("variables").GetProperty("input").Clone();
+    }
+
+    public static IReadOnlyList<JsonElement> GetServiceInstanceUpdateVariables(IEnumerable<string> bodies)
+    {
+        var updates = new List<JsonElement>();
+        foreach (var body in bodies)
+        {
+            if (!body.Contains("\"operationName\":\"serviceInstanceUpdate\"", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            using var document = JsonDocument.Parse(body);
+            updates.Add(document.RootElement.GetProperty("variables").Clone());
+        }
+
+        return updates;
     }
 
     public static JsonElement GetServiceInstanceLimitsUpdateInput(IEnumerable<string> bodies)

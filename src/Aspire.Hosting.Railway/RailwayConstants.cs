@@ -62,7 +62,7 @@ public static class RailwayConstants
     /// Official Tigris bucket region codes documented by Railway
     /// (<see href="https://docs.railway.com/cli/bucket"/>).
     /// </summary>
-    public static readonly IReadOnlyList<string> OfficialBucketRegionIds = RailwayBucketRegion.OfficialIds;
+    public static readonly IReadOnlyList<string> OfficialBucketRegionIds = RailwayBucketRegionMapper.OfficialIds;
 
     /// <summary>
     /// Railway private DNS suffix. Host addresses are <c>{service}.railway.internal</c>.

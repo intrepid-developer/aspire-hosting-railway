@@ -10,9 +10,15 @@ var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/p
 var railway = builder.AddRailwayEnvironment("railway")
     .WithContainerRegistry(ghcr);
 
-var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres();
-var cache = builder.AddRedis("redis").PublishAsRailwayRedis();
-var uploads = builder.AddRailwayBucket("uploads");
+var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres(p =>
+{
+    p.Region = RailwayRegion.EuropeWest4;
+});
+var cache = builder.AddRedis("redis").PublishAsRailwayRedis(r =>
+{
+    r.Region = RailwayRegion.EuropeWest4;
+});
+var uploads = builder.AddRailwayBucket("uploads").WithRegion(RailwayBucketRegion.Ams);
 
 builder.AddProject<Projects.Api>("api")
     .WithReplicas(2)
@@ -24,7 +30,7 @@ builder.AddProject<Projects.Api>("api")
     .WithExternalHttpEndpoints()
     .PublishAsRailwayService(s =>
     {
-        s.Region = RailwayRegion.UsWest2;
+        s.Region = RailwayRegion.EuropeWest4;
         s.Cpu = 1;
         s.MemoryGb = 2;
         s.HealthcheckTimeoutSeconds = 120;

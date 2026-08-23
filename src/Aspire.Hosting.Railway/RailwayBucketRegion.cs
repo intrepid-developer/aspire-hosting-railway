@@ -1,61 +1,27 @@
 namespace Aspire.Hosting.Railway;
 
 /// <summary>
-/// Tigris airport codes used for Railway bucket instances. These are not
-/// compute <see cref="RailwayRegion"/> / <c>Region.region</c> ids.
-/// Confirmed on the official EnvironmentConfig schema and
-/// <see href="https://docs.railway.com/cli/bucket"/> (2026-08-23).
+/// Official Tigris airport codes for Railway bucket instances.
+/// These are not compute <see cref="RailwayRegion"/> / <c>Region.region</c> ids.
 /// </summary>
-internal static class RailwayBucketRegion
+/// <remarks>
+/// Members map to the codes documented at
+/// <see href="https://docs.railway.com/cli/bucket"/> (verified 2026-08-23):
+/// <c>iad</c>, <c>sjc</c>, <c>ams</c>, <c>sin</c>. Region is immutable after
+/// the bucket instance is provisioned; changing it means drop + recreate.
+/// Unset AppHosts keep today's default (<see cref="Iad"/>).
+/// </remarks>
+public enum RailwayBucketRegion
 {
-    internal const string Iad = "iad";
-    internal const string Sjc = "sjc";
-    internal const string Ams = "ams";
-    internal const string Sin = "sin";
+    /// <summary>US East, Virginia — Tigris <c>iad</c>. Default when unset.</summary>
+    Iad,
 
-    internal static readonly IReadOnlyList<string> OfficialIds = [Iad, Sjc, Ams, Sin];
+    /// <summary>US West, California — Tigris <c>sjc</c>.</summary>
+    Sjc,
 
-    /// <summary>
-    /// Returns a confirmed Tigris region. Defaults to <see cref="Iad"/>
-    /// when <paramref name="region"/> is unset. Rejects compute-region
-    /// strings and unknown codes.
-    /// </summary>
-    internal static string Resolve(string? region)
-    {
-        if (string.IsNullOrWhiteSpace(region))
-        {
-            return Iad;
-        }
+    /// <summary>EU West, Amsterdam — Tigris <c>ams</c>.</summary>
+    Ams,
 
-        if (OfficialIds.Contains(region, StringComparer.Ordinal))
-        {
-            return region;
-        }
-
-        throw new InvalidOperationException(
-            $"Railway bucket region '{region}' is not a Tigris airport code. " +
-            $"Use {string.Join(", ", OfficialIds)}. " +
-            "Do not send compute Region.region ids such as us-east4-eqdc4a.");
-    }
-
-    /// <summary>
-    /// Builds the confirmed <c>EnvironmentConfig.buckets</c> patch used to
-    /// provision a bucket instance after <c>bucketCreate</c>.
-    /// </summary>
-    internal static EnvironmentConfigInput CreateInstancePatch(string bucketId, string? region = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(bucketId);
-
-        return new EnvironmentConfigInput
-        {
-            Buckets = new Dictionary<string, EnvironmentConfigBucket>(StringComparer.Ordinal)
-            {
-                [bucketId] = new EnvironmentConfigBucket
-                {
-                    Region = Resolve(region),
-                    IsCreated = true
-                }
-            }
-        };
-    }
+    /// <summary>Asia Pacific, Singapore — Tigris <c>sin</c>.</summary>
+    Sin
 }

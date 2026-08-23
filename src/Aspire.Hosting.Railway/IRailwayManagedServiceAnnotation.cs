@@ -35,4 +35,13 @@ public interface IRailwayManagedServiceAnnotation : IResourceAnnotation
     /// reads this without referencing the PostgreSQL hosting package.
     /// </summary>
     public IReadOnlyList<string>? VolumeBackupScheduleKinds { get; }
+
+    /// <summary>
+    /// Gets the plan / GraphQL region string when set. Buckets use Tigris
+    /// airport codes (<c>iad</c> / <c>sjc</c> / <c>ams</c> / <c>sin</c>).
+    /// Official Postgres / Redis templates use compute
+    /// <c>Region.region</c> ids. Null omits the field. Core apply reads
+    /// this without referencing satellite hosting packages.
+    /// </summary>
+    public string? Region { get; }
 }

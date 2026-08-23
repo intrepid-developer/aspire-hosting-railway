@@ -29,7 +29,7 @@ The plan is not unconditionally secret-safe. `WithEnvironment("API_KEY", value)`
 
 Host addresses are host-only: `{service}.railway.internal` (lowercase). Endpoints and secrets are never concatenated into strings before Aspire resolves them.
 
-Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `templateId` and `serializedConfig` (never empty, never invented template UUIDs). Apply polls `workflowStatus` and fails if `workflowId` is missing.
+Official DBs are created via `template(code: "postgres"|"redis")` then `templateDeployV2` with the fetched `templateId` and `serializedConfig` (never empty, never invented template UUIDs). Apply polls `workflowStatus` and fails if `workflowId` is missing. `TemplateDeployV2Input` has no confirmed region field. After the template service id exists, a requested `RailwayRegion` is applied with `serviceInstanceUpdate` (`region` + `numReplicas` 1). Volume-backed services cannot use replicas / `multiRegionConfig`. Later updates (volume backup schedules) re-send that region so an omitted field does not reset the service to US West.
 
 ## Adopt existing
 
@@ -42,7 +42,7 @@ builder.AddRailwayEnvironment("railway").AsExisting();
 
 On adopt, and on later applies against an existing project id, apply lists project services and buckets by name (case-insensitive: `Postgres` / `postgres`, `api`). Matching services skip template deploy and service create; apply continues with instance update, variable upsert, and deploy.
 
-Planned buckets match `project.buckets` by display name. A match records the bucket id and skips create. A same-name service is not a bucket. After a real create, apply stages and commits the environment patch that provisions the instance (Tigris region `iad` by default), then retries credentials until keys exist. Canvas-created buckets already have an instance. Local state stores bucket **ids** (not S3 secrets); CI without that file adopts by name.
+Planned buckets match `project.buckets` by display name. A match records the bucket id and skips create. A same-name service is not a bucket. After a real create, apply stages and commits the environment patch that provisions the instance (Tigris `RailwayBucketRegion`; unset keeps `iad`), then retries credentials until keys exist. Canvas-created buckets already have an instance and are not re-patched (region is immutable). Local state stores bucket **ids** (not S3 secrets); CI without that file adopts by name.
 
 Re-deploy does not create a second project.
 
@@ -200,7 +200,28 @@ Gotchas:
 - Overlap/drain is in-deploy cutover, not `aspire destroy`. See [deployment teardown](https://docs.railway.com/guides/deployment-teardown).
 - Cron: five-field UTC, 5-minute floor, service must exit. No replicas greater than 1 or `Serverless`. See [cron jobs](https://docs.railway.com/cron-jobs).
 - Custom domains need `WithExternalHttpEndpoints()`. Deploy prints DNS + TXT. Missing TXT is 404 even if CNAME resolves. This integration does not talk to your DNS provider. See [working with domains](https://docs.railway.com/networking/domains/working-with-domains).
-- Postgres / Redis / buckets do not get service knobs. Replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference).
+- Postgres / Redis / buckets do not get service knobs except official compute `Region` on the template settings callback (see below). Replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference).
+
+## Managed regions
+
+Compute `RailwayRegion` and Tigris `RailwayBucketRegion` are different closed types. Do not mix them.
+
+```csharp
+builder.AddPostgres("postgres").PublishAsRailwayPostgres(p =>
+{
+    p.Region = RailwayRegion.EuropeWest4;
+    p.VolumeBackupDaily = true;
+});
+builder.AddRedis("redis").PublishAsRailwayRedis(r => r.Region = RailwayRegion.EuropeWest4);
+builder.AddRailwayBucket("uploads").WithRegion(RailwayBucketRegion.Ams);
+```
+
+| AppHost | Plan | Apply |
+| --- | --- | --- |
+| `PublishAsRailwayPostgres` / `Redis` `Region` | Official `Region.region` string | `serviceInstanceUpdate.region` + `numReplicas` 1 after the template service id exists. Re-sent after volume backup updates. Unset = project default (often US). |
+| `AddRailwayBucket` `Region` / `WithRegion` | Tigris airport code | `EnvironmentConfig.buckets.{id}.region` after `bucketCreate`. Unset = `iad`. Adopted canvas instances are not re-patched. |
+
+Airport codes on Postgres / Redis and compute ids on buckets fail before GraphQL. Bucket region cannot be changed after create (drop + recreate).
 
 Confirmed operation names and omit/`null` rules live in [GraphQL](graphql.md).
 

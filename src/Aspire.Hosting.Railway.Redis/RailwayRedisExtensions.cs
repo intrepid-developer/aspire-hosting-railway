@@ -27,17 +27,41 @@ public static class RailwayRedisExtensions
     /// <param name="builder">The official Redis resource.</param>
     /// <returns>The same resource builder.</returns>
     public static IResourceBuilder<RedisResource> PublishAsRailwayRedis(
-        this IResourceBuilder<RedisResource> builder)
+        this IResourceBuilder<RedisResource> builder) =>
+        PublishAsRailwayRedis(builder, configure: null);
+
+    /// <summary>
+    /// Marks a Redis resource so deploy uses the Railway Redis template,
+    /// optionally requesting a compute region. Local <c>aspire run</c>
+    /// is unchanged.
+    /// </summary>
+    /// <param name="builder">The official Redis resource.</param>
+    /// <param name="configure">
+    /// Optional Railway-specific settings. Set
+    /// <see cref="RailwayRedisSettings.Region"/> for a compute
+    /// <see cref="RailwayRegion"/>. Unset omits the field so the
+    /// template follows the project default.
+    /// </param>
+    /// <returns>The same resource builder.</returns>
+    public static IResourceBuilder<RedisResource> PublishAsRailwayRedis(
+        this IResourceBuilder<RedisResource> builder,
+        Action<RailwayRedisSettings>? configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.ApplicationBuilder.AddRailwayInfrastructureCore();
 
+        var settings = new RailwayRedisSettings();
+        configure?.Invoke(settings);
+
         builder.WithAnnotation(new RailwayManagedServiceAnnotation(
             kind: TemplateCode,
             serviceName: builder.Resource.Name,
             templateCode: TemplateCode,
-            privateReferenceVariable: PrivateReferenceVariable));
+            privateReferenceVariable: PrivateReferenceVariable,
+            region: settings.Region is { } region
+                ? RailwayRegionMapper.ToRegionId(region)
+                : null));
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
