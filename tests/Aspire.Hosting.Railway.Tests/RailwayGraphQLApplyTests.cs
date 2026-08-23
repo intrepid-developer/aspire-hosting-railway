@@ -47,6 +47,35 @@ public class RailwayGraphQLApplyTests
     }
 
     [Fact]
+    public async Task Apply_Compute_OneDeployV2AfterSettingsUpdate()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
+        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        await GraphQLFixtures.CreateApplyService(handler).ApplyAsync(
+            GraphQLFixtures.CreatePlan(),
+            GraphQLFixtures.CreateRequest(),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        Assert.Equal(1, handler.Count("serviceInstanceDeployV2"));
+        Assert.Equal(1, handler.Count("serviceCreate"));
+        var updateIndex = handler.Operations.IndexOf("serviceInstanceUpdate");
+        var deployIndex = handler.Operations.IndexOf("serviceInstanceDeployV2");
+        var registryCommitIndex = handler.Operations.IndexOf("environmentPatchCommit");
+        Assert.True(registryCommitIndex < updateIndex);
+        Assert.True(updateIndex < deployIndex);
+        Assert.Equal(deployIndex, handler.Operations.LastIndexOf("serviceInstanceDeployV2"));
+    }
+
+    [Fact]
     public async Task Apply_AdoptsExistingPostgresService_SkipsTemplateDeployV2()
     {
         var handler = new ScriptedGraphQLHandler();

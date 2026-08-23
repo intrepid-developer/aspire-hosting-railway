@@ -50,6 +50,72 @@ internal static class RailwayManagedRegion
     /// </summary>
     internal static ServiceInstanceUpdateInput? CreateTemplateRegionUpdate(RailwayPlanManagedService managed)
     {
+        var region = TryOfficialTemplateRegion(managed);
+        if (region is null)
+        {
+            return null;
+        }
+
+        return new ServiceInstanceUpdateInput
+        {
+            Region = region,
+            NumReplicas = 1
+        };
+    }
+
+    /// <summary>
+    /// Copies the official template region onto an existing
+    /// <c>serviceInstanceUpdate</c> input so a later update cannot omit
+    /// <c>region</c> and reset the service to US West. No-op when unset.
+    /// Still does not send <c>multiRegionConfig</c>.
+    /// </summary>
+    internal static void IncludeOnUpdate(ServiceInstanceUpdateInput input, RailwayPlanManagedService managed)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var region = TryOfficialTemplateRegion(managed);
+        if (region is null)
+        {
+            return;
+        }
+
+        input.Region = region;
+        input.NumReplicas = 1;
+    }
+
+    /// <summary>
+    /// Standalone region <c>serviceInstanceUpdate</c> is for first-time
+    /// template create (or the first apply that has not yet recorded the
+    /// requested region). A safety re-send is skipped when the same
+    /// official region was already applied and no other
+    /// <c>serviceInstanceUpdate</c> is happening. Never twice in one apply.
+    /// </summary>
+    internal static bool ShouldSendStandaloneRegion(
+        RailwayPlanManagedService managed,
+        IReadOnlyDictionary<string, string> appliedRegions,
+        ISet<string> regionUpdatesThisApply)
+    {
+        ArgumentNullException.ThrowIfNull(managed);
+        ArgumentNullException.ThrowIfNull(appliedRegions);
+        ArgumentNullException.ThrowIfNull(regionUpdatesThisApply);
+
+        var region = TryOfficialTemplateRegion(managed);
+        if (region is null)
+        {
+            return false;
+        }
+
+        if (regionUpdatesThisApply.Contains(managed.Name))
+        {
+            return false;
+        }
+
+        return !appliedRegions.TryGetValue(managed.Name, out var applied) ||
+               !string.Equals(applied, region, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? TryOfficialTemplateRegion(RailwayPlanManagedService managed)
+    {
         ArgumentNullException.ThrowIfNull(managed);
 
         if (string.IsNullOrWhiteSpace(managed.TemplateCode) ||
@@ -58,11 +124,6 @@ internal static class RailwayManagedRegion
             return null;
         }
 
-        var region = RailwayRegionMapper.RequireOfficialRegionId(managed.Name, managed.Region);
-        return new ServiceInstanceUpdateInput
-        {
-            Region = region,
-            NumReplicas = 1
-        };
+        return RailwayRegionMapper.RequireOfficialRegionId(managed.Name, managed.Region);
     }
 }

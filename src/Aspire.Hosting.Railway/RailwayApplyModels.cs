@@ -122,6 +122,14 @@ public sealed class RailwayApplyResult
     /// <summary>Gets template codes that were applied (or already present) in this environment.</summary>
     public List<string> AppliedTemplateCodes { get; init; } = [];
 
+    /// <summary>
+    /// Gets official compute region ids last applied for managed
+    /// templates, keyed by service name. Flatten-safe objects only —
+    /// not a second ledger of secrets.
+    /// </summary>
+    public Dictionary<string, string> AppliedManagedRegions { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Gets warning messages that were reported without failing the apply.</summary>
     public List<string> Warnings { get; init; } = [];
 
@@ -224,9 +232,11 @@ internal sealed class RailwayDeploymentSnapshot
     public Dictionary<string, string> VolumeInstanceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> VolumeBackupScheduleIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> TemplateCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> ManagedRegions { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ProductionServiceIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ProductionBucketIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> ProductionTemplateCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> ProductionManagedRegions { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -244,6 +254,7 @@ internal static class RailwayDeploymentStateStore
     internal const string VolumeInstancesKey = "VolumeInstances";
     internal const string VolumeBackupSchedulesKey = "VolumeBackupSchedules";
     internal const string TemplatesKey = "Templates";
+    internal const string ManagedRegionsKey = "ManagedRegions";
     internal const string CreatedProjectKey = "CreatedProject";
     internal const string CreatedEnvironmentsKey = "CreatedEnvironments";
     internal const string CreatedServicesKey = "CreatedServices";
@@ -306,6 +317,10 @@ internal static class RailwayDeploymentStateStore
         CopyTemplateCodes(templatesRoot?["production"], snapshot.ProductionTemplateCodes);
         CopyTemplateCodes(section.Data[AppliedTemplateCodesKey], snapshot.TemplateCodes);
 
+        var managedRegionsRoot = section.Data[ManagedRegionsKey] as JsonObject;
+        CopyStringMap(managedRegionsRoot?[railwayEnvironmentName] as JsonObject, snapshot.ManagedRegions);
+        CopyStringMap(managedRegionsRoot?["production"] as JsonObject, snapshot.ProductionManagedRegions);
+
         var createdEnvironments = section.Data[CreatedEnvironmentsKey] as JsonObject;
         snapshot.CreatedEnvironment = ReadScopedBool(createdEnvironments, railwayEnvironmentName);
 
@@ -345,6 +360,7 @@ internal static class RailwayDeploymentStateStore
         WriteScopedMap(section.Data, CreatedServicesKey, railwayEnvironmentName, result.CreatedServiceIds);
         WriteScopedMap(section.Data, CreatedCustomDomainsKey, railwayEnvironmentName, result.CreatedCustomDomainIds);
         WriteScopedMap(section.Data, CreatedServiceDomainsKey, railwayEnvironmentName, result.CreatedServiceDomainIds);
+        WriteScopedMap(section.Data, ManagedRegionsKey, railwayEnvironmentName, result.AppliedManagedRegions);
 
         var existingCreatedProject = ReadBool(section.Data, CreatedProjectKey);
         section.Data[CreatedProjectKey] = JsonValue.Create(result.CreatedProject || existingCreatedProject == true);
@@ -392,6 +408,7 @@ internal static class RailwayDeploymentStateStore
         RemoveScoped(section.Data, VolumeInstancesKey, railwayEnvironmentName);
         RemoveScoped(section.Data, VolumeBackupSchedulesKey, railwayEnvironmentName);
         RemoveScoped(section.Data, TemplatesKey, railwayEnvironmentName);
+        RemoveScoped(section.Data, ManagedRegionsKey, railwayEnvironmentName);
         RemoveScoped(section.Data, CreatedServicesKey, railwayEnvironmentName);
         RemoveScoped(section.Data, CreatedCustomDomainsKey, railwayEnvironmentName);
         RemoveScoped(section.Data, CreatedServiceDomainsKey, railwayEnvironmentName);

@@ -219,7 +219,7 @@ public sealed class RailwayManagedRegionTests
         var plan = GraphQLFixtures.CreatePlan(adoptExisting: true, includeApi: false, includePostgres: true);
         plan.ManagedServices[0].Region = "europe-west4-drams3a";
 
-        await GraphQLFixtures.CreateApplyService(handler).ApplyAsync(
+        var result = await GraphQLFixtures.CreateApplyService(handler).ApplyAsync(
             plan,
             GraphQLFixtures.CreateRequest(
                 includeApiImage: false,
@@ -228,6 +228,7 @@ public sealed class RailwayManagedRegionTests
             new RecordingReportingStep(),
             new MemoryDeploymentStateManager());
 
+        Assert.Equal("europe-west4-drams3a", result.AppliedManagedRegions["postgres"]);
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
         var update = Assert.Single(GraphQLFixtures.GetServiceInstanceUpdateVariables(handler.Bodies));
         Assert.Equal(GraphQLFixtures.PostgresServiceId, update.GetProperty("serviceId").GetString());
@@ -277,7 +278,7 @@ public sealed class RailwayManagedRegionTests
     }
 
     [Fact]
-    public async Task Apply_PostgresRegion_IsResentAfterVolumeBackupUpdate()
+    public async Task Apply_PostgresRegion_AndVolumeBackup_SingleServiceInstanceUpdate()
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
@@ -294,7 +295,6 @@ public sealed class RailwayManagedRegionTests
             GraphQLFixtures.VolumeInstanceBackupScheduleList(
                 (GraphQLFixtures.DailyScheduleId, "DAILY"),
                 (GraphQLFixtures.WeeklyScheduleId, "WEEKLY")));
-        handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
 
         var plan = GraphQLFixtures.CreatePlan(adoptExisting: true, includeApi: false, includePostgres: true);
@@ -311,22 +311,124 @@ public sealed class RailwayManagedRegionTests
             new MemoryDeploymentStateManager());
 
         Assert.Equal(1, handler.Count("volumeInstanceBackupScheduleUpdate"));
-        Assert.Equal(2, handler.Count("serviceInstanceUpdate"));
-        var updates = GraphQLFixtures.GetServiceInstanceUpdateVariables(handler.Bodies);
-        Assert.Equal(2, updates.Count);
-        foreach (var update in updates)
-        {
-            Assert.Equal(GraphQLFixtures.PostgresServiceId, update.GetProperty("serviceId").GetString());
-            Assert.Equal("europe-west4-drams3a", update.GetProperty("input").GetProperty("region").GetString());
-            Assert.Equal(1, update.GetProperty("input").GetProperty("numReplicas").GetInt32());
-            Assert.False(update.GetProperty("input").TryGetProperty("multiRegionConfig", out _));
-        }
+        Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
+        var update = Assert.Single(GraphQLFixtures.GetServiceInstanceUpdateVariables(handler.Bodies));
+        Assert.Equal(GraphQLFixtures.PostgresServiceId, update.GetProperty("serviceId").GetString());
+        Assert.Equal("europe-west4-drams3a", update.GetProperty("input").GetProperty("region").GetString());
+        Assert.Equal(1, update.GetProperty("input").GetProperty("numReplicas").GetInt32());
+        Assert.False(update.GetProperty("input").TryGetProperty("multiRegionConfig", out _));
 
         var regionIndex = handler.Operations.IndexOf("serviceInstanceUpdate");
         var backupIndex = handler.Operations.IndexOf("volumeInstanceBackupScheduleUpdate");
-        var resentIndex = handler.Operations.LastIndexOf("serviceInstanceUpdate");
         Assert.True(regionIndex < backupIndex);
-        Assert.True(backupIndex < resentIndex);
+        Assert.Equal(regionIndex, handler.Operations.LastIndexOf("serviceInstanceUpdate"));
+    }
+
+    [Fact]
+    public async Task Apply_PostgresRegion_SubsequentApply_DoesNotResendRegionOnly()
+    {
+        var firstHandler = new ScriptedGraphQLHandler();
+        firstHandler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
+        firstHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
+        firstHandler.Enqueue(
+            "environment",
+            GraphQLFixtures.EnvironmentVolumeInstances((GraphQLFixtures.VolumeInstanceId, GraphQLFixtures.PostgresServiceId)));
+        firstHandler.Enqueue(
+            "volumeInstanceBackupScheduleList",
+            GraphQLFixtures.VolumeInstanceBackupScheduleList((GraphQLFixtures.DailyScheduleId, "DAILY")));
+        firstHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var plan = GraphQLFixtures.CreatePlan(adoptExisting: true, includeApi: false, includePostgres: true);
+        plan.ManagedServices[0].Region = "europe-west4-drams3a";
+        plan.ManagedServices[0].VolumeBackupScheduleKinds = ["DAILY"];
+        var state = new MemoryDeploymentStateManager();
+        var request = GraphQLFixtures.CreateRequest(
+            includeApiImage: false,
+            adoptedProjectId: GraphQLFixtures.ProjectId,
+            adoptedEnvironmentId: GraphQLFixtures.ProductionEnvironmentId);
+
+        await GraphQLFixtures.CreateApplyService(firstHandler).ApplyAsync(
+            plan,
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(1, firstHandler.Count("serviceInstanceUpdate"));
+
+        var secondHandler = new ScriptedGraphQLHandler();
+        secondHandler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
+        secondHandler.Enqueue(
+            "environment",
+            GraphQLFixtures.EnvironmentVolumeInstances((GraphQLFixtures.VolumeInstanceId, GraphQLFixtures.PostgresServiceId)));
+        secondHandler.Enqueue(
+            "volumeInstanceBackupScheduleList",
+            GraphQLFixtures.VolumeInstanceBackupScheduleList((GraphQLFixtures.DailyScheduleId, "DAILY")));
+        secondHandler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        await GraphQLFixtures.CreateApplyService(secondHandler).ApplyAsync(
+            plan,
+            request,
+            new RecordingReportingStep(),
+            state);
+
+        Assert.Equal(0, secondHandler.Count("serviceInstanceUpdate"));
+        Assert.Equal(0, secondHandler.Count("volumeInstanceBackupScheduleUpdate"));
+        Assert.Equal(1, secondHandler.Count("volumeInstanceBackupScheduleList"));
+    }
+
+    [Fact]
+    public void IncludeOnUpdate_WhenLaterServiceInstanceUpdateExists_ReincludesRegion()
+    {
+        var managed = new RailwayPlanManagedService
+        {
+            Name = "postgres",
+            Kind = "postgres",
+            TemplateCode = "postgres",
+            Region = "europe-west4-drams3a"
+        };
+        var input = new ServiceInstanceUpdateInput();
+
+        RailwayManagedRegion.IncludeOnUpdate(input, managed);
+
+        Assert.Equal("europe-west4-drams3a", input.Region);
+        Assert.Equal(1, input.NumReplicas);
+        Assert.Null(input.MultiRegionConfig);
+        Assert.Null(input.Source);
+    }
+
+    [Fact]
+    public void ShouldSendStandaloneRegion_SkipsWhenAlreadyAppliedThisApply()
+    {
+        var managed = new RailwayPlanManagedService
+        {
+            Name = "postgres",
+            Kind = "postgres",
+            TemplateCode = "postgres",
+            Region = "europe-west4-drams3a"
+        };
+
+        Assert.False(RailwayManagedRegion.ShouldSendStandaloneRegion(
+            managed,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "postgres" }));
+        Assert.False(RailwayManagedRegion.ShouldSendStandaloneRegion(
+            managed,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["postgres"] = "europe-west4-drams3a"
+            },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
+        Assert.True(RailwayManagedRegion.ShouldSendStandaloneRegion(
+            managed,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
+        Assert.True(RailwayManagedRegion.ShouldSendStandaloneRegion(
+            managed,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["postgres"] = "us-west2"
+            },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
     }
 
     [Fact]

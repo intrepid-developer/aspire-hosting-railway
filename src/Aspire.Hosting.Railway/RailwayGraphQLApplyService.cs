@@ -137,6 +137,11 @@ public sealed class RailwayGraphQLApplyService
             result.CreatedServiceDomainIds[pair.Key] = pair.Value;
         }
 
+        foreach (var pair in snapshot.ManagedRegions)
+        {
+            result.AppliedManagedRegions[pair.Key] = pair.Value;
+        }
+
         result.AppliedTemplateCodes.AddRange(snapshot.TemplateCodes);
 
         if (duplicatedProduction)
@@ -173,10 +178,17 @@ public sealed class RailwayGraphQLApplyService
 
         await PersistAsync().ConfigureAwait(false);
 
+        var regionUpdatesThisApply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         await ApplyManagedTemplatesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
             .ConfigureAwait(false);
-        await ApplyManagedTemplateRegionsAsync(plan, request, result, reportingStep, persistAsync: PersistAsync, cancellationToken)
-            .ConfigureAwait(false);
+        await ApplyManagedTemplateRegionsAsync(
+            plan,
+            request,
+            result,
+            reportingStep,
+            persistAsync: PersistAsync,
+            regionUpdatesThisApply,
+            cancellationToken).ConfigureAwait(false);
         await ApplyVolumeBackupSchedulesAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
             .ConfigureAwait(false);
         await ApplyBucketsAsync(plan, request, result, reportingStep, PersistAsync, cancellationToken)
@@ -440,6 +452,7 @@ public sealed class RailwayGraphQLApplyService
         RailwayApplyResult result,
         IReportingStep reportingStep,
         Func<Task> persistAsync,
+        HashSet<string> regionUpdatesThisApply,
         CancellationToken cancellationToken)
     {
         foreach (var managed in plan.ManagedServices)
@@ -451,6 +464,7 @@ public sealed class RailwayGraphQLApplyService
                 reportingStep,
                 persistAsync,
                 managed,
+                regionUpdatesThisApply,
                 cancellationToken).ConfigureAwait(false);
         }
     }
@@ -462,8 +476,17 @@ public sealed class RailwayGraphQLApplyService
         IReportingStep reportingStep,
         Func<Task> persistAsync,
         RailwayPlanManagedService managed,
+        HashSet<string> regionUpdatesThisApply,
         CancellationToken cancellationToken)
     {
+        if (!RailwayManagedRegion.ShouldSendStandaloneRegion(
+                managed,
+                result.AppliedManagedRegions,
+                regionUpdatesThisApply))
+        {
+            return;
+        }
+
         var input = RailwayManagedRegion.CreateTemplateRegionUpdate(managed);
         if (input is null)
         {
@@ -492,6 +515,7 @@ public sealed class RailwayGraphQLApplyService
                 request.Token,
                 cancellationToken).ConfigureAwait(false);
             RailwayGraphQLClient.ThrowIfFailed(update, "serviceInstanceUpdate");
+            RecordManagedRegionApplied(result, managed, regionUpdatesThisApply);
             await persistAsync().ConfigureAwait(false);
             await task.CompleteAsync(
                 new MarkdownString(
@@ -720,17 +744,29 @@ public sealed class RailwayGraphQLApplyService
                 }
             }
 
-            // A later serviceInstanceUpdate that omits region can reset
-            // the template to US West. Re-send after volume work.
-            await ApplyManagedTemplateRegionAsync(
-                plan,
-                request,
-                result,
-                reportingStep,
-                persistAsync,
-                managed,
-                cancellationToken).ConfigureAwait(false);
+            // volumeInstanceBackupScheduleUpdate is not a
+            // serviceInstanceUpdate. Do not send a second region
+            // serviceInstanceUpdate in this apply — the standalone
+            // region pass already ran once, or was skipped because
+            // the requested region is already recorded. A later
+            // serviceInstanceUpdate must call IncludeOnUpdate so
+            // omitting region cannot reset US West.
         }
+    }
+
+    private static void RecordManagedRegionApplied(
+        RailwayApplyResult result,
+        RailwayPlanManagedService managed,
+        HashSet<string> regionUpdatesThisApply)
+    {
+        var input = RailwayManagedRegion.CreateTemplateRegionUpdate(managed);
+        if (input?.Region is null)
+        {
+            return;
+        }
+
+        result.AppliedManagedRegions[managed.Name] = input.Region;
+        regionUpdatesThisApply.Add(managed.Name);
     }
 
     private async Task EnsureManagedServiceIdAsync(
@@ -1110,6 +1146,11 @@ public sealed class RailwayGraphQLApplyService
                         cancellationToken).ConfigureAwait(false);
                 }
 
+                // Official Railway docs and staff: serviceInstanceUpdate
+                // is settings (including source.image). It does not
+                // deploy. serviceInstanceDeployV2 is the one canvas
+                // deploy. Do not call DeployV2 a second time. Registry
+                // credentials stay an EnvironmentConfig patch.
                 var deploy = await _client.ServiceInstanceDeployV2Async(
                     serviceId,
                     result.EnvironmentId,
@@ -1566,6 +1607,11 @@ public sealed class RailwayGraphQLApplyService
             {
                 result.AppliedTemplateCodes.Add(code);
             }
+        }
+
+        foreach (var pair in snapshot.ProductionManagedRegions)
+        {
+            result.AppliedManagedRegions.TryAdd(pair.Key, pair.Value);
         }
     }
 

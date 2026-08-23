@@ -2,6 +2,13 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.2-preview.2
+
+- One `aspire deploy` creates at most one Railway canvas deployment per resource after the unavoidable official-template create. First-time Postgres / Redis is still `templateDeployV2` (no confirmed region field) then **one** `serviceInstanceUpdate` (`region` + `numReplicas` 1). Volume backup stays on `volumeInstanceBackupScheduleUpdate` and no longer sends a second region update in the same apply.
+- Subsequent applies skip a region-only `serviceInstanceUpdate` when that official region is already recorded. If a later `serviceInstanceUpdate` exists, include region on it so omitting the field cannot reset the template to US West. Never call the standalone region helper twice for the same managed service in one apply.
+- Compute apply keeps image + settings on `serviceInstanceUpdate`, then `serviceInstanceDeployV2` once. Official Railway docs treat Update as settings-only; DeployV2 is the deploy. Registry credentials stay an `EnvironmentConfig` patch.
+- See [publish and deploy](docs/publish-and-deploy.md) and [GraphQL](docs/graphql.md).
+
 ## 13.5.2-preview.1
 
 - Retarget to Aspire.Hosting 13.5.2.

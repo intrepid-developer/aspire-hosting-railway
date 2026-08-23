@@ -61,6 +61,33 @@ public class RailwayDeploymentStateStoreTests
     }
 
     [Fact]
+    public async Task Save_ThenFlattenUnflatten_KeepsManagedRegions()
+    {
+        var state = new MemoryDeploymentStateManager();
+        var result = CreateResult(templateCodes: ["postgres"]);
+        result.AppliedManagedRegions["postgres"] = "europe-west4-drams3a";
+        await RailwayDeploymentStateStore.SaveAsync(
+            state,
+            "railway",
+            "production",
+            result,
+            CancellationToken.None);
+
+        await FlattenUnflattenSectionAsync(state, "Railway:railway");
+
+        var snapshot = await RailwayDeploymentStateStore.LoadAsync(
+            state,
+            "railway",
+            "production",
+            CancellationToken.None);
+
+        Assert.Equal("europe-west4-drams3a", snapshot.ManagedRegions["postgres"]);
+        var section = await state.AcquireSectionAsync("Railway:railway");
+        Assert.IsType<JsonObject>(section.Data[RailwayDeploymentStateStore.ManagedRegionsKey]?["production"]);
+        Assert.IsNotType<JsonArray>(section.Data[RailwayDeploymentStateStore.ManagedRegionsKey]?["production"]);
+    }
+
+    [Fact]
     public async Task Load_MigratesLegacyAppliedTemplateCodesString()
     {
         var state = new MemoryDeploymentStateManager();

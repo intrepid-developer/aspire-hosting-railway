@@ -100,7 +100,8 @@ public static class RailwayGraphQLOperations
     /// <c>numReplicas</c> and <c>multiRegionConfig</c> together. Official
     /// Postgres / Redis templates send <c>region</c> plus
     /// <c>numReplicas</c> 1 when a compute region is set; they do not
-    /// send <c>multiRegionConfig</c>. Omit unset
+    /// send <c>multiRegionConfig</c>. At most one region update per
+    /// apply after <c>templateDeployV2</c>. Omit unset
     /// healthcheck, restart-policy, start-command, pre-deploy, teardown,
     /// and cron fields; do not send <c>null</c>. ServiceInstance has no
     /// <c>multiRegionConfig</c> read field. Do not send
