@@ -84,6 +84,7 @@ public sealed class RailwayRegionTests
         Assert.Equal("iad", bucket.Value.Region);
         Assert.True(bucket.Value.IsCreated);
         Assert.Null(bucket.Value.IsDeleted);
+        Assert.Null(patch.Services);
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => RailwayBucketRegion.Resolve("us-east4-eqdc4a"));

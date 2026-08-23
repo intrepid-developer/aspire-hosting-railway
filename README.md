@@ -7,7 +7,7 @@ Aspire 13.5 hosting so `aspire publish`, `aspire deploy`, and `aspire destroy` c
 
 ## Status
 
-Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.1-preview.2** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.1** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.1-preview.3** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.1** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -28,7 +28,11 @@ using Aspire.Hosting.Railway;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
+var ghcrUsername = builder.AddParameter("ghcr-username");
+var ghcrPassword = builder.AddParameter("ghcr-password", secret: true);
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground")
+    .WithUsername(ghcrUsername)
+    .WithPassword(ghcrPassword);
 var railway = builder.AddRailwayEnvironment("railway")
     .WithContainerRegistry(ghcr);
 
@@ -87,16 +91,16 @@ dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.1-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.1-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.1-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.1-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.1-preview.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.1-preview.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.1-preview.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.1-preview.3" />
 ```
 
 API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.1-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.1-preview.3" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.1" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.1" />
 ```
@@ -127,7 +131,7 @@ Local `aspire run` needs no token.
 
 ## Limits
 
-- Railway has **no image registry**. Push to GHCR or Docker Hub, then deploy sets `source.image`.
+- Railway has **no image registry**. Push to GHCR or Docker Hub, then deploy sets `source.image`. Private GHCR pulls need `WithUsername` / `WithPassword` parameter refs (Railway **Pro plan**).
 - This integration does not shell out to `railway up`. Railpack has no .NET support; use an image or a Dockerfile.
 - `aspire destroy` tears down resources this integration created in the mapped Railway environment (`production` / `staging`). Adopted resources (`AsExisting()`, `railway-project-id` / `railway-environment-id`, or a live name match) are skipped. The Railway project is not deleted. Buckets are skipped — public GraphQL has no `bucketDelete`. This is not in-deploy overlap/drain.
 - PR / ephemeral Railway environments are not in this release.

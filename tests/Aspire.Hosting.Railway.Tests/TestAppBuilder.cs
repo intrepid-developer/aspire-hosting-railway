@@ -47,4 +47,19 @@ internal static class TestAppBuilder
 
     public static DistributedApplicationModel GetModel(DistributedApplication app) =>
         app.Services.GetRequiredService<DistributedApplicationModel>();
+
+    /// <summary>
+    /// Adds GHCR with parameter-backed credentials. Values are test
+    /// placeholders, not real tokens.
+    /// </summary>
+    public static IResourceBuilder<ContainerRegistryResource> AddTestGhcr(
+        this IDistributedApplicationBuilder builder,
+        string repository = "intrepid-developer/playground")
+    {
+        var username = builder.AddParameter("ghcr-username", GraphQLFixtures.RegistryUsername);
+        var password = builder.AddParameter("ghcr-password", GraphQLFixtures.RegistryPassword, secret: true);
+        return builder.AddContainerRegistry("ghcr", "ghcr.io", repository)
+            .WithUsername(username)
+            .WithPassword(password);
+    }
 }

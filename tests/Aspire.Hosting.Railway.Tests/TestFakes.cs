@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Railway;
 
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Railway.Tests;
@@ -249,18 +250,24 @@ internal static class GraphQLFixtures
         handler.Enqueue("environmentPatchCommit", EnvironmentPatchCommit);
     }
 
-    public static JsonElement GetEnvironmentStageChangesVariables(IEnumerable<string> bodies)
+    public static JsonElement GetEnvironmentStageChangesVariables(
+        IEnumerable<string> bodies,
+        string? requiredFragment = "\"buckets\"")
     {
         var body = bodies.Single(item =>
-            item.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal));
+            item.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal) &&
+            (requiredFragment is null || item.Contains(requiredFragment, StringComparison.Ordinal)));
         using var document = JsonDocument.Parse(body);
         return document.RootElement.GetProperty("variables").Clone();
     }
 
-    public static JsonElement GetEnvironmentPatchCommitVariables(IEnumerable<string> bodies)
+    public static JsonElement GetEnvironmentPatchCommitVariables(
+        IEnumerable<string> bodies,
+        string? requiredFragment = "\"buckets\"")
     {
         var body = bodies.Single(item =>
-            item.Contains("\"operationName\":\"environmentPatchCommit\"", StringComparison.Ordinal));
+            item.Contains("\"operationName\":\"environmentPatchCommit\"", StringComparison.Ordinal) &&
+            (requiredFragment is null || item.Contains(requiredFragment, StringComparison.Ordinal)));
         using var document = JsonDocument.Parse(body);
         return document.RootElement.GetProperty("variables").Clone();
     }
@@ -591,12 +598,16 @@ internal static class GraphQLFixtures
         return plan;
     }
 
+    public const string RegistryUsername = "test-registry-username";
+    public const string RegistryPassword = "test-registry-password";
+
     public static RailwayApplyRequest CreateRequest(
         string? adoptedProjectId = null,
         string? adoptedEnvironmentId = null,
         bool duplicateStaging = true,
         bool createEmpty = false,
-        bool includeApiImage = true)
+        bool includeApiImage = true,
+        bool includeRegistryCredentials = true)
     {
         var request = new RailwayApplyRequest
         {
@@ -604,7 +615,14 @@ internal static class GraphQLFixtures
             AdoptedProjectId = adoptedProjectId,
             AdoptedEnvironmentId = adoptedEnvironmentId,
             DuplicateProductionWhenCreatingStaging = duplicateStaging,
-            CreateEmptyEnvironment = createEmpty
+            CreateEmptyEnvironment = createEmpty,
+            RegistryCredentials = includeApiImage && includeRegistryCredentials
+                ? new RailwayRegistryCredentials
+                {
+                    Username = RegistryUsername,
+                    Password = RegistryPassword
+                }
+                : null
         };
 
         if (includeApiImage)
@@ -613,6 +631,17 @@ internal static class GraphQLFixtures
         }
 
         return request;
+    }
+
+    /// <summary>
+    /// Enqueues the confirmed EnvironmentConfig registry-credentials pair.
+    /// Tests that omit these extra responses fail when apply calls the
+    /// operations (the fake handler does not invent success).
+    /// </summary>
+    public static void EnqueueRegistryCredentials(ScriptedGraphQLHandler handler)
+    {
+        handler.Enqueue("environmentStageChanges", EnvironmentStageChanges);
+        handler.Enqueue("environmentPatchCommit", EnvironmentPatchCommit);
     }
 
     public static RailwayGraphQLApplyService CreateApplyService(ScriptedGraphQLHandler handler)
@@ -628,6 +657,15 @@ internal static class GraphQLFixtures
             VolumeInstanceTimeout = TimeSpan.FromSeconds(5)
         });
     }
+}
+
+internal sealed class FakeHostEnvironment : IHostEnvironment
+{
+    public string EnvironmentName { get; set; } = "Production";
+    public string ApplicationName { get; set; } = "tests";
+    public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+    public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
+        new Microsoft.Extensions.FileProviders.NullFileProvider();
 }
 
 internal sealed class FakeChatConnectionStringResource : Resource, IResourceWithConnectionString

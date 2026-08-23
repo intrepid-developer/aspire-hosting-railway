@@ -57,6 +57,7 @@ public static class RailwayPlanBuilder
         if (registry is not null)
         {
             plan.ContainerRegistryEndpoint = registry.Endpoint.ValueExpression;
+            AddRegistryCredentialParameterNames(plan, registry);
         }
 
         foreach (var resource in model.Resources)
@@ -579,6 +580,30 @@ public static class RailwayPlanBuilder
         if (!plan.Parameters.Contains(name, StringComparer.Ordinal))
         {
             plan.Parameters.Add(name);
+        }
+    }
+
+    /// <summary>
+    /// Captures username / password parameter <em>names</em> only. Values
+    /// stay out of <c>railway-plan.json</c>.
+    /// </summary>
+    private static void AddRegistryCredentialParameterNames(RailwayPlan plan, IContainerRegistry registry)
+    {
+        if (registry is not IResource resource)
+        {
+            return;
+        }
+
+        var username = resource.Annotations.OfType<ContainerRegistryUsernameAnnotation>().LastOrDefault();
+        if (username?.Username is ParameterResource usernameParameter)
+        {
+            AddParameterName(plan, usernameParameter.Name);
+        }
+
+        var password = resource.Annotations.OfType<ContainerRegistryPasswordAnnotation>().LastOrDefault();
+        if (password?.Password is ParameterResource passwordParameter)
+        {
+            AddParameterName(plan, passwordParameter.Name);
         }
     }
 }

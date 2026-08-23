@@ -2,7 +2,11 @@ using Aspire.Hosting.Railway;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground");
+var ghcrUsername = builder.AddParameter("ghcr-username");
+var ghcrPassword = builder.AddParameter("ghcr-password", secret: true);
+var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io", "intrepid-developer/playground")
+    .WithUsername(ghcrUsername)
+    .WithPassword(ghcrPassword);
 var railway = builder.AddRailwayEnvironment("railway")
     .WithContainerRegistry(ghcr);
 

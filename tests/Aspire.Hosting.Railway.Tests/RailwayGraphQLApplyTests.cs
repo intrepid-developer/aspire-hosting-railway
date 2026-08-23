@@ -16,6 +16,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -50,6 +51,7 @@ public class RailwayGraphQLApplyTests
     {
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -86,6 +88,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("project", GraphQLFixtures.ProjectEmpty);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -127,6 +130,7 @@ public class RailwayGraphQLApplyTests
         stagingHandler.Enqueue("project", GraphQLFixtures.ProjectWithExistingCanvas);
         stagingHandler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         stagingHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueRegistryCredentials(stagingHandler);
         stagingHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         stagingHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         stagingHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -182,6 +186,7 @@ public class RailwayGraphQLApplyTests
         var retryHandler = new ScriptedGraphQLHandler();
         retryHandler.Enqueue("project", GraphQLFixtures.ProjectEmpty);
         retryHandler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(retryHandler);
         retryHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         retryHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         retryHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -265,6 +270,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("project", GraphQLFixtures.ProjectWithExistingBucket);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -284,8 +290,8 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(GraphQLFixtures.UploadsServiceId, result.ServiceIds["uploads"]);
         Assert.NotEqual(result.ServiceIds["uploads"], result.BucketIds["uploads"]);
         Assert.Equal(0, handler.Count("bucketCreate"));
-        Assert.Equal(0, handler.Count("environmentStageChanges"));
-        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.Equal(1, handler.Count("environmentStageChanges"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
         Assert.Equal(1, handler.Count("bucketS3Credentials"));
         Assert.Equal(0, handler.Count("serviceCreate"));
         var credentialsBody = handler.Bodies.Single(body => body.Contains("bucketS3Credentials", StringComparison.Ordinal));
@@ -312,6 +318,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -328,8 +335,8 @@ public class RailwayGraphQLApplyTests
 
         Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
         Assert.Equal(1, handler.Count("bucketCreate"));
-        Assert.Equal(1, handler.Count("environmentStageChanges"));
-        Assert.Equal(1, handler.Count("environmentPatchCommit"));
+        Assert.Equal(2, handler.Count("environmentStageChanges"));
+        Assert.Equal(2, handler.Count("environmentPatchCommit"));
         Assert.Equal(1, handler.Count("bucketS3Credentials"));
         Assert.Equal(1, handler.Count("serviceCreate"));
         var createBody = handler.Bodies.Single(body => body.Contains("bucketCreate", StringComparison.Ordinal));
@@ -413,6 +420,7 @@ public class RailwayGraphQLApplyTests
         GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -473,6 +481,7 @@ public class RailwayGraphQLApplyTests
         GraphQLFixtures.EnqueueBucketInstanceProvision(handler);
         handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -489,8 +498,8 @@ public class RailwayGraphQLApplyTests
 
         Assert.Equal(GraphQLFixtures.BucketId, result.BucketIds["uploads"]);
         Assert.Equal(0, handler.Count("bucketCreate"));
-        Assert.Equal(1, handler.Count("environmentStageChanges"));
-        Assert.Equal(1, handler.Count("environmentPatchCommit"));
+        Assert.Equal(2, handler.Count("environmentStageChanges"));
+        Assert.Equal(2, handler.Count("environmentPatchCommit"));
         Assert.Equal(2, handler.Count("bucketS3Credentials"));
         AssertBucketInstancePatch(handler);
     }
@@ -557,6 +566,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -596,6 +606,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -650,6 +661,7 @@ public class RailwayGraphQLApplyTests
         var firstHandler = new ScriptedGraphQLHandler();
         firstHandler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         firstHandler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(firstHandler);
         firstHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         firstHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         firstHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -665,6 +677,7 @@ public class RailwayGraphQLApplyTests
 
         var secondHandler = new ScriptedGraphQLHandler();
         secondHandler.Enqueue("project", GraphQLFixtures.ProjectWithApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(secondHandler);
         secondHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         secondHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         secondHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -726,6 +739,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -733,7 +747,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         var key = builder.AddParameter("xai-api-key", "placeholder-openai-key", secret: true);
         var chat = builder.AddResource(new FakeChatConnectionStringResource("chat", key.Resource));
@@ -783,6 +797,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -790,7 +805,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx");
 
@@ -821,6 +836,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -854,6 +870,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -888,6 +905,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -930,6 +948,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -957,6 +976,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1009,6 +1029,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.GraphQLError("over plan vCPU limit"));
 
@@ -1035,6 +1056,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1063,6 +1085,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1214,6 +1237,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1264,6 +1288,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1271,7 +1296,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         var api = builder.AddContainer("api", "nginx").WithAnnotation(new ReplicaAnnotation(2));
 
@@ -1300,6 +1325,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1307,7 +1333,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .WithAnnotation(new ReplicaAnnotation(2))
@@ -1344,6 +1370,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1351,7 +1378,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .PublishAsRailwayService(s =>
@@ -1395,6 +1422,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceLimitsUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
@@ -1403,7 +1431,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .WithAnnotation(new ReplicaAnnotation(2))
@@ -1441,6 +1469,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1462,7 +1491,7 @@ public class RailwayGraphQLApplyTests
         Assert.DoesNotContain("RAILWAY_HEALTHCHECK_TIMEOUT_SEC", handler.Bodies.Single(body =>
             body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
-        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
     }
 
     [Fact]
@@ -1471,6 +1500,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1553,6 +1583,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1591,6 +1622,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1598,7 +1630,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .WithHttpEndpoint(targetPort: 80)
@@ -1630,6 +1662,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1637,7 +1670,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .WithHttpEndpoint(targetPort: 80)
@@ -1673,6 +1706,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1694,7 +1728,7 @@ public class RailwayGraphQLApplyTests
         Assert.DoesNotContain("null", handler.Bodies.Single(body =>
             body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
-        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
     }
 
     [Fact]
@@ -1703,6 +1737,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1732,6 +1767,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1817,6 +1853,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1855,6 +1892,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1862,7 +1900,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .PublishAsRailwayService(s =>
@@ -1902,6 +1940,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1923,7 +1962,7 @@ public class RailwayGraphQLApplyTests
         Assert.DoesNotContain("null", handler.Bodies.Single(body =>
             body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
-        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
     }
 
     [Fact]
@@ -1932,6 +1971,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1960,6 +2000,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -1988,6 +2029,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2105,6 +2147,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2143,6 +2186,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2150,7 +2194,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .PublishAsRailwayService(s =>
@@ -2191,6 +2235,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2215,7 +2260,7 @@ public class RailwayGraphQLApplyTests
         Assert.DoesNotContain("RAILWAY_DEPLOYMENT_OVERLAP_SECONDS", handler.Bodies.Single(body =>
             body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
-        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
     }
 
     [Fact]
@@ -2224,6 +2269,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2253,6 +2299,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2359,6 +2406,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2397,6 +2445,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2404,7 +2453,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .PublishAsRailwayService(s =>
@@ -2451,6 +2500,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2471,7 +2521,7 @@ public class RailwayGraphQLApplyTests
         Assert.DoesNotContain("null", handler.Bodies.Single(body =>
             body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
         Assert.Equal(1, handler.Count("serviceInstanceUpdate"));
-        Assert.Equal(0, handler.Count("environmentPatchCommit"));
+        Assert.Equal(1, handler.Count("environmentPatchCommit"));
         Assert.DoesNotContain("cronCreate", handler.Bodies.Single(body =>
             body.Contains("serviceInstanceUpdate", StringComparison.Ordinal)));
         Assert.DoesNotContain("scheduleCreate", handler.Bodies.Single(body =>
@@ -2601,6 +2651,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2636,6 +2687,7 @@ public class RailwayGraphQLApplyTests
         var handler = new ScriptedGraphQLHandler();
         handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -2643,7 +2695,7 @@ public class RailwayGraphQLApplyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx")
             .PublishAsRailwayService(s => s.CronSchedule = "0 3 * * *");
@@ -2690,9 +2742,11 @@ public class RailwayGraphQLApplyTests
         Assert.Equal(RailwayConstants.DefaultBucketRegion, committedBucket.GetProperty("region").GetString());
         Assert.True(committedBucket.GetProperty("isCreated").GetBoolean());
         var stageBody = handler.Bodies.Single(body =>
-            body.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal));
+            body.Contains("\"operationName\":\"environmentStageChanges\"", StringComparison.Ordinal) &&
+            body.Contains("\"buckets\"", StringComparison.Ordinal));
         var commitBody = handler.Bodies.Single(body =>
-            body.Contains("\"operationName\":\"environmentPatchCommit\"", StringComparison.Ordinal));
+            body.Contains("\"operationName\":\"environmentPatchCommit\"", StringComparison.Ordinal) &&
+            body.Contains("\"buckets\"", StringComparison.Ordinal));
         Assert.DoesNotContain("us-east4-eqdc4a", stageBody, StringComparison.Ordinal);
         Assert.DoesNotContain("us-west2", stageBody, StringComparison.Ordinal);
         Assert.DoesNotContain("placeholder-access-key", stageBody, StringComparison.Ordinal);
@@ -2714,6 +2768,7 @@ public class RailwayGraphQLApplyTests
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateUploads);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);

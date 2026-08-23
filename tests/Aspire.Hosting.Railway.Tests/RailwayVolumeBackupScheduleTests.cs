@@ -485,6 +485,7 @@ public sealed class RailwayVolumeBackupScheduleTests
 
     private static void EnqueueComputeAndCommit(ScriptedGraphQLHandler handler)
     {
+        GraphQLFixtures.EnqueueRegistryCredentials(handler);
         handler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         handler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);

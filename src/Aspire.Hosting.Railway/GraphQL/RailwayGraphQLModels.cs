@@ -340,10 +340,11 @@ public sealed class BucketCreateInput
 }
 
 /// <summary>
-/// Confirmed <c>EnvironmentConfig</c> patch used to provision a bucket
-/// instance (JSON Schema
+/// Confirmed <c>EnvironmentConfig</c> patch (JSON Schema
 /// <c>https://backboard.railway.com/schema/environment.schema.json</c>,
-/// live 2026-08-23). Only <c>buckets</c> is sent on this path.
+/// live 2026-08-23). Apply sends only the slice in use: <c>buckets</c>
+/// after <c>bucketCreate</c>, or <c>services</c> for private-registry
+/// credentials. Omit unset; do not send <c>null</c>.
 /// </summary>
 public sealed class EnvironmentConfigInput
 {
@@ -353,6 +354,54 @@ public sealed class EnvironmentConfigInput
     /// </summary>
     [JsonPropertyName("buckets")]
     public Dictionary<string, EnvironmentConfigBucket>? Buckets { get; set; }
+
+    /// <summary>
+    /// Gets or sets service entries keyed by the Railway service id.
+    /// Used to set <c>deploy.registryCredentials</c>.
+    /// </summary>
+    [JsonPropertyName("services")]
+    public Dictionary<string, EnvironmentConfigService>? Services { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>EnvironmentConfig.services</c> additionalProperties object.
+/// Only <c>deploy</c> is sent on the registry-credentials path.
+/// </summary>
+public sealed class EnvironmentConfigService
+{
+    /// <summary>Gets or sets the deploy slice for this service.</summary>
+    [JsonPropertyName("deploy")]
+    public EnvironmentConfigDeploy? Deploy { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>EnvironmentConfig.services.{id}.deploy</c> object.
+/// Only <c>registryCredentials</c> is sent on this path.
+/// </summary>
+public sealed class EnvironmentConfigDeploy
+{
+    /// <summary>
+    /// Gets or sets private registry credentials.
+    /// Schema: <c>{ username, password }</c> or null. No extra fields.
+    /// Railway Pro encrypts them at rest. Never persist them.
+    /// </summary>
+    [JsonPropertyName("registryCredentials")]
+    public EnvironmentConfigRegistryCredentials? RegistryCredentials { get; set; }
+}
+
+/// <summary>
+/// Confirmed <c>deploy.registryCredentials</c>: username and password
+/// only. GHCR's dashboard is token-only; the schema still wants both.
+/// </summary>
+public sealed class EnvironmentConfigRegistryCredentials
+{
+    /// <summary>Gets or sets the registry username.</summary>
+    [JsonPropertyName("username")]
+    public required string Username { get; set; }
+
+    /// <summary>Gets or sets the registry password or token.</summary>
+    [JsonPropertyName("password")]
+    public required string Password { get; set; }
 }
 
 /// <summary>

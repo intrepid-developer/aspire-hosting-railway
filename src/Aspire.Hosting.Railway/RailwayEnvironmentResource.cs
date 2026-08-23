@@ -494,7 +494,11 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
             AdoptedProjectId = adoptedProjectId,
             AdoptedEnvironmentId = adoptedEnvironmentId,
             DuplicateProductionWhenCreatingStaging = DuplicateProductionWhenCreatingStaging,
-            CreateEmptyEnvironment = CreateEmptyEnvironment
+            CreateEmptyEnvironment = CreateEmptyEnvironment,
+            RegistryCredentials = await ResolveRegistryCredentialsAsync(
+                    ResolveContainerRegistry(context.Model),
+                    context.CancellationToken)
+                .ConfigureAwait(false)
         };
 
         foreach (var service in plan.Services)
@@ -683,6 +687,45 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
             valueRead,
             parameterValue,
             capturedParameterNames);
+    }
+
+    internal static async Task<RailwayRegistryCredentials?> ResolveRegistryCredentialsAsync(
+        IContainerRegistry? registry,
+        CancellationToken cancellationToken)
+    {
+        if (registry is not IResource resource)
+        {
+            return null;
+        }
+
+        var usernameAnnotation = resource.Annotations.OfType<ContainerRegistryUsernameAnnotation>().LastOrDefault();
+        var passwordAnnotation = resource.Annotations.OfType<ContainerRegistryPasswordAnnotation>().LastOrDefault();
+        if (usernameAnnotation is null && passwordAnnotation is null)
+        {
+            return null;
+        }
+
+        if (usernameAnnotation is null || passwordAnnotation is null)
+        {
+            throw new InvalidOperationException(
+                "Private registry credentials require both WithUsername and WithPassword parameter references. " +
+                "CI can bind GITHUB_TOKEN to the password parameter. Do not write tokens into railway-plan.json.");
+        }
+
+        var username = await usernameAnnotation.Username.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var password = await passwordAnnotation.Password.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException(
+                "Private registry credentials resolved to an empty username or password. " +
+                "Set the WithUsername / WithPassword parameters (CI can bind GITHUB_TOKEN) before aspire deploy.");
+        }
+
+        return new RailwayRegistryCredentials
+        {
+            Username = username,
+            Password = password
+        };
     }
 
     private static async Task<(bool ValueRead, string? Value)> TryReadParameterValueAsync(

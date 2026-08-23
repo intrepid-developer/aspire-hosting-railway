@@ -248,6 +248,7 @@ public class RailwayGraphQLDestroyTests
         var applyHandler = new ScriptedGraphQLHandler();
         applyHandler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
         applyHandler.Enqueue("serviceCreate", GraphQLFixtures.ServiceCreateApi);
+        GraphQLFixtures.EnqueueRegistryCredentials(applyHandler);
         applyHandler.Enqueue("serviceInstanceUpdate", GraphQLFixtures.ScalarSuccess);
         applyHandler.Enqueue("variableCollectionUpsert", GraphQLFixtures.ScalarSuccess);
         applyHandler.Enqueue("serviceInstanceDeployV2", GraphQLFixtures.ScalarSuccess);
@@ -260,7 +261,7 @@ public class RailwayGraphQLDestroyTests
 
         var builder = TestAppBuilder.CreatePublish();
         builder.Configuration["RAILWAY_TOKEN"] = GraphQLFixtures.Token;
-        var ghcr = builder.AddContainerRegistry("ghcr", "ghcr.io");
+        var ghcr = builder.AddTestGhcr();
         var railway = builder.AddRailwayEnvironment("railway").WithContainerRegistry(ghcr);
         builder.AddContainer("api", "nginx");
 

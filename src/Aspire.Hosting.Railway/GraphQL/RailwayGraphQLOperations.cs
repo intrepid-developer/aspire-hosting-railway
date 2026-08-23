@@ -100,7 +100,9 @@ public static class RailwayGraphQLOperations
     /// <c>numReplicas</c> and <c>multiRegionConfig</c> together. Omit unset
     /// healthcheck, restart-policy, start-command, pre-deploy, teardown,
     /// and cron fields; do not send <c>null</c>. ServiceInstance has no
-    /// <c>multiRegionConfig</c> read field.
+    /// <c>multiRegionConfig</c> read field. Do not send
+    /// <c>registryCredentials</c> here — that slice lives on
+    /// <c>EnvironmentConfig.services.{id}.deploy</c>.
     /// </summary>
     public const string ServiceInstanceUpdate = """
         mutation serviceInstanceUpdate($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
@@ -362,9 +364,13 @@ public static class RailwayGraphQLOperations
     /// <c>environmentStageChanges(environmentId: String!, input: EnvironmentConfig!, merge: Boolean) → EnvironmentPatch!</c>
     /// (live schema 2026-08-23). <c>EnvironmentConfig</c> is a scalar whose
     /// JSON Schema is <c>https://backboard.railway.com/schema/environment.schema.json</c>.
-    /// Bucket instance fields on that schema: <c>buckets.{id}.region</c>,
-    /// <c>isCreated</c>, <c>isDeleted</c>. Send a JSON object, not a string.
-    /// Merge when adding onto an existing staged patch.
+    /// Slices used: <c>buckets.{id}.region</c> + <c>isCreated</c> after
+    /// <c>bucketCreate</c>, and
+    /// <c>services.{serviceId}.deploy.registryCredentials</c>
+    /// (<c>{ username, password }</c>) so Railway can pull private images.
+    /// Send a JSON object, not a string. Merge when adding onto an existing
+    /// staged patch. Do not add registry fields onto
+    /// <c>serviceInstanceUpdate</c>.
     /// </summary>
     public const string EnvironmentStageChanges = """
         mutation environmentStageChanges($environmentId: String!, $input: EnvironmentConfig!, $merge: Boolean) {
@@ -379,8 +385,9 @@ public static class RailwayGraphQLOperations
     /// Commits the provided <c>EnvironmentConfig</c> patch. Confirmed
     /// <c>environmentPatchCommit(commitMessage: String, environmentId: String!, patch: EnvironmentConfig) → String!</c>
     /// (live schema 2026-08-23). This is the apply-now path the official
-    /// CLI uses after <c>bucketCreate</c>. Always pass <c>environmentId</c>
-    /// and the patch object. Omit unset; do not send <c>null</c>.
+    /// CLI uses after <c>bucketCreate</c> and for private-registry
+    /// credentials. Always pass <c>environmentId</c> and the patch object.
+    /// Omit unset; do not send <c>null</c>.
     /// </summary>
     public const string EnvironmentPatchCommit = """
         mutation environmentPatchCommit($environmentId: String!, $patch: EnvironmentConfig, $commitMessage: String) {

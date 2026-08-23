@@ -2,6 +2,14 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.1-preview.3
+
+- `aspire deploy` applies private registry credentials so Railway can pull GHCR (and similar) images. Preview.2 only set `source.image`.
+- Official Aspire `AddContainerRegistry` + `WithUsername` / `WithPassword` parameter refs. Values are resolved at deploy time only. CI can bind `GITHUB_TOKEN` to the password parameter. Username and password never land in `railway-plan.json`, deployment state, or logs.
+- After the Railway service id exists, apply stages `environmentStageChanges` then commits `environmentPatchCommit` with the confirmed `EnvironmentConfig.services.{serviceId}.deploy.registryCredentials` object (`{ username, password }` only; official EnvironmentConfig schema 2026-08-23). Then the existing `serviceInstanceUpdate` `source.image` + `serviceInstanceDeployV2` path runs. Registry fields are not added onto `serviceInstanceUpdate`.
+- Private registry credentials require a Railway [Pro plan](https://docs.railway.com/builds/private-registries). If the resolved image host is private (`ghcr.io` and similar) and no credentials resolve, deploy fails instead of leaving an unpullable image.
+- See [getting started](docs/getting-started.md), [publish and deploy](docs/publish-and-deploy.md#image-resolution), and [GraphQL](docs/graphql.md).
+
 ## 13.5.1-preview.2
 
 - `AddRailwayBucket` create path provisions the bucket **instance** after `bucketCreate`. Railway staff and the live schema: `bucketCreate` is the project record only. Apply stages `environmentStageChanges` then commits `environmentPatchCommit` with the confirmed `EnvironmentConfig.buckets.{id}` object (`region` + `isCreated`). Default Tigris region is `iad`. Do not send compute region ids. Then poll `bucketS3Credentials` as before. Canvas buckets still adopt by name. See [#41](https://github.com/intrepid-developer/aspire-hosting-railway/issues/41).

@@ -108,6 +108,7 @@ public class RailwayGraphQLClientTests
         Assert.Equal("iad", bucket.GetProperty("region").GetString());
         Assert.True(bucket.GetProperty("isCreated").GetBoolean());
         Assert.False(bucket.TryGetProperty("isDeleted", out _));
+        Assert.False(variables.GetProperty("input").TryGetProperty("services", out _));
         Assert.Contains("EnvironmentConfig!", RailwayGraphQLOperations.EnvironmentStageChanges, StringComparison.Ordinal);
         Assert.Contains("$merge: Boolean", RailwayGraphQLOperations.EnvironmentStageChanges, StringComparison.Ordinal);
         Assert.DoesNotContain("us-east4-eqdc4a", handler.Body, StringComparison.Ordinal);
@@ -139,6 +140,39 @@ public class RailwayGraphQLClientTests
         Assert.Contains("$environmentId: String!", RailwayGraphQLOperations.EnvironmentPatchCommit, StringComparison.Ordinal);
         Assert.DoesNotContain("us-east4-eqdc4a", handler.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+        Assert.False(variables.GetProperty("patch").TryGetProperty("services", out _));
+    }
+
+    [Fact]
+    public async Task EnvironmentStageChanges_PostsConfirmedRegistryCredentialsPatch()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.EnvironmentStageChanges);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+        var patch = RailwayImageRegistry.CreateCredentialsPatch(
+            "svc_placeholder",
+            new RailwayRegistryCredentials
+            {
+                Username = GraphQLFixtures.RegistryUsername,
+                Password = GraphQLFixtures.RegistryPassword
+            });
+
+        await client.EnvironmentStageChangesAsync(
+            "env_placeholder",
+            patch,
+            merge: true,
+            "placeholder-token");
+
+        using var document = System.Text.Json.JsonDocument.Parse(handler.Body);
+        var input = document.RootElement.GetProperty("variables").GetProperty("input");
+        var credentials = input.GetProperty("services").GetProperty("svc_placeholder")
+            .GetProperty("deploy").GetProperty("registryCredentials");
+        Assert.Equal(GraphQLFixtures.RegistryUsername, credentials.GetProperty("username").GetString());
+        Assert.Equal(GraphQLFixtures.RegistryPassword, credentials.GetProperty("password").GetString());
+        Assert.False(input.TryGetProperty("buckets", out _));
+        Assert.False(credentials.TryGetProperty("email", out _));
+        Assert.DoesNotContain("placeholder-token", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("pluginCreate", handler.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("serviceInstanceUpdate", handler.Body, StringComparison.Ordinal);
     }
 
     [Fact]
