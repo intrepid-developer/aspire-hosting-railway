@@ -2,6 +2,13 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.2-preview.4
+
+- Generated `*.up.railway.app` service domains are created once. `WithExternalHttpEndpoints()` still requests a Railway-provided hostname; `aspire deploy` no longer calls `serviceDomainCreate` on every apply.
+- Before `serviceDomainCreate`, apply lists confirmed `domains(environmentId, projectId, serviceId)` and adopts an existing `serviceDomains` id. Snapshot `CreatedServiceDomainIds` also skips create. First apply still creates when the list is empty. Optional `targetPort` is unchanged. Persist domain **ids** only — tokens stay out of plan and state.
+- Deploy does not delete extras. Leftover generated domains from earlier previews can be removed in the Railway dashboard (Networking). `serviceDomainDelete` stays destroy-only.
+- See [publish and deploy](docs/publish-and-deploy.md) and [GraphQL](docs/graphql.md).
+
 ## 13.5.2-preview.3
 
 - `WithReference` on official Railway Postgres / Redis now follows the consumer, the same way local `AddPostgres` / `AddRedis` already do. `AddProject` / `IProjectMetadata` (.NET, Aspire.Npgsql, Aspire.StackExchange.Redis, EF `UseNpgsql`) get a keyword connection string on `ConnectionStrings__{name}`. Containers and other `DATABASE_URL` / `REDIS_URL` processes keep the Railway URI.

@@ -1111,29 +1111,13 @@ public sealed class RailwayGraphQLApplyService
 
                 if (request.ExternalHttpServices.Contains(service.Name))
                 {
-                    try
-                    {
-                        var domain = await _client.ServiceDomainCreateAsync(
-                            new ServiceDomainCreateInput
-                            {
-                                ServiceId = serviceId,
-                                EnvironmentId = result.EnvironmentId,
-                                TargetPort = service.TargetPort
-                            },
-                            request.Token,
-                            cancellationToken).ConfigureAwait(false);
-                        RailwayGraphQLClient.ThrowIfFailed(domain, "serviceDomainCreate");
-                        var createdDomainId = domain.Data?.ServiceDomainCreate?.Id;
-                        if (!string.IsNullOrWhiteSpace(createdDomainId))
-                        {
-                            result.CreatedServiceDomainIds[service.Name] = createdDomainId;
-                        }
-                    }
-                    catch (InvalidOperationException exception)
-                    {
-                        result.Warnings.Add(exception.Message);
-                        reportingStep.Log(Microsoft.Extensions.Logging.LogLevel.Warning, exception.Message);
-                    }
+                    await EnsureGeneratedServiceDomainAsync(
+                        service,
+                        request,
+                        result,
+                        serviceId,
+                        reportingStep,
+                        cancellationToken).ConfigureAwait(false);
 
                     await ApplyCustomDomainsAsync(
                         service,
@@ -1167,6 +1151,69 @@ public sealed class RailwayGraphQLApplyService
                     CompletionState.Completed,
                     cancellationToken).ConfigureAwait(false);
             }
+        }
+    }
+
+    /// <summary>
+    /// Ensures one Railway-generated <c>*.up.railway.app</c> domain.
+    /// Lists confirmed <c>domains</c> first. Skips
+    /// <c>serviceDomainCreate</c> when <c>serviceDomains</c> already has
+    /// an id, or when state already has
+    /// <see cref="RailwayApplyResult.CreatedServiceDomainIds"/> for the
+    /// service. Deploy does not delete extras.
+    /// </summary>
+    private async Task EnsureGeneratedServiceDomainAsync(
+        RailwayPlanService service,
+        RailwayApplyRequest request,
+        RailwayApplyResult result,
+        string serviceId,
+        IReportingStep reportingStep,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var listResponse = await _client.DomainsAsync(
+                result.EnvironmentId,
+                result.ProjectId,
+                serviceId,
+                request.Token,
+                cancellationToken).ConfigureAwait(false);
+            RailwayGraphQLClient.ThrowIfFailed(listResponse, "domains");
+
+            var existing = (listResponse.Data?.Domains?.ServiceDomains ?? [])
+                .FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate.Id));
+            if (existing is not null)
+            {
+                result.CreatedServiceDomainIds[service.Name] = existing.Id!;
+                return;
+            }
+
+            if (result.CreatedServiceDomainIds.TryGetValue(service.Name, out var persistedId) &&
+                !string.IsNullOrWhiteSpace(persistedId))
+            {
+                return;
+            }
+
+            var domain = await _client.ServiceDomainCreateAsync(
+                new ServiceDomainCreateInput
+                {
+                    ServiceId = serviceId,
+                    EnvironmentId = result.EnvironmentId,
+                    TargetPort = service.TargetPort
+                },
+                request.Token,
+                cancellationToken).ConfigureAwait(false);
+            RailwayGraphQLClient.ThrowIfFailed(domain, "serviceDomainCreate");
+            var createdDomainId = domain.Data?.ServiceDomainCreate?.Id;
+            if (!string.IsNullOrWhiteSpace(createdDomainId))
+            {
+                result.CreatedServiceDomainIds[service.Name] = createdDomainId;
+            }
+        }
+        catch (InvalidOperationException exception)
+        {
+            result.Warnings.Add(exception.Message);
+            reportingStep.Log(Microsoft.Extensions.Logging.LogLevel.Warning, exception.Message);
         }
     }
 

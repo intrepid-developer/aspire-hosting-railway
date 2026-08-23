@@ -26,7 +26,7 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 | `serviceInstanceLimitsUpdate` | Per-replica CPU/RAM after the service id exists. Always `serviceId` + `environmentId`. Optional floats: `vCPUs`, `memoryGB`. Different mutation from `serviceInstanceUpdate`. Not sent for managed Postgres / Redis / buckets. |
 | `serviceInstanceDeployV2` | The compute canvas deploy. Deploys a service instance from its current `source.image`. Apply calls this once after `serviceInstanceUpdate`. Do not drop it — Update does not start a deployment. |
 | `variableCollectionUpsert` | Upserts service or shared variables. |
-| `serviceDomainCreate` | Railway-provided HTTP domain. Optional `targetPort` Int when the Aspire HTTP endpoint has one. Omit unset. |
+| `serviceDomainCreate` | Railway-provided HTTP domain. Optional `targetPort` Int when the Aspire HTTP endpoint has one. Omit unset. Call only when `domains.serviceDomains` is empty and state has no `CreatedServiceDomainIds` for the service. |
 | `domains` | `domains(environmentId, projectId, serviceId)` → `AllDomains` (`customDomains`, `serviceDomains`). Always pass all three ids. |
 | `customDomain` | `customDomain(id, projectId)`. Re-query status after adopt. `verificationToken` lives on `CustomDomainStatus`, not `DNSRecords`. |
 | `customDomainAvailable` | `customDomainAvailable(domain)` → `DomainAvailable { available, message }`. |
@@ -51,7 +51,9 @@ Unit tests stay offline. They inject a fake `HttpMessageHandler`. Do not fake Gr
 
 Documents are in `RailwayGraphQLOperations`. Apply maps `RailwayRegion` to official `Region.region` strings (`us-west2`, `us-east4-eqdc4a`, `europe-west4-drams3a`, `asia-southeast1-eqsg3a`). Cap total replicas at 50. Config-as-code `deploy.*` names are mapping only.
 
-Custom hostnames: after `serviceDomainCreate`, list `domains`, adopt case-insensitively or `customDomainAvailable` + `customDomainCreate`. Report DNS records as Railway returned them. See [working with domains](https://docs.railway.com/networking/domains/working-with-domains).
+Generated `*.up.railway.app` domains: list `domains` first. If `serviceDomains` already has an id, adopt it (persist the id). Also skip create when `CreatedServiceDomainIds` already has the service. Create only when the list is empty. Deploy does not call `serviceDomainDelete` and does not remove leftover extras from earlier previews — delete those in the Railway dashboard (Networking).
+
+Custom hostnames: after the generated service domain is ensured, list `domains`, adopt case-insensitively or `customDomainAvailable` + `customDomainCreate`. Report DNS records as Railway returned them. See [working with domains](https://docs.railway.com/networking/domains/working-with-domains).
 
 ## Not in v1
 

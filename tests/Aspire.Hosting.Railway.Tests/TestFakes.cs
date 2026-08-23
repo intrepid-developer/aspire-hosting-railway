@@ -368,6 +368,7 @@ internal static class GraphQLFixtures
     }
 
     public const string CustomDomainId = "cdom_placeholder";
+    public const string ServiceDomainId = "domain_placeholder";
 
     public static string ServiceDomainCreate =>
         """{"data":{"serviceDomainCreate":{"id":"domain_placeholder","domain":"api-placeholder.up.railway.app"}}}""";
@@ -375,8 +376,21 @@ internal static class GraphQLFixtures
     public static string DomainsEmpty =>
         """{"data":{"domains":{"customDomains":[],"serviceDomains":[]}}}""";
 
+    public static string DomainsWithService =>
+        """{"data":{"domains":{"customDomains":[],"serviceDomains":[{"id":"domain_placeholder","domain":"api-placeholder.up.railway.app"}]}}}""";
+
     public static string DomainsWithCustom =>
         """{"data":{"domains":{"customDomains":[{"id":"cdom_placeholder","domain":"api.example.com","targetPort":8080,"status":{"verified":false,"verificationToken":"verify-placeholder","verificationDnsHost":"_railway.example.com","certificateStatus":"CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP","dnsRecords":[{"fqdn":"api.example.com","recordType":"DNS_RECORD_TYPE_CNAME","requiredValue":"api-placeholder.up.railway.app","purpose":"DNS_RECORD_PURPOSE_TRAFFIC_ROUTE","status":"DNS_RECORD_STATUS_REQUIRES_UPDATE"}]}}],"serviceDomains":[{"id":"domain_placeholder","domain":"api-placeholder.up.railway.app"}]}}}""";
+
+    /// <summary>
+    /// First-apply generated domain: list is empty, then
+    /// <c>serviceDomainCreate</c>.
+    /// </summary>
+    public static void EnqueueGeneratedServiceDomainCreate(ScriptedGraphQLHandler handler)
+    {
+        handler.Enqueue("domains", DomainsEmpty);
+        handler.Enqueue("serviceDomainCreate", ServiceDomainCreate);
+    }
 
     public static string CustomDomainAvailableTrue =>
         """{"data":{"customDomainAvailable":{"available":true,"message":"available"}}}""";
