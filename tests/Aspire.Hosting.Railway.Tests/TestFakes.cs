@@ -286,7 +286,14 @@ internal static class GraphQLFixtures
     {
         var urlStyleJson = urlStyle is null ? string.Empty : $",\"urlStyle\":\"{urlStyle}\"";
         return
-            $$"""{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"{{endpoint}}","region":"{{region}}","bucketName":"{{bucketName}}"{{urlStyleJson}}}}""";
+            "{\"data\":{\"bucketS3Credentials\":{" +
+            "\"accessKeyId\":\"placeholder-access-key\"," +
+            "\"secretAccessKey\":\"placeholder-secret-key\"," +
+            $"\"endpoint\":\"{endpoint}\"," +
+            $"\"region\":\"{region}\"," +
+            $"\"bucketName\":\"{bucketName}\"" +
+            urlStyleJson +
+            "}}}";
     }
 
     public static string ProjectEmpty => ProjectQuery();
