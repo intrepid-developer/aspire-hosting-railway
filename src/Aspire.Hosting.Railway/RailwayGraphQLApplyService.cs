@@ -997,13 +997,23 @@ public sealed class RailwayGraphQLApplyService
                     ? managed.Name
                     : credentials.BucketName;
                 var region = string.IsNullOrWhiteSpace(credentials.Region) ? "auto" : credentials.Region;
+                var forcePathStyle = RailwayBucketS3Addressing.ResolveForcePathStyle(
+                    endpoint,
+                    urlStyle: credentials.UrlStyle);
                 result.BucketConnectionStrings[managed.Name] =
-                    $"Endpoint={endpoint};AccessKeyId={credentials.AccessKeyId};SecretAccessKey={credentials.SecretAccessKey};Bucket={bucketName};Region={region};ForcePathStyle=false";
+                    RailwayBucketS3Addressing.FormatConnectionString(
+                        endpoint,
+                        credentials.AccessKeyId!,
+                        credentials.SecretAccessKey!,
+                        bucketName,
+                        region,
+                        forcePathStyle,
+                        credentials.UrlStyle);
 
                 await persistAsync().ConfigureAwait(false);
 
                 await task.CompleteAsync(
-                    new MarkdownString($"Bucket `{managed.Name}` is available at `{RailwayConstants.BucketS3Endpoint}`."),
+                    new MarkdownString($"Bucket `{managed.Name}` is available at `{endpoint}`."),
                     CompletionState.Completed,
                     cancellationToken).ConfigureAwait(false);
             }

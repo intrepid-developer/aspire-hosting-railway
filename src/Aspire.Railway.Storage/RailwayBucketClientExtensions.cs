@@ -48,10 +48,12 @@ public static class RailwayBucketClientExtensions
     internal static IAmazonS3 CreateClient(IConfiguration configuration, string connectionName)
     {
         var options = ResolveOptions(configuration, connectionName);
-        var endpoint = options.Endpoint ?? "https://storage.railway.app";
+        var endpoint = options.Endpoint ?? RailwayBucketS3Addressing.DefaultEndpoint;
         var region = string.IsNullOrWhiteSpace(options.Region) ? "us-east-1" : options.Region;
-        var forcePathStyle = options.ForcePathStyle ??
-            !endpoint.Contains("storage.railway.app", StringComparison.OrdinalIgnoreCase);
+        var forcePathStyle = RailwayBucketS3Addressing.ResolveForcePathStyle(
+            endpoint,
+            options.ForcePathStyle,
+            options.UrlStyle);
 
         var config = new AmazonS3Config
         {
@@ -78,6 +80,8 @@ public static class RailwayBucketClientExtensions
         {
             options.ForcePathStyle = forcePathStyle;
         }
+
+        options.UrlStyle ??= section["UrlStyle"];
 
         return options;
     }

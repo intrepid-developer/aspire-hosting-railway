@@ -586,6 +586,82 @@ public class RailwayGraphQLApplyTests
     }
 
     [Fact]
+    public async Task Apply_BucketConnectionString_PrefersCredentialsEndpointAndUrlStyle()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.BucketCredentials);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var reporting = new RecordingReportingStep();
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            reporting,
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(
+            "Endpoint=https://t3.storageapi.dev;AccessKeyId=placeholder-access-key;SecretAccessKey=placeholder-secret-key;Bucket=uploads;Region=auto;ForcePathStyle=false;UrlStyle=virtual",
+            result.BucketConnectionStrings["uploads"]);
+        Assert.Contains(
+            reporting.Completions,
+            completion => completion.Contains("https://t3.storageapi.dev", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            reporting.Completions,
+            completion => completion.Contains("https://storage.railway.app", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Apply_BucketConnectionString_LegacyHostWithoutUrlStyle_IsVirtualHosted()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
+        handler.Enqueue("bucketS3Credentials", GraphQLFixtures.LegacyBucketCredentials);
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var reporting = new RecordingReportingStep();
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            reporting,
+            new MemoryDeploymentStateManager());
+
+        Assert.Equal(
+            "Endpoint=https://storage.railway.app;AccessKeyId=placeholder-access-key;SecretAccessKey=placeholder-secret-key;Bucket=uploads;Region=auto;ForcePathStyle=false",
+            result.BucketConnectionStrings["uploads"]);
+        Assert.Contains(
+            reporting.Completions,
+            completion => completion.Contains("https://storage.railway.app", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Apply_BucketConnectionString_UrlStylePath_SetsForcePathStyle()
+    {
+        var handler = new ScriptedGraphQLHandler();
+        handler.Enqueue("projectCreate", GraphQLFixtures.ProjectCreate);
+        GraphQLFixtures.EnqueueBucketCreateAndProvision(handler);
+        handler.Enqueue(
+            "bucketS3Credentials",
+            GraphQLFixtures.BucketS3CredentialsJson(urlStyle: "path"));
+        handler.Enqueue("environmentPatchCommitStaged", GraphQLFixtures.ScalarSuccess);
+
+        var apply = GraphQLFixtures.CreateApplyService(handler);
+        var result = await apply.ApplyAsync(
+            GraphQLFixtures.CreatePlan(includeApi: false, includeBucket: true),
+            GraphQLFixtures.CreateRequest(includeApiImage: false),
+            new RecordingReportingStep(),
+            new MemoryDeploymentStateManager());
+
+        Assert.Contains("ForcePathStyle=true", result.BucketConnectionStrings["uploads"], StringComparison.Ordinal);
+        Assert.Contains("UrlStyle=path", result.BucketConnectionStrings["uploads"], StringComparison.Ordinal);
+        Assert.Contains("Endpoint=https://t3.storageapi.dev", result.BucketConnectionStrings["uploads"], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Apply_BucketConnectionString_ReachesOnlyReferencingComputeServices()
     {
         var handler = new ScriptedGraphQLHandler();
@@ -686,6 +762,7 @@ public class RailwayGraphQLApplyTests
         Assert.Contains("secretAccessKey", credentialsBody, StringComparison.Ordinal);
         Assert.Contains("projectId", credentialsBody, StringComparison.Ordinal);
         Assert.Contains("bucketName", credentialsBody, StringComparison.Ordinal);
+        Assert.Contains("urlStyle", credentialsBody, StringComparison.Ordinal);
         Assert.DoesNotContain(GraphQLFixtures.Token, string.Join('\n', handler.Bodies), StringComparison.Ordinal);
     }
 

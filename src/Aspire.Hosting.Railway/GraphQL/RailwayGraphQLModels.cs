@@ -631,6 +631,15 @@ public sealed class BucketS3Credentials
     /// <summary>Gets or sets the S3 bucket name returned as <c>bucketName</c>.</summary>
     [JsonPropertyName("bucketName")]
     public string? BucketName { get; set; }
+
+    /// <summary>
+    /// Gets or sets Railway's addressing style (<c>virtual</c> or
+    /// <c>path</c>). Confirmed on live <c>BucketS3CompatibleCredentials</c>.
+    /// Maps to <c>ForcePathStyle</c> (<c>virtual</c> → false,
+    /// <c>path</c> → true). Prefer this over hostname string checks.
+    /// </summary>
+    [JsonPropertyName("urlStyle")]
+    public string? UrlStyle { get; set; }
 }
 
 /// <summary>Data wrapper for <c>serviceDomainCreate</c>.</summary>

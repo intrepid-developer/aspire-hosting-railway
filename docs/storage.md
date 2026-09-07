@@ -7,8 +7,8 @@
 | | Local `aspire run` | Deploy |
 | --- | --- | --- |
 | Backing | [Adobe S3Mock](https://github.com/adobe/S3Mock) (`adobe/s3mock:4.9.1`) | `bucketCreate` (record) + environment patch (instance) + `bucketS3Credentials` |
-| Endpoint | The emulator HTTP endpoint | `https://storage.railway.app` |
-| Addressing | Path-style (`ForcePathStyle=true`) | Virtual-hosted (`ForcePathStyle=false`) |
+| Endpoint | The emulator HTTP endpoint | `https://t3.storageapi.dev` (legacy alias: `https://storage.railway.app`) |
+| Addressing | Path-style (`ForcePathStyle=true`) | Prefer `bucketS3Credentials.urlStyle` (`virtual` → `ForcePathStyle=false`, `path` → `true`). Documented and legacy Railway hosts are virtual-hosted when `urlStyle` is unset. |
 | Credentials | Placeholder `s3mock` / `s3mock` | Fresh S3 keys from `bucketS3Credentials` (in memory only) |
 
 The hosting package is `IntrepidDeveloper.Aspire.Hosting.Railway.Storage`. It is not the deprecated CommunityToolkit MinIO package. Bucket region is a Tigris airport code (`iad` / `sjc` / `ams` / `sin`) and is immutable after the instance is provisioned. Unset keeps `iad` so existing AppHosts do not silently move. EU AppHosts must set `ams`. Changing region after create means drop + recreate the bucket. These codes are not compute `RailwayRegion` ids. Railway buckets are **not** on private DNS.
@@ -35,15 +35,15 @@ The consuming project uses `IntrepidDeveloper.Aspire.Railway.Storage`:
 builder.AddRailwayBucketClient("uploads"); // IAmazonS3
 ```
 
-`AddRailwayBucketClient("uploads")` registers keyed and unkeyed `IAmazonS3` plus `RailwayBucketSettings` from `ConnectionStrings:uploads`. Local S3-compatible endpoints default to path-style; `storage.railway.app` uses virtual-hosted style.
+`AddRailwayBucketClient("uploads")` registers keyed and unkeyed `IAmazonS3` plus `RailwayBucketSettings` from `ConnectionStrings:uploads`. Local S3-compatible endpoints default to path-style. `t3.storageapi.dev` and the legacy host `storage.railway.app` use virtual-hosted style (`ForcePathStyle=false`) unless `urlStyle=path` or `ForcePathStyle` is set explicitly. When `UrlStyle` is present (`virtual` / `path`), it wins over hostname checks.
 
 ## Connection string
 
 ```
-Endpoint=https://storage.railway.app;AccessKeyId=...;SecretAccessKey=...;Bucket=uploads;Region=auto;ForcePathStyle=false
+Endpoint=https://t3.storageapi.dev;AccessKeyId=...;SecretAccessKey=...;Bucket=uploads;Region=auto;ForcePathStyle=false
 ```
 
-Semicolon-delimited keys: `Endpoint`, `AccessKeyId` (or `AccessKey`), `SecretAccessKey` (or `SecretKey`), `Bucket` (or `BucketName`), `Region`, `ForcePathStyle`.
+Semicolon-delimited keys: `Endpoint`, `AccessKeyId` (or `AccessKey`), `SecretAccessKey` (or `SecretKey`), `Bucket` (or `BucketName`), `Region`, `ForcePathStyle`, optional `UrlStyle` (`virtual` / `path`).
 
 On Railway, region is typically `auto`. Local emulator strings use `Region=us-east-1;ForcePathStyle=true`.
 

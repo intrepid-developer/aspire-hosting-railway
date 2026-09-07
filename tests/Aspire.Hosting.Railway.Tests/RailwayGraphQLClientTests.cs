@@ -178,8 +178,7 @@ public class RailwayGraphQLClientTests
     [Fact]
     public async Task BucketS3Credentials_RequestIncludesProjectIdAndSelectsBucketName()
     {
-        var handler = new RecordingHandler(
-            """{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucketName":"uploads"}}}""");
+        var handler = new RecordingHandler(GraphQLFixtures.BucketCredentials);
         var client = new RailwayGraphQLClient(new HttpClient(handler));
 
         var response = await client.BucketS3CredentialsAsync(
@@ -189,11 +188,15 @@ public class RailwayGraphQLClientTests
             "placeholder-token");
 
         Assert.Equal("uploads", response.Data?.BucketS3Credentials?.BucketName);
+        Assert.Equal("https://t3.storageapi.dev", response.Data?.BucketS3Credentials?.Endpoint);
+        Assert.Equal("virtual", response.Data?.BucketS3Credentials?.UrlStyle);
         Assert.Contains("projectId", handler.Body, StringComparison.Ordinal);
         Assert.Contains("proj_placeholder", handler.Body, StringComparison.Ordinal);
         Assert.Contains("bucketName", handler.Body, StringComparison.Ordinal);
+        Assert.Contains("urlStyle", handler.Body, StringComparison.Ordinal);
         Assert.Contains("$projectId: String!", RailwayGraphQLOperations.BucketS3Credentials, StringComparison.Ordinal);
         Assert.Contains("bucketName", RailwayGraphQLOperations.BucketS3Credentials, StringComparison.Ordinal);
+        Assert.Contains("urlStyle", RailwayGraphQLOperations.BucketS3Credentials, StringComparison.Ordinal);
         Assert.DoesNotContain("region\n            bucket\n", RailwayGraphQLOperations.BucketS3Credentials, StringComparison.Ordinal);
     }
 
@@ -201,7 +204,7 @@ public class RailwayGraphQLClientTests
     public async Task BucketS3Credentials_LiveArrayPayload_TakesFirstCredential()
     {
         var handler = new RecordingHandler(
-            """{"data":{"bucketS3Credentials":[{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucketName":"uploads"}]}}""");
+            """{"data":{"bucketS3Credentials":[{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://t3.storageapi.dev","region":"auto","bucketName":"uploads","urlStyle":"virtual"}]}}""");
         var client = new RailwayGraphQLClient(new HttpClient(handler));
 
         var response = await client.BucketS3CredentialsAsync(
@@ -213,7 +216,41 @@ public class RailwayGraphQLClientTests
         RailwayGraphQLClient.ThrowIfFailed(response, "bucketS3Credentials");
         Assert.Equal("uploads", response.Data?.BucketS3Credentials?.BucketName);
         Assert.Equal("placeholder-access-key", response.Data?.BucketS3Credentials?.AccessKeyId);
+        Assert.Equal("https://t3.storageapi.dev", response.Data?.BucketS3Credentials?.Endpoint);
+        Assert.Equal("virtual", response.Data?.BucketS3Credentials?.UrlStyle);
+    }
+
+    [Fact]
+    public async Task BucketS3Credentials_LegacyHostWithoutUrlStyle_StillDeserializes()
+    {
+        var handler = new RecordingHandler(GraphQLFixtures.LegacyBucketCredentials);
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.BucketS3CredentialsAsync(
+            "bucket_placeholder",
+            "env_placeholder",
+            "proj_placeholder",
+            "placeholder-token");
+
+        RailwayGraphQLClient.ThrowIfFailed(response, "bucketS3Credentials");
         Assert.Equal("https://storage.railway.app", response.Data?.BucketS3Credentials?.Endpoint);
+        Assert.Null(response.Data?.BucketS3Credentials?.UrlStyle);
+    }
+
+    [Fact]
+    public async Task BucketS3Credentials_DeserializesPathUrlStyle()
+    {
+        var handler = new RecordingHandler(
+            GraphQLFixtures.BucketS3CredentialsJson(urlStyle: "path"));
+        var client = new RailwayGraphQLClient(new HttpClient(handler));
+
+        var response = await client.BucketS3CredentialsAsync(
+            "bucket_placeholder",
+            "env_placeholder",
+            "proj_placeholder",
+            "placeholder-token");
+
+        Assert.Equal("path", response.Data?.BucketS3Credentials?.UrlStyle);
     }
 
     [Fact]

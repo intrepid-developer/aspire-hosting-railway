@@ -47,9 +47,13 @@ public static class RailwayConstants
     public const string GraphQLEndpoint = "https://backboard.railway.com/graphql/v2";
 
     /// <summary>
-    /// Public S3-compatible endpoint for Railway buckets. Buckets are not on private DNS.
+    /// Documented S3-compatible endpoint for Railway buckets
+    /// (<see href="https://docs.railway.com/storage-buckets"/>).
+    /// Virtual-hosted. Prefer <c>bucketS3Credentials.endpoint</c> when present.
+    /// <c>storage.railway.app</c> is a legacy alias that still serves.
+    /// Buckets are not on private DNS.
     /// </summary>
-    public const string BucketS3Endpoint = "https://storage.railway.app";
+    public const string BucketS3Endpoint = "https://t3.storageapi.dev";
 
     /// <summary>
     /// Default Tigris bucket region when AppHost has no mapped bucket region.

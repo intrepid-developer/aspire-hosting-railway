@@ -5,7 +5,7 @@ namespace Aspire.Railway.Storage;
 /// </summary>
 /// <remarks>
 /// Connection string format (semicolon-delimited):
-/// <c>Endpoint=https://storage.railway.app;AccessKeyId=...;SecretAccessKey=...;Bucket=uploads;Region=auto;ForcePathStyle=false</c>
+/// <c>Endpoint=https://t3.storageapi.dev;AccessKeyId=...;SecretAccessKey=...;Bucket=uploads;Region=auto;ForcePathStyle=false</c>
 /// </remarks>
 public sealed class RailwayBucketConnectionOptions
 {
@@ -27,8 +27,17 @@ public sealed class RailwayBucketConnectionOptions
     /// <summary>
     /// Gets or sets whether to use path-style addressing. Local S3-compatible containers
     /// typically need <see langword="true"/>; Railway virtual-hosted buckets use <see langword="false"/>.
+    /// When unset, <c>UrlStyle</c> is preferred, then the Railway host heuristic
+    /// (<c>t3.storageapi.dev</c> and legacy <c>storage.railway.app</c> are virtual-hosted).
     /// </summary>
     public bool? ForcePathStyle { get; set; }
+
+    /// <summary>
+    /// Gets or sets Railway's addressing style from
+    /// <c>bucketS3Credentials.urlStyle</c> (<c>virtual</c> or <c>path</c>).
+    /// Preferred over hostname checks when <see cref="ForcePathStyle"/> is unset.
+    /// </summary>
+    public string? UrlStyle { get; set; }
 
     /// <summary>
     /// Parses a semicolon-delimited connection string.
@@ -80,6 +89,10 @@ public sealed class RailwayBucketConnectionOptions
                      bool.TryParse(value, out var forcePathStyle))
             {
                 options.ForcePathStyle = forcePathStyle;
+            }
+            else if (key.Equals("UrlStyle", StringComparison.OrdinalIgnoreCase))
+            {
+                options.UrlStyle = value;
             }
         }
 
