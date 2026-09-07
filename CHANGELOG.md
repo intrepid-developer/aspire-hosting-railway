@@ -2,6 +2,14 @@
 
 Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.5.3-preview.2
+
+- Railway bucket S3 default endpoint is now `https://t3.storageapi.dev` ([storage buckets](https://docs.railway.com/storage-buckets), [CLI bucket](https://docs.railway.com/cli/bucket)). `storage.railway.app` remains a legacy alias and still counts as virtual-hosted.
+- Apply prefers `bucketS3Credentials.endpoint` when present. Completion copy prints that host instead of always printing the package constant.
+- `bucketS3Credentials` now selects `urlStyle`. `virtual` maps to `ForcePathStyle=false`; `path` maps to `true`. That mapping is preferred over hostname string checks. Unset `urlStyle` still treats `t3.storageapi.dev` and `storage.railway.app` as virtual-hosted; local emulator hosts stay path-style.
+- `AddRailwayBucketClient` no longer treats every host other than `storage.railway.app` as path-style. Connection strings may include optional `UrlStyle`.
+- See [storage](docs/storage.md) and [GraphQL](docs/graphql.md). Fixes [#54](https://github.com/intrepid-developer/aspire-hosting-railway/issues/54).
+
 ## 13.5.3-preview.1
 
 - Retarget to Aspire.Hosting 13.5.3.

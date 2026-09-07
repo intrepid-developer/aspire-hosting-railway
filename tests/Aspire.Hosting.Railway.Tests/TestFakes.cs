@@ -273,8 +273,21 @@ internal static class GraphQLFixtures
         return document.RootElement.GetProperty("variables").Clone();
     }
 
-    public static string BucketCredentials =>
-        """{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"https://storage.railway.app","region":"auto","bucketName":"uploads"}}}""";
+    public static string BucketCredentials => BucketS3CredentialsJson();
+
+    public static string LegacyBucketCredentials =>
+        BucketS3CredentialsJson(endpoint: "https://storage.railway.app", urlStyle: null);
+
+    public static string BucketS3CredentialsJson(
+        string endpoint = "https://t3.storageapi.dev",
+        string? urlStyle = "virtual",
+        string region = "auto",
+        string bucketName = "uploads")
+    {
+        var urlStyleJson = urlStyle is null ? string.Empty : $",\"urlStyle\":\"{urlStyle}\"";
+        return
+            $$"""{"data":{"bucketS3Credentials":{"accessKeyId":"placeholder-access-key","secretAccessKey":"placeholder-secret-key","endpoint":"{{endpoint}}","region":"{{region}}","bucketName":"{{bucketName}}"{{urlStyleJson}}}}""";
+    }
 
     public static string ProjectEmpty => ProjectQuery();
 

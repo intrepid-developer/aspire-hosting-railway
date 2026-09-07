@@ -10,4 +10,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Railway.Tests" />
+  </ItemGroup>
 </Project>

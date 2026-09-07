@@ -347,8 +347,10 @@ public static class RailwayGraphQLOperations
 
     /// <summary>
     /// Reads S3 credentials for a bucket. <c>projectId</c> is required by Railway.
-    /// The payload field is <c>bucketName</c> (not <c>bucket</c>). Endpoint is
-    /// https://storage.railway.app. Callers must not persist the secret.
+    /// The payload field is <c>bucketName</c> (not <c>bucket</c>). Prefer returned
+    /// <c>endpoint</c> (documented host is https://t3.storageapi.dev;
+    /// <c>storage.railway.app</c> is a legacy alias). Select <c>urlStyle</c>
+    /// (<c>virtual</c> / <c>path</c>). Callers must not persist the secret.
     /// </summary>
     public const string BucketS3Credentials = """
         query bucketS3Credentials($bucketId: String!, $environmentId: String!, $projectId: String!) {
@@ -358,6 +360,7 @@ public static class RailwayGraphQLOperations
             endpoint
             region
             bucketName
+            urlStyle
           }
         }
         """;
