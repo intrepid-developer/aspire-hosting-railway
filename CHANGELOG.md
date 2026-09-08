@@ -1,6 +1,11 @@
 # Changelog
 
-Versions match `Directory.Build.props`. Preview packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
+Versions match `Directory.Build.props`. Packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
+
+## 13.5.3
+
+- First stable release on the Aspire 13.5.3 line. Same public surface as `13.5.3-preview.2`.
+- Preview packages remain available on nuget.org; prefer this stable version.
 
 ## 13.5.3-preview.2
 

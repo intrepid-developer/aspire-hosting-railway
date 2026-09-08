@@ -1,17 +1,17 @@
 # Getting started
 
-Preview packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.3-preview.2** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.3** / `net10.0`.
+Packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.5.3** (`Directory.Build.props`). Pinned Aspire.Hosting **13.5.3** / `net10.0`.
 
 ## Restore from nuget.org
 
-No extra feed or PAT. Add the packages with `--prerelease` (or pin the version in `PackageReference` as below):
+No extra feed or PAT. Add the packages (or pin the version in `PackageReference` as below):
 
 ```bash
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Redis --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Storage --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Redis
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Storage
+dotnet add package IntrepidDeveloper.Aspire.Railway.Storage
 ```
 
 This repo's playground sample references the projects directly and does not need a package restore of these IDs.
@@ -51,10 +51,10 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using` fo
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Railway replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference), so those templates are not scaled. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.3-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.3-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.3-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.3-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.3" />
 ```
 
 ```csharp
@@ -120,7 +120,7 @@ Bucket `RailwayBucketRegion` codes (`iad` / `sjc` / `ams` / `sin`) are not compu
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.3-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.3" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.3" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.3" />
 ```
