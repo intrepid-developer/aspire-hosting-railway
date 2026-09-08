@@ -1,13 +1,13 @@
 # Aspire Hosting for Railway
 
-[![NuGet](https://img.shields.io/nuget/vpre/IntrepidDeveloper.Aspire.Hosting.Railway.svg?label=nuget)](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway)
+[![NuGet](https://img.shields.io/nuget/v/IntrepidDeveloper.Aspire.Hosting.Railway.svg?label=nuget)](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Aspire 13.5 hosting so `aspire publish`, `aspire deploy`, and `aspire destroy` can target [Railway](https://railway.com). Local `aspire run` stays the normal Aspire model and never needs a Railway token.
 
 ## Status
 
-Preview on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.3-preview.2** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.3** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Packages are on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway) and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). Pack also publishes a GitHub Release. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.5.3** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.5.3** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -76,14 +76,14 @@ builder.AddRedisClient("redis");
 builder.AddRailwayBucketClient("uploads"); // IAmazonS3
 ```
 
-Restore from [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). No extra feed or PAT. These are prerelease packages, so use `--prerelease` or pin the version in `PackageReference` as below.
+Restore from [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). No extra feed or PAT.
 
 ```bash
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Redis --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Storage --prerelease
-dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Redis
+dotnet add package IntrepidDeveloper.Aspire.Hosting.Railway.Storage
+dotnet add package IntrepidDeveloper.Aspire.Railway.Storage
 ```
 
 [GitHub Packages feed: see Getting started](docs/getting-started.md#restore-from-github-packages-optional). Do not commit PATs or `packageSourceCredentials`.
@@ -91,16 +91,16 @@ dotnet add package IntrepidDeveloper.Aspire.Railway.Storage --prerelease
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.3-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.3-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.3-preview.2" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.3-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.5.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.5.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.5.3" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.5.3" />
 ```
 
 API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.3-preview.2" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.5.3" />
 <PackageReference Include="Aspire.Npgsql" Version="13.5.3" />
 <PackageReference Include="Aspire.StackExchange.Redis" Version="13.5.3" />
 ```
