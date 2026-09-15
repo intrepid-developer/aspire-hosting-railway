@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <AspireVersion>13.5.3</AspireVersion>
+    <AspireVersion>13.5.4</AspireVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Aspire.Hosting" Version="$(AspireVersion)" />
