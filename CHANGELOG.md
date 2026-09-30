@@ -2,6 +2,14 @@
 
 Versions match `Directory.Build.props`. Packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.6.0
+
+- First package on the Aspire 13.6.0 line. Pin bump from stable 13.5.4.
+- This is a pin bump, not a Railway API change. The public AppHost surface (`AddRailwayEnvironment`, `PublishAsRailway*`, `AddRailwayBucket`) is unchanged.
+- Align `Microsoft.Extensions.*` package versions with Aspire.Hosting 13.6.0 (`10.0.12`) so restore does not downgrade.
+- Aspire 13.6 compute-environment / pipeline APIs used by this integration (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`) stay compatible. 13.6 breaking changes (MongoDB local TLS, Cosmos emulator default, Front Door origin names, terminal namespace move) do not affect Railway apply.
+- Playground AppHost suppresses new `ASPIRE010` (`AspireUseCliBundle` defaults to false). The sample keeps NuGet-restored orchestration; it does not opt into the Aspire CLI bundle.
+
 ## 13.5.4
 
 - First package on the Aspire 13.5.4 line. Pin bump from stable 13.5.3.

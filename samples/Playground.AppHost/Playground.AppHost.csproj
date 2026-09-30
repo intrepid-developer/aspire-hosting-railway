@@ -1,10 +1,10 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.5.4">
+<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <UserSecretsId>intrepid-developer-aspire-railway-playground</UserSecretsId>
     <RootNamespace>Playground.AppHost</RootNamespace>
-    <NoWarn>$(NoWarn);CS1591;ASPIRECOMPUTE003</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;ASPIRECOMPUTE003;ASPIRE010</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
