@@ -69,7 +69,7 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     /// </summary>
     /// <remarks>
     /// Sent only when set. Must be greater than 0. There is no Aspire-core
-    /// <c>WithCpu</c> in Aspire.Hosting 13.5.0; configure this through
+    /// <c>WithCpu</c> in Aspire.Hosting 13.6.0; configure this through
     /// <c>PublishAsRailwayService</c>. Railway plan caps (for example 24 vCPU)
     /// are plan-specific and are not hardcoded here — over-plan values fail
     /// with the GraphQL error. Not sent for
@@ -84,7 +84,7 @@ public sealed class RailwayServiceResource : Resource, IResourceWithParent<Railw
     /// <remarks>
     /// Sent only when set. Must be greater than 0. Units are GraphQL
     /// <c>memoryGB</c> floats, not config-as-code <c>memoryBytes</c>. There is
-    /// no Aspire-core <c>WithMemory</c> in Aspire.Hosting 13.5.0; configure this
+    /// no Aspire-core <c>WithMemory</c> in Aspire.Hosting 13.6.0; configure this
     /// through <c>PublishAsRailwayService</c>. Not sent for
     /// <c>PublishAsRailwayPostgres</c> / <c>PublishAsRailwayRedis</c> / buckets.
     /// </remarks>

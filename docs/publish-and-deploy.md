@@ -1,6 +1,6 @@
 # Publish and deploy
 
-This integration uses Aspire 13.5 compute-environment + pipeline hooks (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`). It does **not** use the obsolete `IDistributedApplicationPublisher` / `DeployingCallbackAnnotation` model.
+This integration uses Aspire 13.6 compute-environment + pipeline hooks (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`). It does **not** use the obsolete `IDistributedApplicationPublisher` / `DeployingCallbackAnnotation` model.
 
 ## Pipeline steps
 
@@ -134,7 +134,7 @@ Replica count is Aspire-core `WithReplicas` on a project. Implicit compute on `A
 
 Healthcheck path is Aspire-core `WithHttpHealthCheck("/health")`. Railway always probes until HTTP 200, so a non-200 Aspire `statusCode` is ignored. Custom `WithHealthCheck` keys that are not HTTP probes are not mapped.
 
-Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.5.4 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron / custom-domain annotation. `WithArgs` is not mapped. Custom hostnames need `WithExternalHttpEndpoints()`.
+Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.6.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron / custom-domain annotation. `WithArgs` is not mapped. Custom hostnames need `WithExternalHttpEndpoints()`.
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
