@@ -8,6 +8,7 @@ Versions match `Directory.Build.props`. Packages are on nuget.org (GitHub Packag
 - This is a pin bump, not a Railway API change. The public AppHost surface (`AddRailwayEnvironment`, `PublishAsRailway*`, `AddRailwayBucket`) is unchanged.
 - Align `Microsoft.Extensions.*` package versions with Aspire.Hosting 13.6.0 (`10.0.12`) so restore does not downgrade.
 - Aspire 13.6 compute-environment / pipeline APIs used by this integration (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`) stay compatible. 13.6 breaking changes (MongoDB local TLS, Cosmos emulator default, Front Door origin names, terminal namespace move) do not affect Railway apply.
+- Playground AppHost suppresses new `ASPIRE010` (`AspireUseCliBundle` defaults to false). The sample keeps NuGet-restored orchestration; it does not opt into the Aspire CLI bundle.
 
 ## 13.5.4
 
