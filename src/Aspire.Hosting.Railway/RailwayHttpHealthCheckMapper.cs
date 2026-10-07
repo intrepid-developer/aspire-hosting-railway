@@ -6,7 +6,7 @@ namespace Aspire.Hosting.Railway;
 /// Reads the HTTP path from Aspire <c>WithHttpHealthCheck</c>. That API stores
 /// the path in <see cref="HealthCheckAnnotation.Key"/> as
 /// <c>{resource}_{endpoint}_{path}_{statusCode}_check</c>; there is no separate
-/// path annotation in Aspire.Hosting 13.6.0.
+/// path annotation in Aspire.Hosting 13.6.1.
 /// </summary>
 internal static class RailwayHttpHealthCheckMapper
 {
