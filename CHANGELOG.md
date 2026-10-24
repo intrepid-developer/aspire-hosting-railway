@@ -2,6 +2,11 @@
 
 Versions match `Directory.Build.props`. Packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 13.6.4
+
+- First package on the Aspire 13.6.4 line. Pin bump from stable 13.6.3.
+- This is a pin bump, not a Railway API change. `Microsoft.Extensions.*` stays on 10.0.12.
+
 ## 13.6.3
 
 - First package on the Aspire 13.6.3 line. Pin bump from stable 13.6.2.
