@@ -20,6 +20,12 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install Aspire CLI
+        run: |
+          curl -sSL https://aspire.dev/install.sh -o /tmp/aspire-install.sh
+          bash /tmp/aspire-install.sh --version 17.0.0
+          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+
       - name: Restore
         run: dotnet restore IntrepidDeveloper.Aspire.Hosting.Railway.slnx
 

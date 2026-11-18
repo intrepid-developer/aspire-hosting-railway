@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "samples/Playground.AppHost/Playground.AppHost.csproj"
+  }
+}

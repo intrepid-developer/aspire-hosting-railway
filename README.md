@@ -3,11 +3,11 @@
 [![NuGet](https://img.shields.io/nuget/v/IntrepidDeveloper.Aspire.Hosting.Railway.svg?label=nuget)](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Aspire 13.6 hosting so `aspire publish`, `aspire deploy`, and `aspire destroy` can target [Railway](https://railway.com). Local `aspire run` stays the normal Aspire model and never needs a Railway token.
+Aspire 17.0 hosting so `aspire publish`, `aspire deploy`, and `aspire destroy` can target [Railway](https://railway.com). Local `aspire run` stays the normal Aspire model and never needs a Railway token.
 
 ## Status
 
-Packages are on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway) and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). Pack also publishes a GitHub Release. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **13.6.5** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **13.6.5** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
+Packages are on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway) and [GitHub Packages](https://nuget.pkg.github.com/intrepid-developer/index.json). Pack also publishes a GitHub Release. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version: **17.0.0** (from `Directory.Build.props`). MIT. Pinned to Aspire.Hosting **17.0.0** / `net10.0`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Packages
 
@@ -44,7 +44,7 @@ var db = builder.AddPostgres("postgres").PublishAsRailwayPostgres(s =>
 var cache = builder.AddRedis("redis").PublishAsRailwayRedis();
 var uploads = builder.AddRailwayBucket("uploads");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithReplicas(2)
     .WithHttpHealthCheck("/health")
     .WithReference(db)
@@ -91,18 +91,20 @@ dotnet add package IntrepidDeveloper.Aspire.Railway.Storage
 AppHost (`IntrepidDeveloper.Aspire.Hosting.Railway*`):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.6.5" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.6.5" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.6.5" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.6.5" />
+<PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" />
+<PackageReference Include="Aspire.Hosting.Dotnet" Version="17.0.0" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="17.0.0" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="17.0.0" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="17.0.0" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="17.0.0" />
 ```
 
 API / consuming project (`AddRailwayBucketClient` plus the usual Aspire clients):
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.6.5" />
-<PackageReference Include="Aspire.Npgsql" Version="13.6.5" />
-<PackageReference Include="Aspire.StackExchange.Redis" Version="13.6.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="17.0.0" />
+<PackageReference Include="Aspire.Npgsql" Version="17.0.0" />
+<PackageReference Include="Aspire.StackExchange.Redis" Version="17.0.0" />
 ```
 
 ## Auth
@@ -149,7 +151,7 @@ Full mapping and constraints (5-minute cron floor, no replicas with volumes, cro
 Kitchen-sink service: region, CPU/RAM, sleep-when-idle, healthcheck timeout, restart, start / pre-deploy, overlap / drain, and a custom hostname. Image start is exec form — wrap `$PORT`.
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithReplicas(2)
     .WithHttpHealthCheck("/health")
     .WithComputeEnvironment(railway)
@@ -173,7 +175,7 @@ builder.AddProject<Projects.Api>("api")
 Cron worker: five-field crontab, UTC. The service must exit. Do not combine with replicas greater than 1 or `Serverless`.
 
 ```csharp
-builder.AddProject<Projects.Worker>("nightly")
+builder.AddDotnetProject("nightly", "../Worker/Worker.csproj")
     .PublishAsRailwayService(s =>
     {
         s.CronSchedule = "0 3 * * *"; // 03:00 UTC
@@ -183,7 +185,7 @@ builder.AddProject<Projects.Worker>("nightly")
 Multi-region: `ReplicaRegions` wins over `WithReplicas` + `Region`.
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithComputeEnvironment(railway)
     .PublishAsRailwayService(s =>
     {

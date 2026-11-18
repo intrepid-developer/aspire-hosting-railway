@@ -1,6 +1,6 @@
 # Getting started
 
-Packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **13.6.5** (`Directory.Build.props`). Pinned Aspire.Hosting **13.6.5** / `net10.0`.
+Packages live on [nuget.org](https://www.nuget.org/packages/IntrepidDeveloper.Aspire.Hosting.Railway). Pack also publishes a GitHub Release and GitHub Packages. nuget.org uses Trusted Publishing (OIDC, no stored key). Current version is **17.0.0** (`Directory.Build.props`). Pinned Aspire.Hosting **17.0.0** / `net10.0`.
 
 ## Restore from nuget.org
 
@@ -50,11 +50,23 @@ Extension methods live in `Aspire.Hosting`, so AppHosts need no extra `using` fo
 
 Use official resource types where they exist. Postgres and Redis stay `AddPostgres` / `AddRedis`; `PublishAsRailway*` only changes deploy. Railway replicas cannot be used with [volumes](https://docs.railway.com/volumes/reference), so those templates are not scaled. Buckets are `AddRailwayBucket` in the AppHost and `AddRailwayBucketClient` (`IAmazonS3`) in the consuming project. The AppHost also needs the official `Aspire.Hosting.PostgreSQL` and `Aspire.Hosting.Redis` packages for `AddPostgres` / `AddRedis`.
 
+Aspire 17 C# AppHosts use `Microsoft.NET.Sdk` plus `Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet`. `Aspire.AppHost.Sdk` is obsolete (`ASPIRE012`). `AddProject` is obsolete; use `AddDotnetProject` with a project path. C# AppHosts require the Aspire CLI bundle (`ASPIRE013`).
+
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="13.6.5" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="13.6.5" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="13.6.5" />
-<PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="13.6.5" />
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" Version="17.0.0" />
+    <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway" Version="17.0.0" />
+    <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.PostgreSQL" Version="17.0.0" />
+    <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Redis" Version="17.0.0" />
+    <PackageReference Include="IntrepidDeveloper.Aspire.Hosting.Railway.Storage" Version="17.0.0" />
+  </ItemGroup>
+</Project>
 ```
 
 ```csharp
@@ -82,7 +94,7 @@ var cache = builder.AddRedis("redis").PublishAsRailwayRedis(s =>
 });
 var uploads = builder.AddRailwayBucket("uploads", configure: b => b.Region = RailwayBucketRegion.Ams);
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithReplicas(2)
     .WithHttpHealthCheck("/health")
     .WithReference(db)
@@ -108,7 +120,7 @@ builder.Build().Run();
 
 | Consumer | `ConnectionStrings__{name}` | When `DATABASE_URL` / `REDIS_URL` is also set |
 | --- | --- | --- |
-| `AddProject` / `IProjectMetadata` (.NET, Aspire.Npgsql, Aspire.StackExchange.Redis, EF `UseNpgsql`) | Keyword form: `Host=${{postgres.PGHOST}};Port=…;Username=…;Password=…;Database=…` and `host:port,password=` for Redis. Composed from official Railway [Postgres](https://docs.railway.com/databases/postgresql) `PG*` / [Redis](https://docs.railway.com/databases/redis) `REDIS*` variables. | Stays the `postgresql://` / `redis://` URI (`${{postgres.DATABASE_URL}}` / `${{redis.REDIS_URL}}`). Use this for libraries that read `DATABASE_URL`. |
+| `AddDotnetProject` / `AddProject` / `IProjectMetadata` (.NET, Aspire.Npgsql, Aspire.StackExchange.Redis, EF `UseNpgsql`) | Keyword form: `Host=${{postgres.PGHOST}};Port=…;Username=…;Password=…;Database=…` and `host:port,password=` for Redis. Composed from official Railway [Postgres](https://docs.railway.com/databases/postgresql) `PG*` / [Redis](https://docs.railway.com/databases/redis) `REDIS*` variables. | Stays the `postgresql://` / `redis://` URI (`${{postgres.DATABASE_URL}}` / `${{redis.REDIS_URL}}`). Use this for libraries that read `DATABASE_URL`. |
 | `AddContainer` / Node / other URI processes | `${{postgres.DATABASE_URL}}` / `${{redis.REDIS_URL}}` | Same URI. |
 
 `WithReference` does not invent a `DATABASE_URL` variable. Set it with `WithEnvironment` when the process reads that name. The plan stores Railway expressions only — never resolved passwords, never the deploy token.
@@ -120,9 +132,9 @@ Bucket `RailwayBucketRegion` codes (`iad` / `sjc` / `ams` / `sin`) are not compu
 In the API / consuming project, add the storage client plus the usual Aspire Npgsql and Redis clients:
 
 ```xml
-<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="13.6.5" />
-<PackageReference Include="Aspire.Npgsql" Version="13.6.5" />
-<PackageReference Include="Aspire.StackExchange.Redis" Version="13.6.5" />
+<PackageReference Include="IntrepidDeveloper.Aspire.Railway.Storage" Version="17.0.0" />
+<PackageReference Include="Aspire.Npgsql" Version="17.0.0" />
+<PackageReference Include="Aspire.StackExchange.Redis" Version="17.0.0" />
 ```
 
 ```csharp

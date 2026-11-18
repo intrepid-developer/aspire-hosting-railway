@@ -1,6 +1,6 @@
 # Publish and deploy
 
-This integration uses Aspire 13.6 compute-environment + pipeline hooks (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`). It does **not** use the obsolete `IDistributedApplicationPublisher` / `DeployingCallbackAnnotation` model.
+This integration uses Aspire 17.0 compute-environment + pipeline hooks (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`). It does **not** use the obsolete `IDistributedApplicationPublisher` / `DeployingCallbackAnnotation` model.
 
 ## Pipeline steps
 
@@ -27,10 +27,10 @@ The plan is not unconditionally secret-safe. `WithEnvironment("API_KEY", value)`
 
 `WithReference` on official Railway databases emits secret-safe Railway expressions onto services that actually referenced the database — never the local Docker connection string. The format follows the consumer (the same split local `AddPostgres` / `AddRedis` already use):
 
-- **.NET `AddProject` / `IProjectMetadata`:** `ConnectionStrings__{name}` is Npgsql keyword form (`Host=;Port=;Username=;Password=;Database=`) or StackExchange.Redis `host:port,password=`. Those strings are composed from official template variables ([Postgres](https://docs.railway.com/databases/postgresql) `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`, [Redis](https://docs.railway.com/databases/redis) `REDISHOST` / `REDISPORT` / `REDISPASSWORD`). Example: `Host=${{postgres.PGHOST}};…;Password=${{postgres.PGPASSWORD}};…`. Apply upserts the expressions; Railway interpolates them. Passwords are never written into `railway-plan.json` or deployment state.
+- **.NET `AddDotnetProject` / `AddProject` / `IProjectMetadata`:** `ConnectionStrings__{name}` is Npgsql keyword form (`Host=;Port=;Username=;Password=;Database=`) or StackExchange.Redis `host:port,password=`. Those strings are composed from official template variables ([Postgres](https://docs.railway.com/databases/postgresql) `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`, [Redis](https://docs.railway.com/databases/redis) `REDISHOST` / `REDISPORT` / `REDISPASSWORD`). Example: `Host=${{postgres.PGHOST}};…;Password=${{postgres.PGPASSWORD}};…`. Apply upserts the expressions; Railway interpolates them. Passwords are never written into `railway-plan.json` or deployment state.
 - **Containers / Node / other `DATABASE_URL` consumers:** `ConnectionStrings__{name}` stays `${{postgres.DATABASE_URL}}` / `${{redis.REDIS_URL}}` (`postgresql://` / `redis://` after interpolation).
 
-`WithReference` always writes `ConnectionStrings__{name}`. It does not invent `DATABASE_URL` / `REDIS_URL`. If the AppHost also sets those names (`WithEnvironment`), they stay the URI even on an `AddProject` — so a service can have keyword `ConnectionStrings__postgres` and URI `DATABASE_URL` at the same time. Aspire.Npgsql / EF `UseNpgsql` read `ConnectionStrings__{name}`; Node `pg` and similar read `DATABASE_URL`.
+`WithReference` always writes `ConnectionStrings__{name}`. It does not invent `DATABASE_URL` / `REDIS_URL`. If the AppHost also sets those names (`WithEnvironment`), they stay the URI even on an `AddDotnetProject` / `AddProject` — so a service can have keyword `ConnectionStrings__postgres` and URI `DATABASE_URL` at the same time. Aspire.Npgsql / EF `UseNpgsql` read `ConnectionStrings__{name}`; Node `pg` and similar read `DATABASE_URL`.
 
 Non-Railway connection strings are captured as secret parameter **names** in the plan and resolved on deploy.
 
@@ -134,10 +134,10 @@ Replica count is Aspire-core `WithReplicas` on a project. Implicit compute on `A
 
 Healthcheck path is Aspire-core `WithHttpHealthCheck("/health")`. Railway always probes until HTTP 200, so a non-200 Aspire `statusCode` is ignored. Custom `WithHealthCheck` keys that are not HTTP probes are not mapped.
 
-Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 13.6.5 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron / custom-domain annotation. `WithArgs` is not mapped. Custom hostnames need `WithExternalHttpEndpoints()`.
+Railway-specific settings use `PublishAsRailwayService`. Aspire.Hosting 17.0.0 has no `WithCpu` / `WithMemory` / healthcheck-timeout / restart-policy / start-command / overlap / drain / cron / custom-domain annotation. `WithArgs` is not mapped. Custom hostnames need `WithExternalHttpEndpoints()`.
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithReplicas(2)
     .WithHttpHealthCheck("/health")
     .WithComputeEnvironment(railway)
@@ -157,14 +157,14 @@ builder.AddProject<Projects.Api>("api")
         s.CustomDomains.Add("api.example.com"); // requires WithExternalHttpEndpoints(); hostnames only
     });
 
-builder.AddProject<Projects.Worker>("nightly")
+builder.AddDotnetProject("nightly", "../Worker/Worker.csproj")
     .PublishAsRailwayService(s =>
     {
         s.CronSchedule = "0 3 * * *"; // 03:00 UTC; omit = always-on
     });
 
 // Aspire has no core multi-region API
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithComputeEnvironment(railway)
     .PublishAsRailwayService(s =>
     {

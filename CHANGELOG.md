@@ -2,6 +2,15 @@
 
 Versions match `Directory.Build.props`. Packages are on nuget.org (GitHub Packages is still published). This file starts at **0.1.0-preview.11**. Earlier previews are not listed here. AppHost mapping: [docs/publish-and-deploy.md](docs/publish-and-deploy.md). Confirmed GraphQL operations: [docs/graphql.md](docs/graphql.md).
 
+## 17.0.0
+
+- Retarget to Aspire.Hosting **17.0.0**. First package on the Aspire 17.0.0 line. NuGet IDs and the public Railway AppHost surface (`AddRailwayEnvironment`, `PublishAsRailway*`, `AddRailwayBucket`, `AddRailwayBucketClient`) are unchanged. GraphQL operations are unchanged.
+- Stay on `net10.0` and SDK **10.0.404**. Aspire.Hosting 17.0.0 ships `lib/net10.0` only; client packages also have `net11.0`. Microsoft.Extensions.* stays **10.0.15** (Aspire.Hosting 17.0.0's `net10.0` dependency group). No TFM/SDK bump is required.
+- Aspire 17 C# AppHosts use `Microsoft.NET.Sdk` plus `Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet`. `Aspire.AppHost.Sdk` is obsolete (`ASPIRE012`). `AddProject` is obsolete; use `AddDotnetProject` with a project path. C# AppHosts require the Aspire CLI bundle (`ASPIRE013`, not suppressible). The playground sample follows that AppHost layout.
+- Keyword connection strings still apply to `AddProject` / `IProjectMetadata` and now also to `AddDotnetProject` (same `IProjectMetadata` annotation). Containers keep URI form.
+- Pipeline and compute APIs used by this integration (`IComputeEnvironmentResource`, `PipelineStepAnnotation`, `WellKnownPipelineSteps`, `IDeploymentStateManager`, `IPipelineOutputService`) graduated to stable in Aspire 17 (`ASPIREPIPELINES001` / `002` / `004`, `ASPIRECOMPUTE002`). `GetHostAddressExpression` is no longer experimental. No Railway GraphQL change.
+- CI installs Aspire CLI 17.0.0 so the playground AppHost can restore the required CLI bundle.
+
 ## 13.6.5
 
 - Aspire 13.6.5 retarget; `Microsoft.Extensions.*` 10.0.12 → 10.0.15 (.NET 10 security patches); SDK 10.0.404.
