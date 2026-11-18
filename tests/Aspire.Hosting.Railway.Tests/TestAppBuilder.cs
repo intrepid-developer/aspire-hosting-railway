@@ -1,6 +1,7 @@
 using System.Reflection;
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dotnet;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -64,10 +65,10 @@ internal static class TestAppBuilder
     }
 
     /// <summary>
-    /// Adds a real <c>AddProject</c> consumer against a throwaway csproj so
+    /// Adds a real <c>AddDotnetProject</c> consumer against a throwaway csproj so
     /// plan tests can distinguish .NET projects from containers.
     /// </summary>
-    public static IResourceBuilder<ProjectResource> AddTestProject(
+    public static IResourceBuilder<DotnetProjectResource> AddTestProject(
         this IDistributedApplicationBuilder builder,
         string name = "api")
     {
@@ -84,6 +85,6 @@ internal static class TestAppBuilder
               </PropertyGroup>
             </Project>
             """);
-        return builder.AddProject(name, projectPath);
+        return builder.AddDotnetProject(name, projectPath);
     }
 }

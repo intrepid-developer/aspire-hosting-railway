@@ -20,7 +20,7 @@ var cache = builder.AddRedis("redis").PublishAsRailwayRedis(r =>
 });
 var uploads = builder.AddRailwayBucket("uploads").WithRegion(RailwayBucketRegion.Ams);
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Playground.Api/Api.csproj")
     .WithReplicas(2)
     .WithHttpHealthCheck("/health")
     .WithReference(db)

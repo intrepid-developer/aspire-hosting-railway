@@ -3,7 +3,6 @@
 #pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIRECOMPUTE002
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
 using Aspire.Hosting.ApplicationModel;
@@ -75,7 +74,6 @@ public sealed class RailwayEnvironmentResource : Resource, IComputeEnvironmentRe
         EnvironmentIdParameter is not null;
 
     /// <inheritdoc />
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         ArgumentNullException.ThrowIfNull(endpointReference);

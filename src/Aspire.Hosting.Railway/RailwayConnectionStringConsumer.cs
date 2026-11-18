@@ -12,9 +12,9 @@ internal static class RailwayConnectionStringConsumer
     /// <summary>
     /// Returns whether <paramref name="resource"/> should receive a
     /// keyword-form connection string (Aspire.Npgsql /
-    /// Aspire.StackExchange.Redis). <see cref="ProjectResource"/> and
-    /// <see cref="IProjectMetadata"/> are the .NET project signals.
-    /// Containers, executables, and Node apps keep the URI.
+    /// Aspire.StackExchange.Redis). <see cref="ProjectResource"/>,
+    /// <c>AddDotnetProject</c>, and <see cref="IProjectMetadata"/> are the
+    /// .NET project signals. Containers, executables, and Node apps keep the URI.
     /// </summary>
     internal static bool PrefersKeywordConnectionString(IResource resource)
     {
